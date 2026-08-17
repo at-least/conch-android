@@ -1,0 +1,19 @@
+// Self-hosted Sentry mapping upload. All inputs come from local.properties /
+// ~/.gradle/gradle.properties (never committed):
+//   SENTRY_URL=https://sentry.example.com
+//   SENTRY_TOKEN=sntrys_... (org/project scope, "org: project:read + project:releases")
+//   SENTRY_ORG / SENTRY_PROJECT optional overrides
+// Without SENTRY_URL + SENTRY_TOKEN the plugin is applied but skips uploads.
+if (project.hasProperty("SENTRY_URL") && project.hasProperty("SENTRY_TOKEN")) {
+    project.plugins.apply("io.sentry.android.gradle")
+    def ext = project.extensions.getByType(io.sentry.android.gradle.SentryPluginExtension.class)
+    ext.url.set(project.property("SENTRY_URL"))
+    ext.authToken.set(project.property("SENTRY_TOKEN"))
+    ext.org.set(project.hasProperty("SENTRY_ORG") ? project.property("SENTRY_ORG") : "tild")
+    ext.projectName.set(project.hasProperty("SENTRY_PROJECT") ? project.property("SENTRY_PROJECT") : "tildssh")
+    ext.telemetry.set(false)
+    ext.autoUploadProguardMapping.set(true)
+    ext.tracingSampleRate.set(0.0)
+    ext.autoInstallation.enabled.set(false)   // dependency added manually
+    ext.manifestParsing.enabled.set(true)
+}
