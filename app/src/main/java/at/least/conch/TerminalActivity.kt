@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.MoreVert
@@ -49,6 +50,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +63,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
 
@@ -79,6 +84,14 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
     private val snippetsSheetVisible = mutableStateOf(false)
     private val scrollOffset = mutableStateOf(0)
 
+    /** Command history capture (null when disabled in Settings). */
+    private var historyAssembler: InputLineAssembler? = null
+    private val historySheetVisible = mutableStateOf(false)
+    private val historyStore by lazy { CommandHistoryStore(this) }
+    private val historyExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "conch-history").apply { isDaemon = true }
+    }
+
     /** TOFU prompt wired into the SSH handshake (runs on the reader thread). */
     private val tofuPrompt: KeyPrompt = { request, answer ->
         keyPromptState.value = request to answer
@@ -91,6 +104,12 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
         val host = HostStore(this).load().firstOrNull { it.id == hostId } ?: return finish()
         this.host = host
         subtitle.value = "${host.username}@${host.hostname}:${host.port}"
+
+        if (getSharedPreferences("conchapp_settings", MODE_PRIVATE).getBoolean("commandHistory", true)) {
+            historyAssembler = InputLineAssembler { line ->
+                historyExecutor.execute { historyStore.record(hostId, line) }
+            }
+        }
 
         emulator = TerminalEmulator(80, 24).also { emu ->
             emu.bellListener = { }
@@ -177,6 +196,7 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
         session?.disconnect()
         session = null
         SessionService.stop(this)
+        historyExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -192,7 +212,7 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
     private fun pasteIntoTerminal() {
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() ?: return
-        if (text.isNotEmpty()) terminalView?.sendText(text)
+        if (text.isNotEmpty()) terminalView?.pasteText(text)
     }
 
     private fun openSftp() {
@@ -276,6 +296,11 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
                                 onClick = { menuOpen = false; snippetsSheetVisible.value = true }
                             )
                             DropdownMenuItem(
+                                text = { Text("History") },
+                                leadingIcon = { Icon(Icons.Filled.History, contentDescription = null) },
+                                onClick = { menuOpen = false; historySheetVisible.value = true }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Copy screen") },
                                 leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
                                 onClick = { menuOpen = false; copyScreen() }
@@ -337,13 +362,20 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
                         TerminalView(ctx).apply {
                             terminalView = this
                             this.emulator = this@TerminalActivity.emulator
-                            onData = { data -> session?.write(data) }
+                            onData = { data ->
+                                session?.write(data)
+                                historyAssembler?.feed(data)
+                            }
                             onPtyResize = { c, r -> session?.resizePty(c, r) }
                             onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
                             onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.value = off }
                             if (host?.fontSizeSp ?: 0f > 0f) {
                                 fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
                             }
+                            theme = TerminalTheme.byName(
+                                getSharedPreferences("conchapp_settings", MODE_PRIVATE)
+                                    .getString(TerminalTheme.PREF_KEY, null)
+                            )
                             setOnClickListener { showSoftKeyboard() }
                             post { requestFocus() }
                         }
@@ -444,6 +476,85 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
                 }
             }
         }
+
+        if (historySheetVisible.value) {
+            HistorySheet()
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    private fun HistorySheet() {
+        val host = this.host ?: return
+        var query by remember { mutableStateOf("") }
+        var results by remember { mutableStateOf<List<HistoryEntry>>(emptyList()) }
+        // Search does file read + AES-GCM decrypt + JSON parse: keep it off
+        // the UI thread, debounced 150 ms so keystrokes stay cheap.
+        LaunchedEffect(query) {
+            delay(150)
+            results = withContext(Dispatchers.Default) {
+                historyStore.search(host.id, query)
+            }
+        }
+        ModalBottomSheet(onDismissRequest = { historySheetVisible.value = false }) {
+            Text(
+                "Command history",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            androidx.compose.material3.OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                label = { Text("Search") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            if (results.isEmpty()) {
+                Text(
+                    if (query.isBlank()) "No history yet. Commands you run are recorded here (encrypted on this device)."
+                    else "Nothing matches \"$query\".",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            LazyColumn(modifier = Modifier.padding(bottom = 24.dp)) {
+                items(results) { entry ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                historySheetVisible.value = false
+                                // sendRaw, not sendText: a single-char entry must
+                                // never be interpreted as an armed Ctrl-letter
+                                terminalView?.sendRaw((entry.text + "\r").toByteArray(Charsets.UTF_8))
+                            }
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            entry.text.lineSequence().firstOrNull() ?: "",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 13.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { saveAsSnippet(entry.text) }) { Text("Save") }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun saveAsSnippet(command: String) {
+        val store = SnippetStore(this)
+        val list = store.load()
+        val label = command.lineSequence().firstOrNull { it.isNotBlank() }?.take(40) ?: "snippet"
+        list.add(Snippet(label = label, command = command))
+        store.save(list)
+        Toast.makeText(this, "Saved snippet: $label", Toast.LENGTH_SHORT).show()
     }
 
     @Composable

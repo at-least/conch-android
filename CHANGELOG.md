@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0 (2026-08-19)
+
+- Bracketed paste mode (xterm DECSET 2004): pastes into vim/nano/less land
+  verbatim — wrapped in `ESC[200~…ESC[201~` when the remote app enables
+  bracketed paste, newline-sanitized (CRLF/CR → LF) otherwise; the IME
+  clipboard path routes multi-line commits through the same logic and
+  never leaves Ctrl armed
+- Searchable per-host command history (encrypted at rest, AES-256-GCM via
+  the Android Keystore): terminal menu → History; search, tap to re-run,
+  save any entry as a snippet. Conservative capture — arrow-edited and
+  tab-completed lines are skipped rather than recorded wrong; opt-out and
+  "clear history" in Settings
+- Terminal color themes: Default, Dracula, Solarized Dark, Nord, Gruvbox
+  Dark — pick in Settings, applied to new sessions
+- README: the encrypted backup format is now publicly documented (magic,
+  salt/IV layout, AES-256-GCM, PBKDF2-HMAC-SHA256 600k iterations, merge
+  semantics, free-forever commitment) — anti-lock-in
+
 ## 0.8.1 (2026-08-17)
 
 - Crash reporting wired into all failure paths (14 sites: SSH connect,

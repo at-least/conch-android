@@ -125,6 +125,9 @@ class TerminalEmulator(var cols: Int, var rows: Int) {
     private var mainCol = 0
     private var mainRow = 0
 
+    /** DECSET 2004: remote app asked for bracketed paste markers. */
+    var bracketedPasteMode = false
+
     // parser state
     private var state = STATE_GROUND
     private val csiParams = StringBuilder(16)
@@ -421,6 +424,7 @@ class TerminalEmulator(var cols: Int, var rows: Int) {
         utfAccum = 0
         utfNeed = 0
         csiParams.setLength(0)
+        bracketedPasteMode = false
         curFg = FG_DEFAULT
         curBg = BG_DEFAULT
         curFlags = 0
@@ -598,6 +602,7 @@ class TerminalEmulator(var cols: Int, var rows: Int) {
                         1049 -> enterAltScreen(clear = true, saveCursor = true)
                         1047, 47 -> enterAltScreen(clear = false, saveCursor = false)
                         1048 -> saveCursor()
+                        2004 -> bracketedPasteMode = true
                     }
                 }
                 'l' -> {
@@ -607,6 +612,7 @@ class TerminalEmulator(var cols: Int, var rows: Int) {
                         1047 -> { clearRegion(0, 0, rows - 1, cols - 1); exitAltScreen() }
                         47 -> exitAltScreen()
                         1048 -> restoreCursor()
+                        2004 -> bracketedPasteMode = false
                     }
                 }
             }

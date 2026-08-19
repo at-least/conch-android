@@ -52,6 +52,7 @@ class SettingsActivity : ComponentActivity() {
     private val keepScreenOn = mutableStateOf(false)
     private val appLock = mutableStateOf(false)
     private val busy = mutableStateOf(false)
+    private val commandHistory = mutableStateOf(true)
 
     /** Pending SAF target once the user confirms the passphrase. */
     private var pendingExport: Uri? = null
@@ -75,6 +76,8 @@ class SettingsActivity : ComponentActivity() {
         crashEnabled.value = CrashReporting.isEnabled()
         keepScreenOn.value = getSharedPreferences("conchapp_settings", MODE_PRIVATE)
             .getBoolean("keepScreenOn", false)
+        commandHistory.value = getSharedPreferences("conchapp_settings", MODE_PRIVATE)
+            .getBoolean("commandHistory", true)
         appLock.value = AppLock.isEnabled(this) && AppLock.canAuthenticate(this)
         setContent {
             SettingsScreen(
@@ -262,6 +265,50 @@ class SettingsActivity : ComponentActivity() {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
+                                Text("Command history", fontSize = 16.sp)
+                                Text(
+                                    "Remember the commands you run, per host, encrypted on this device. Search and re-run them from the terminal menu, or save them as snippets.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                            Switch(
+                                checked = commandHistory.value,
+                                onCheckedChange = { on ->
+                                    commandHistory.value = on
+                                    getSharedPreferences("conchapp_settings", MODE_PRIVATE)
+                                        .edit().putBoolean("commandHistory", on).apply()
+                                }
+                            )
+                        }
+                        TextButton(
+                            onClick = {
+                                CommandHistoryStore(this@SettingsActivity).clear()
+                                Toast.makeText(this@SettingsActivity, "Command history cleared", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) { Text("Clear history") }
+                    }
+                }
+
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Terminal theme", fontSize = 16.sp)
+                        Text(
+                            "Color scheme for the terminal (applied to new sessions).",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                        )
+                        TerminalThemePicker()
+                    }
+                }
+
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
                                 Text("Lock app", fontSize = 16.sp)
                                 Text(
                                     if (AppLock.canAuthenticate(this@SettingsActivity))
@@ -350,6 +397,35 @@ class SettingsActivity : ComponentActivity() {
                     pendingImport = null
                 }) { Text("Cancel") } }
             )
+        }
+    }
+
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    @Composable
+    private fun TerminalThemePicker() {
+        var selected by remember {
+            mutableStateOf(
+                TerminalTheme.byName(
+                    getSharedPreferences("conchapp_settings", MODE_PRIVATE)
+                        .getString(TerminalTheme.PREF_KEY, null)
+                ).name
+            )
+        }
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            for (theme in TerminalTheme.ALL) {
+                androidx.compose.material3.FilterChip(
+                    selected = theme.name == selected,
+                    onClick = {
+                        selected = theme.name
+                        getSharedPreferences("conchapp_settings", MODE_PRIVATE)
+                            .edit().putString(TerminalTheme.PREF_KEY, theme.name).apply()
+                    },
+                    label = { Text(theme.name) }
+                )
+            }
         }
     }
 }

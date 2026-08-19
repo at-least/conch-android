@@ -10,6 +10,9 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 
 ### Terminal
 - Built-in VT100/xterm emulator (not a WebView): 256-color + **24-bit truecolor**, CJK wide chars, scroll regions, alt-screen
+- **Bracketed paste mode** (DECSET 2004) — multi-line pastes into vim/nano land verbatim, no auto-execution, no justify-mangling
+- **Searchable command history** — per-host, encrypted at rest, one tap to re-run or save as snippet
+- **Color themes** — Default, Dracula, Solarized Dark, Nord, Gruvbox Dark
 - **Scrollback history** (4000 lines) with gesture scrolling and a position indicator
 - Hardware keyboard: F1–F12, PgUp/PgDn, Home/End, Del, Ctrl+arrows
 - **User-configurable extra-keys row** (18-key pool, layout persists across sessions)
@@ -38,6 +41,39 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Home-screen widget** — first four hosts, one tap deep-links into a terminal
 - **OpenSSH config import** — pull `Host` blocks from your `~/.ssh/config`
 - **Encrypted backup & restore** — single-file export of everything (hosts, passwords, keys, snippets, known hosts), passphrase-protected (AES-256-GCM + PBKDF2), restores on any device
+
+## Backup format
+
+Backups are portable and self-contained — you are never locked into Conch.
+The format is fully specified here so that other tools (or a future Conch
+version) can read what Conch writes today.
+
+**File layout** (binary, plain byte concatenation):
+
+| Offset | Field | Size |
+|---|---|---|
+| 0 | Magic `TILDBAK1` | 8 bytes |
+| 8 | Random salt | 16 bytes |
+| 24 | Random IV (nonce) | 12 bytes |
+| 36 | Ciphertext + GCM tag | rest of file |
+
+**Crypto:**
+- Payload encryption: **AES-256-GCM** (128-bit tag). A fresh random salt and a fresh random IV are generated for **every export** — no two backups share key material or nonce.
+- Key derivation: **PBKDF2-HMAC-SHA256, 600,000 iterations** over your passphrase with the 16-byte salt, producing a 256-bit key.
+- The key is derived from the passphrase only — not from the Android Keystore — so a backup restores on any device. Wrong passphrase = GCM tag verification failure (nothing decrypts, no oracle).
+
+**Contents** (AES-GCM plaintext is a JSON object, `version: 1`):
+- `hosts` + `hostSecrets` — all host entries including their passwords
+- `keys` + `keySecrets` — SSH keys (Ed25519, PEM private keys included)
+- `snippets` — command snippets
+- `knownHosts` — your TOFU `known_hosts` file
+
+**Import semantics:** merging, never destructive — importing a backup adds
+hosts, keys and snippets that are new; existing entries are never overwritten
+or deleted, and `known_hosts` entries are merged (unique lines only).
+
+**Commitment: export and import are free in every Conch build and every
+tier — forever.** Data portability is a right, not a feature gate.
 
 ## Downloads
 

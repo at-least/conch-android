@@ -57,6 +57,25 @@ class TerminalView @JvmOverloads constructor(
             onCtrlStateChanged?.invoke(value)
         }
 
+    /**
+     * Per-instance colors. Start as a copy of the shared defaults so themes
+     * never mutate the companion [PALETTE].
+     */
+    private val palette = PALETTE.copyOf()
+    private var bgColor = BG_COLOR
+    private var defaultFgColor = DEFAULT_FG_COLOR
+
+    /** Applies a [TerminalTheme] and re-renders. */
+    var theme: TerminalTheme = TerminalTheme.DEFAULT
+        set(value) {
+            field = value
+            value.base16Into(palette)
+            bgColor = (0xFF shl 24) or value.bg
+            defaultFgColor = (0xFF shl 24) or value.defaultFg
+            setBackgroundColor(bgColor)
+            invalidate()
+        }
+
     /** Notifies UI (e.g. Compose key row) that the Ctrl-armed state changed. */
     var onCtrlStateChanged: ((Boolean) -> Unit)? = null
 
@@ -164,7 +183,7 @@ class TerminalView @JvmOverloads constructor(
         isFocusable = true
         isFocusableInTouchMode = true
         measureCell()
-        setBackgroundColor(BG_COLOR)
+        setBackgroundColor(bgColor)
     }
 
     private fun measureCell() {
@@ -241,7 +260,7 @@ class TerminalView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val emu = emulator ?: return
-        canvas.drawColor(BG_COLOR)
+        canvas.drawColor(bgColor)
 
         val visibleRows = ceil((height - paddingTop - paddingBottom) / cellHeight).toInt()
         val total = emu.scrollbackSize + emu.rows
@@ -269,7 +288,7 @@ class TerminalView @JvmOverloads constructor(
                 if (flags and TerminalEmulator.FLAG_REVERSE != 0) {
                     val t = fg; fg = bg; bg = t
                 }
-                if (bg != BG_COLOR) {
+                if (bg != bgColor) {
                     bgPaint.color = bg
                     canvas.drawRect(x, y - fontAscent, x + cellWidth, y - fontAscent + cellHeight, bgPaint)
                 }
@@ -305,16 +324,16 @@ class TerminalView @JvmOverloads constructor(
 
     private fun styleToFg(style: Int): Int {
         val idx = style and 0x1FF
-        if (idx == TerminalEmulator.FG_DEFAULT) return DEFAULT_FG_COLOR
+        if (idx == TerminalEmulator.FG_DEFAULT) return defaultFgColor
         emulator?.rgbAtIndex(idx)?.let { return 0xFF000000.toInt() or it }
-        return paletteColor(idx)
+        return palette[idx]
     }
 
     private fun styleToBg(style: Int): Int {
         val idx = (style shr 9) and 0x1FF
-        if (idx == TerminalEmulator.BG_DEFAULT) return BG_COLOR
+        if (idx == TerminalEmulator.BG_DEFAULT) return bgColor
         emulator?.rgbAtIndex(idx)?.let { return 0xFF000000.toInt() or it }
-        return paletteColor(idx)
+        return palette[idx]
     }
 
     // ----------------------------------------------------------------- input
@@ -346,6 +365,22 @@ class TerminalView @JvmOverloads constructor(
     fun sendRaw(bytes: ByteArray) {
         resetScrollOnInput()
         onData?.invoke(bytes)
+    }
+
+    /**
+     * Pastes [text] into the terminal: bracketed (ESC[200~...ESC[201~) when
+     * the remote enabled DECSET 2004, newline-sanitized otherwise. Bypasses
+     * [sendText] (never interpreted as Ctrl-shortcut) and clears any armed
+     * Ctrl so the next keystroke is not swallowed as Ctrl-letter.
+     */
+    fun pasteText(text: String) {
+        if (text.isEmpty()) return
+        ctrlArmed = false
+        if (emulator?.bracketedPasteMode == true) {
+            sendRaw(BracketedPaste.wrap(text).toByteArray(Charsets.UTF_8))
+        } else {
+            sendRaw(BracketedPaste.sanitize(text).toByteArray(Charsets.UTF_8))
+        }
     }
 
     fun sendText(text: String) {
@@ -498,7 +533,12 @@ class TerminalView @JvmOverloads constructor(
 
     private class TerminalInputConnection(private val view: TerminalView) : BaseInputConnection(view, false) {
         override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
-            if (text.isNotEmpty()) view.sendText(text.toString())
+            // Multi-line IME payloads (clipboard paste gestures) go through the
+            // bracketed-paste path; single-line commits are normal typing.
+            if (text.isNotEmpty()) {
+                if (BracketedPaste.looksLikePaste(text.toString())) view.pasteText(text.toString())
+                else view.sendText(text.toString())
+            }
             return true
         }
     }
@@ -586,7 +626,5 @@ class TerminalView @JvmOverloads constructor(
                 pal[idx++] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
             }
         }
-
-        fun paletteColor(idx: Int): Int = PALETTE[idx]
     }
 }
