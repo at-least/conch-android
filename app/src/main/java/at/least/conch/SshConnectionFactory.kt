@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import net.schmizz.sshj.SSHClient
+import net.schmizz.sshj.userauth.keyprovider.KeyProvider
 
 /**
  * Single place that builds an authenticated [SSHClient] for a stored host:
@@ -11,7 +12,7 @@ import net.schmizz.sshj.SSHClient
  */
 object SshConnectionFactory {
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     /**
      * @param prompt optional UI prompt for unknown/changed host keys; when null,
@@ -21,9 +22,29 @@ object SshConnectionFactory {
         context: Context,
         host: Host,
         prompt: KeyPrompt? = null,
+    ): SSHClient = connect(
+        host = host,
+        prompt = prompt,
+        store = KnownHostsStore(context.filesDir),
+        keyProvider = { ssh, keyId -> KeyManager(context).loadKeyProvider(ssh, keyId) },
+        password = { SecretsStore.get("host-pw:${host.id}") },
+        mainHandler = mainHandler,
+    )
+
+    /**
+     * JVM-testable core: same wiring, with storage/auth sources injected.
+     * A null [mainHandler] runs the TOFU prompt synchronously.
+     */
+    fun connect(
+        host: Host,
+        prompt: KeyPrompt?,
+        store: KnownHostsStore,
+        keyProvider: (SSHClient, String) -> KeyProvider,
+        password: (Host) -> String?,
+        mainHandler: Handler? = null,
     ): SSHClient {
         val ssh = SSHClient()
-        ssh.addHostKeyVerifier(TofuHostKeyVerifier(KnownHostsStore(context), prompt, mainHandler))
+        ssh.addHostKeyVerifier(TofuHostKeyVerifier(store, prompt, mainHandler))
         ssh.connectTimeout = 10_000
         ssh.timeout = 0
         ssh.useCompression()
@@ -33,15 +54,15 @@ object SshConnectionFactory {
             Host.AUTH_KEY -> {
                 val keyId = host.keyId
                     ?: throw IllegalStateException("Host is set to key auth but no key is selected")
-                val provider = KeyManager(context).loadKeyProvider(ssh, keyId)
+                val provider = keyProvider(ssh, keyId)
                 ssh.authPublickey(host.username, provider)
             }
             else -> {
-                val password = SecretsStore.get("host-pw:${host.id}")
-                if (password.isNullOrEmpty()) {
+                val pw = password(host)
+                if (pw.isNullOrEmpty()) {
                     throw IllegalStateException("No stored password — edit this host and save a password")
                 }
-                ssh.authPassword(host.username, password)
+                ssh.authPassword(host.username, pw)
             }
         }
         if (host.keepAlive) {

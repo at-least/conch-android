@@ -1,6 +1,5 @@
 package at.least.conch
 
-import android.content.Context
 import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.common.KeyType
 import net.schmizz.sshj.transport.verification.HostKeyVerifier
@@ -14,18 +13,19 @@ enum class KnownStatus { KNOWN, MISMATCH, UNKNOWN }
 
 /**
  * OpenSSH-format known_hosts store with TOFU (trust-on-first-use) semantics.
- * Pure entry encoding/decoding is kept testable without Android.
+ * Takes the app's files dir (not a Context) so entry encoding/decoding and
+ * the full TOFU flow are testable on the JVM.
  */
-class KnownHostsStore(context: Context) {
+class KnownHostsStore(filesDir: File) {
 
-    private val file: File = File(context.filesDir, "known_hosts")
+    val file: File = File(filesDir, "known_hosts")
 
     fun status(hostname: String, port: Int, key: PublicKey): KnownStatus {
         val blob = blobOf(key)
         var mismatch = false
         for (line in readLines()) {
             val entry = parseEntry(line) ?: continue
-            if (entry.host != hostField(hostname, port)) continue
+            if (!matchesHost(entry.host, hostname, port)) continue
             if (entry.blob.contentEquals(blob)) return KnownStatus.KNOWN
             mismatch = true
         }
@@ -42,9 +42,8 @@ class KnownHostsStore(context: Context) {
     }
 
     fun algorithmsFor(hostname: String, port: Int): List<String> {
-        val host = hostField(hostname, port)
         return readLines().mapNotNull { parseEntry(it) }
-            .filter { it.host == host }
+            .filter { matchesHost(it.host, hostname, port) }
             .map { it.algorithm }
             .distinct()
     }
@@ -53,8 +52,31 @@ class KnownHostsStore(context: Context) {
         if (file.exists()) file.readLines().filter { it.isNotBlank() } else emptyList()
 
     companion object {
-        fun hostField(hostname: String, port: Int): String =
-            if (port == 22) hostname else "[$hostname]:$port"
+        /** OpenSSH format: `host`, `[host]:port` for non-22; IPv6 always bracketed. */
+        fun hostField(hostname: String, port: Int): String {
+            val bare = hostname.removePrefix("[").removeSuffix("]")
+            return when {
+                port == 22 && !bare.contains(":") -> bare
+                port == 22 -> "[$bare]"
+                else -> "[$bare]:$port"
+            }
+        }
+
+        /**
+         * Entry matches when it equals the current canonical field, or when it
+         * was written by an older app version that stored IPv6 port-22 hosts
+         * unbracketed (migration tolerance).
+         */
+        fun matchesHost(entryHost: String, hostname: String, port: Int): Boolean {
+            val canonical = hostField(hostname, port)
+            if (entryHost == canonical) return true
+            val bare = hostname.removePrefix("[").removeSuffix("]")
+            if (bare.contains(":") && port == 22) {
+                // legacy unbracketed IPv6 entry
+                if (entryHost == bare) return true
+            }
+            return false
+        }
 
         fun blobOf(key: PublicKey): ByteArray =
             Buffer.PlainBuffer().apply { putPublicKey(key) }.getCompactData()
@@ -81,7 +103,26 @@ class KnownHostsStore(context: Context) {
             } catch (_: Exception) {
                 return null
             }
+            if (!isPlausibleKeyBlob(blob)) return null
             return Entry(parts[0], parts[1], blob)
+        }
+
+        /**
+         * A known_hosts key blob must open with an ssh string naming a known
+         * key algorithm; OpenSSH ignores lines whose key it cannot parse, so
+         * garbage blobs (truncated base64, arbitrary data) must not create
+         * entries — otherwise they'd read as changed keys instead of being
+         * skipped.
+         */
+        fun isPlausibleKeyBlob(blob: ByteArray): Boolean {
+            if (blob.size < 4) return false
+            val len = ((blob[0].toInt() and 0xFF) shl 24) or ((blob[1].toInt() and 0xFF) shl 16) or
+                ((blob[2].toInt() and 0xFF) shl 8) or (blob[3].toInt() and 0xFF)
+            if (len < 4 || len > blob.size - 4) return false
+            val alg = String(blob, 4, len, Charsets.US_ASCII)
+            return (alg.startsWith("ssh-") || alg.startsWith("ecdsa-") ||
+                alg.startsWith("sk-ssh-") || alg.startsWith("x509v3-")) &&
+                alg.none { it.code < 32 || it.code > 126 }
         }
     }
 }
@@ -137,8 +178,11 @@ class TofuHostKeyVerifier(
                         isChange = isChange,
                     )
                 ) { accepted -> future.complete(accepted) }
-            } catch (_: Exception) {
+            } catch (e: Throwable) {
+                // a crashing prompt must not hang the handshake; truly fatal
+                // VM errors still propagate after unblocking the wait
                 future.complete(false)
+                if (e is VirtualMachineError || e is ThreadDeath) throw e
             }
         }
         mainHandler?.post(runnable) ?: runnable()

@@ -99,4 +99,16 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+
+    // In-process SSH server for JVM tests against real SSH interaction.
+    testImplementation("org.apache.sshd:sshd-core:2.13.2")
+    testImplementation("org.apache.sshd:sshd-sftp:2.13.2")
+    // i2p eddsa key types are what sshj (and this MINA version) expect for Ed25519.
+    testImplementation("net.i2p.crypto:eddsa:0.3.0")
+    // slf4j-android's Log calls would hit android.jar stubs in JVM tests; use NOP instead.
+    // Variant classpaths are named e.g. fossDebugUnitTestRuntimeClasspath.
+    configurations.matching { it.name.contains("UnitTest") }.configureEach {
+        exclude(group = "org.slf4j", module = "slf4j-android")
+    }
+    testRuntimeOnly("org.slf4j:slf4j-nop:2.0.16")
 }

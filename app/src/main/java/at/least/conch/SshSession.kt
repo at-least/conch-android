@@ -12,20 +12,26 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Manages one SSH connection with an interactive PTY shell plus optional
  * local port-forward tunnels, backed by sshj. All socket I/O runs on
  * background threads; callbacks arrive on the main thread.
+ *
+ * [post] and [connector] are seams for JVM tests: the app uses the defaults
+ * (main-thread Handler + [SshConnectionFactory] with Android storage).
  */
 class SshSession(
-    private val context: Context,
+    private val context: Context?,
     private val host: Host,
     initialCols: Int,
     initialRows: Int,
     private val callbacks: Callbacks,
     private val tofuPrompt: KeyPrompt? = null,
+    post: ((Runnable) -> Unit)? = null,
+    connector: ((Host, KeyPrompt?) -> SSHClient)? = null,
 ) {
     interface Callbacks {
         fun onConnected()
@@ -33,7 +39,16 @@ class SshSession(
         fun onDisconnected(reason: String)
     }
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val post: (Runnable) -> Unit = post ?: { r: Runnable -> mainHandler.post(r) }
+    private val connector: (Host, KeyPrompt?) -> SSHClient = connector
+        ?: { h, p ->
+            SshConnectionFactory.connect(
+                context ?: throw IllegalStateException("context required for default connector"),
+                h,
+                p,
+            )
+        }
     private var client: SSHClient? = null
     private var session: Session? = null
     private var shell: Session.Shell? = null
@@ -60,7 +75,13 @@ class SshSession(
     fun connect() {
         Thread {
             try {
-                val ssh = SshConnectionFactory.connect(context, host, tofuPrompt)
+                val ssh = connector(host, tofuPrompt)
+                if (closed.get()) {
+                    // disconnect() raced us while the connection was building —
+                    // nobody will close this client anymore, so do it here
+                    try { ssh.disconnect() } catch (_: Exception) {}
+                    return@Thread
+                }
                 client = ssh
 
                 startTunnels(ssh)
@@ -69,7 +90,7 @@ class SshSession(
                     val proxy = SocksProxy(ssh)
                     val bound = proxy.start(host.socksPort)
                     socksProxy = proxy
-                    mainHandler.post {
+                    post {
                         callbacks.onData(
                             "\r\n\u001b[90m[socks5 listening on 127.0.0.1:$bound]\u001b[0m\r\n".toByteArray()
                         )
@@ -83,7 +104,7 @@ class SshSession(
                 shell = sh
                 shellOut = sh.outputStream
 
-                mainHandler.post { callbacks.onConnected() }
+                if (!closed.get()) post { callbacks.onConnected() }
 
                 if (host.tmuxAutoAttach) {
                     // -A: attach if the session exists, create it otherwise;
@@ -103,7 +124,7 @@ class SshSession(
                     if (n < 0) break
                     if (n > 0) {
                         val copy = buf.copyOf(n)
-                        mainHandler.post { callbacks.onData(copy) }
+                        post { callbacks.onData(copy) }
                     }
                 }
                 disconnectInner("Connection closed by remote")
@@ -145,11 +166,15 @@ class SshSession(
 
     fun write(data: ByteArray) {
         val out = shellOut ?: return
-        writerExecutor.execute {
-            try {
-                synchronized(out) { out.write(data); out.flush() }
-            } catch (_: IOException) {
+        try {
+            writerExecutor.execute {
+                try {
+                    synchronized(out) { out.write(data); out.flush() }
+                } catch (_: IOException) {
+                }
             }
+        } catch (_: RejectedExecutionException) {
+            // session already disconnected — drop the keystrokes
         }
     }
 
@@ -157,11 +182,14 @@ class SshSession(
         cols = newCols
         rows = newRows
         val sh = shell ?: return
-        writerExecutor.execute {
-            try {
-                sh.changeWindowDimensions(newCols, newRows, 0, 0)
-            } catch (_: Exception) {
+        try {
+            writerExecutor.execute {
+                try {
+                    sh.changeWindowDimensions(newCols, newRows, 0, 0)
+                } catch (_: Exception) {
+                }
             }
+        } catch (_: RejectedExecutionException) {
         }
     }
 
@@ -177,6 +205,6 @@ class SshSession(
         try { client?.disconnect() } catch (_: Exception) {}
         forwarderSockets.forEach { try { it.close() } catch (_: Exception) {} }
         val c = callbacks
-        mainHandler.post { c.onDisconnected(reason) }
+        post { c.onDisconnected(reason) }
     }
 }
