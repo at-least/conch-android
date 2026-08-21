@@ -4,13 +4,22 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,9 +29,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
@@ -57,6 +68,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,15 +80,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
+class TerminalActivity : FragmentActivity() {
 
-    private var session: SshSession? = null
+    /** Connection health shown as the banner: dot style + color per state. */
+    private enum class ConnState { CONNECTING, CONNECTED, RECONNECTING, STOPPED }
+
+    private var reconnector: SessionReconnector? = null
     private var host: Host? = null
     private var terminalView: TerminalView? = null
     private var emulator: TerminalEmulator? = null
 
     private val statusText = mutableStateOf<String?>(null)
     private val statusColor = mutableStateOf(Color(0xFFFFB74D))
+    private val connState = mutableStateOf(ConnState.CONNECTING)
     private val subtitle = mutableStateOf("")
     private val keyboardRowVisible = mutableStateOf(true)
     private val ctrlArmed = mutableStateOf(false)
@@ -83,6 +100,8 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
     private val keyPromptState = mutableStateOf<Pair<KeyPromptRequest, (Boolean) -> Unit>?>(null)
     private val snippetsSheetVisible = mutableStateOf(false)
     private val scrollOffset = mutableStateOf(0)
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Command history capture (null when disabled in Settings). */
     private var historyAssembler: InputLineAssembler? = null
@@ -140,21 +159,38 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
     }
 
     private fun connect(host: Host) {
+        connState.value = ConnState.CONNECTING
         statusText.value = "Connecting to ${host.hostname}:${host.port} …"
+        statusColor.value = Color(0xFFFFB74D)
         val emu = emulator
-        session = SshSession(
-            context = this,
-            host = host,
-            initialCols = emu?.cols ?: 80,
-            initialRows = emu?.rows ?: 24,
-            callbacks = this,
-            tofuPrompt = tofuPrompt,
-        ).also { it.connect() }
+        reconnector = SessionReconnector(
+            newSession = { cb ->
+                SshSession(
+                    context = this,
+                    host = host,
+                    initialCols = emu?.cols ?: 80,
+                    initialRows = emu?.rows ?: 24,
+                    callbacks = cb,
+                    tofuPrompt = tofuPrompt,
+                )
+            },
+            listener = object : SessionReconnector.Listener {
+                override fun onSessionConnected() = this@TerminalActivity.onSessionConnected()
+                override fun onSessionData(data: ByteArray) = this@TerminalActivity.onSessionData(data)
+                override fun onReconnecting(attempt: Int, delayMs: Long, reason: String) =
+                    this@TerminalActivity.onReconnecting(attempt, delayMs, reason)
+
+                override fun onSessionStopped(reason: String) = showStopped(reason)
+            },
+            postDelayed = { delayMs, action -> mainHandler.postDelayed(action, delayMs) },
+            cancelScheduled = { mainHandler.removeCallbacksAndMessages(null) },
+        ).also { it.start() }
     }
 
     // ------------------------------------------------------- session callbacks
 
-    override fun onConnected() {
+    private fun onSessionConnected() {
+        connState.value = ConnState.CONNECTED
         statusText.value = "Connected ${host?.username}@${host?.hostname}"
         statusColor.value = Color(0xFF4CAF50)
         host?.let { h ->
@@ -177,24 +213,39 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
         terminalView?.post { terminalView?.showSoftKeyboard() }
     }
 
-    override fun onData(data: ByteArray) {
+    private fun onSessionData(data: ByteArray) {
         terminalView?.feedAndInvalidate(data) ?: emulator?.feed(data)
     }
 
-    override fun onDisconnected(reason: String) {
+    private fun onReconnecting(attempt: Int, delayMs: Long, reason: String) {
         if (isFinishing) return
-        SessionService.stop(this)
+        connState.value = ConnState.RECONNECTING
+        statusText.value = "Reconnecting ($attempt) in ${delayMs / 1000}s — $reason · tap to stop"
+        statusColor.value = Color(0xFFFFB74D)
+        emulator?.feed("\r\u001b[90m── Connection lost: $reason — reconnecting ──\u001b[0m\r\n")
+        terminalView?.invalidate()
+    }
+
+    private fun showStopped(reason: String) {
+        if (isFinishing) return
+        if (connState.value == ConnState.STOPPED) return
+        connState.value = ConnState.STOPPED
         statusText.value = "Disconnected: $reason"
         statusColor.value = Color(0xFFE53935)
         emulator?.feed("\r\u001b[90m── Connection closed: $reason ──\u001b[0m\r\n")
         terminalView?.invalidate()
+        SessionService.stop(this)
         Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
-        session = null
+    }
+
+    /** User tapped the reconnecting banner: give up and show the stopped state. */
+    private fun stopReconnecting() {
+        reconnector?.stop("stopped by user")
     }
 
     override fun onDestroy() {
-        session?.disconnect()
-        session = null
+        reconnector?.stop()
+        reconnector = null
         SessionService.stop(this)
         historyExecutor.shutdown()
         super.onDestroy()
@@ -347,15 +398,28 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
                     .imePadding()
             ) {
                 statusText.value?.let { text ->
-                    Text(
-                        text,
-                        color = Color.White,
-                        fontSize = 12.sp,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(statusColor.value)
+                            .clickable(
+                                enabled = connState.value == ConnState.RECONNECTING,
+                                onClick = { stopReconnecting() }
+                            )
                             .padding(horizontal = 10.dp, vertical = 3.dp)
-                    )
+                    ) {
+                        StatusDot(
+                            state = connState.value,
+                            keepAlive = host?.keepAlive ?: false,
+                        )
+                        Text(
+                            text,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
                 }
                 AndroidView(
                     factory = { ctx ->
@@ -363,10 +427,10 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
                             terminalView = this
                             this.emulator = this@TerminalActivity.emulator
                             onData = { data ->
-                                session?.write(data)
+                                reconnector?.write(data)
                                 historyAssembler?.feed(data)
                             }
-                            onPtyResize = { c, r -> session?.resizePty(c, r) }
+                            onPtyResize = { c, r -> reconnector?.resizePty(c, r) }
                             onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
                             onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.value = off }
                             if (host?.fontSizeSp ?: 0f > 0f) {
@@ -682,9 +746,73 @@ class TerminalActivity : FragmentActivity(), SshSession.Callbacks {
         }
     }
 
+    /**
+     * Health dot for the status banner:
+     * - CONNECTED + keep-alive: flashes once every 15s — the visible
+     *   heartbeat, synced to the SSH keep-alive cadence (sshj offers no
+     *   per-reply callback, so this is the cadence, not the reply)
+     * - CONNECTED without keep-alive: solid
+     * - CONNECTING / RECONNECTING: blinking
+     * - STOPPED: dim grey
+     */
+    @Composable
+    private fun StatusDot(state: ConnState, keepAlive: Boolean) {
+        val alpha = when (state) {
+            ConnState.CONNECTED -> if (keepAlive) heartbeatAlpha() else 1f
+            ConnState.CONNECTING, ConnState.RECONNECTING -> blinkAlpha()
+            ConnState.STOPPED -> 0.35f
+        }
+        val color = if (state == ConnState.STOPPED) Color(0xFF37474F) else Color.White
+        Box(
+            Modifier
+                .size(8.dp)
+                .alpha(alpha)
+                .clip(CircleShape)
+                .background(color)
+        )
+    }
+
+    /** Full brightness for 0.8s, decays to 0.35 by 2s, holds until the next 15s beat. */
+    @Composable
+    private fun heartbeatAlpha(): Float {
+        val transition = rememberInfiniteTransition(label = "heartbeat")
+        val phase = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 15f,
+            animationSpec = infiniteRepeatable(tween(15_000, easing = LinearEasing)),
+            label = "phase",
+        )
+        // derivedStateOf: while the computed alpha holds at 0.35f (13 of every
+        // 15 seconds) the structurally-equal write suppresses recomposition —
+        // the animation clock ticks cheaply instead of redrawing every frame
+        val alpha = remember {
+            androidx.compose.runtime.derivedStateOf {
+                val p = phase.value
+                if (p < 0.8f) 1f
+                else 0.35f + 0.65f * (1f - ((p - 0.8f) / 1.2f).coerceIn(0f, 1f))
+            }
+        }
+        return alpha.value
+    }
+
+    @Composable
+    private fun blinkAlpha(): Float {
+        val transition = rememberInfiniteTransition(label = "blink")
+        val a by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.25f,
+            animationSpec = infiniteRepeatable(
+                tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                RepeatMode.Reverse,
+            ),
+            label = "alpha",
+        )
+        return a
+    }
+
     private fun disconnectAndFinish() {
-        session?.disconnect()
-        session = null
+        reconnector?.stop()
+        reconnector = null
         SessionService.stop(this)
         finish()
     }

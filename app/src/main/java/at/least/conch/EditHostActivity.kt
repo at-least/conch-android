@@ -106,7 +106,7 @@ private fun EditHostScreen(
     var password by remember { mutableStateOf("") }
     var fontSizeText by remember { mutableStateOf(if ((initial?.fontSizeSp ?: 0f) > 0f) initial!!.fontSizeSp.toInt().toString() else "") }
     var keepAlive by remember { mutableStateOf(initial?.keepAlive ?: true) }
-    var tmux by remember { mutableStateOf(initial?.tmuxAutoAttach ?: false) }
+    var tmux by remember { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
     var socksPortText by remember { mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "") }
     val ctx = LocalContext.current
     val keys = remember { KeyManager(ctx).list() }

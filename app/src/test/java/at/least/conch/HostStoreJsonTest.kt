@@ -42,6 +42,12 @@ class HostStoreJsonTest {
     }
 
     @Test
+    fun `new hosts default to tmux auto attach`() {
+        // mobile-first default: sessions must survive network drops
+        assertTrue(Host().tmuxAutoAttach)
+    }
+
+    @Test
     fun `missing fields fall back to defaults`() {
         val o = JSONObject().put("id", "x").put("hostname", "h").put("username", "u")
         val host = HostStore.hostFromJson(o)
@@ -50,6 +56,8 @@ class HostStoreJsonTest {
         assertEquals(null, host.keyId)
         assertEquals(0f, host.fontSizeSp)
         assertTrue(host.keepAlive)
+        // pre-feature backups (no tmuxAutoAttach field) must stay off —
+        // only NEW hosts get the default-on behavior
         assertFalse(host.tmuxAutoAttach)
         assertTrue(host.tunnels.isEmpty())
     }

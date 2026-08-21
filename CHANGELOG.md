@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.1 (unreleased)
+
+- Auto-reconnect with exponential backoff (1s → 2s → … → 30s cap, unlimited
+  retries): mobile networks drop, and with tmux attached the session lives
+  server-side — conch now comes back on its own and restores the screen.
+  Tap the amber "Reconnecting" banner to give up
+- Connection health banner: status dot with a visible 15s heartbeat pulse
+  while connected (synced to the SSH keep-alive cadence), blinking while
+  connecting/reconnecting, dim when stopped
+- New hosts now default to "Auto-attach tmux" ON (existing hosts keep their
+  saved setting; pre-feature backups import as off)
+
 ## 0.9.0 (2026-08-19)
 
 - Bracketed paste mode (xterm DECSET 2004): pastes into vim/nano/less land

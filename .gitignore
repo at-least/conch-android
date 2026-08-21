@@ -10,5 +10,4 @@ captures/
 .kotlin/
 # internal working docs — not for the public repo
 /docs/
-/PLAN.md
 /.fable/

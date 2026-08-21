@@ -35,7 +35,10 @@ data class Host(
     var keyId: String? = null,
     var fontSizeSp: Float = 0f,             // 0 = app default
     var keepAlive: Boolean = true,
-    var tmuxAutoAttach: Boolean = false,    // attach/create session "conch" on connect
+    // Default ON for newly created hosts (mobile networks drop; tmux keeps
+    // the session alive server-side). hostFromJson keeps its own fallback of
+    // false so pre-feature backups and saved hosts stay exactly as they were.
+    var tmuxAutoAttach: Boolean = true,
     var socksPort: Int = 0,                 // local SOCKS5 proxy (0 = off)
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
