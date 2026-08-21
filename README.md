@@ -1,8 +1,12 @@
-# Conch
+# Conch Android
 
 <a href="https://least.at"><strong>least.at</strong></a> · GitHub: [at-least/conch-android](https://github.com/at-least/conch-android)
 
 A free, open-source SSH client for Android — no subscription, no tracking, no ads (an optional one-time "remove ads" purchase may arrive in the Play build later; the direct-APK build will always be clean).
+
+This is the original Conch codebase. An iOS sibling lives at
+[at-least/conch-ios](https://github.com/at-least/conch-ios) — same feature
+set and byte-compatible backups (`TILDBAK1`), built with Citadel/SwiftTerm.
 
 Built for people who manage servers from their phone: ops, devs, and anyone left stranded by abandoned SSH apps.
 
@@ -20,9 +24,11 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - 64 KB read buffer + per-frame repaint throttling — `cat` a huge file without stutter
 
 ### Connectivity
+- **Auto-reconnect with exponential backoff** (1s → 2s → … → 30s, unlimited retries) — mobile networks drop; conch comes back on its own
+- **Connection health banner** — four states (connecting / connected / reconnecting(n) / stopped) with a status dot that pulses on the 15-second keep-alive heartbeat; tap the amber banner to give up retrying
 - **Multiple concurrent sessions** — "Connect (new session)" opens another terminal; each gets its own persistent notification
 - **Foreground service** keeps sessions alive when backgrounded (survives Android's task killers)
-- Optional auto-attach into `tmux` (`tmux new -A -s conch`) — a dropped connection never loses your work
+- **tmux auto-attach on by default** for new hosts (`tmux new -A -s conch`) — a dropped connection never loses your work; existing hosts keep their saved setting
 - **Port forwarding**: local tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
 - Keep-alive, per-host terminal font size, OSC window-title tracking
 
@@ -91,7 +97,9 @@ tier — forever.** Data portability is a right, not a feature gate.
 ./gradlew testFossDebugUnitTest  # unit tests
 ```
 
-Requirements: JDK 17, Android SDK 35.
+Requirements: JDK 17+ (Temurin 21 tested; note Android Studio's bundled JBR
+25 currently fails the Kotlin compiler's version parsing — use a standalone
+JDK), Android SDK 35.
 
 Optional build inputs (via `local.properties`, never committed):
 - `SENTRY_DSN` / `SENTRY_URL` / `SENTRY_TOKEN` — enable crash reporting and
@@ -107,6 +115,8 @@ app/src/main/java/at/least/conch/
   TerminalEmulator.kt      # VT100/xterm state machine (pure Kotlin, unit-tested)
   TerminalView.kt          # canvas renderer + gesture/keyboard input
   SshSession.kt            # sshj shell + PTY + tunnels + SOCKS5
+  SessionReconnector.kt    # drop → backoff → rebuild → re-attach orchestration
+  ReconnectPolicy.kt       # exponential backoff (1s…30s cap, unlimited retries)
   SocksProxy.kt            # minimal SOCKS5 server bridging to direct-tcpip
   SshConnectionFactory.kt  # auth (password/key), TOFU, keep-alive
   KeyManager.kt            # Ed25519 generate/import (OpenSSH v1 format)
@@ -121,6 +131,18 @@ app/src/main/java/at/least/conch/
   CrashReporting.kt        # opt-in Sentry wrapper with host scrubbing
   ...
 ```
+
+Tests run against a real in-process sshd (Apache MINA SSHD) — the same
+code paths the app drives, including connect/auth/PTY/SFTP/forwarding,
+TOFU accept/reject, and reconnect-after-drop.
+
+## Development roadmap
+
+[PLAN.md](PLAN.md) tracks the mobile-first redesign in value order
+(① reconnect + tmux default ✅ → ② pull-down command panel → ③ gesture
+strip + modifier chips → ④ card tabs), gated by the hypotheses in
+[POC.md](POC.md). Both are part of the repo, one per platform — the iOS
+equivalents live in [conch-ios](https://github.com/at-least/conch-ios).
 
 ## Privacy
 
