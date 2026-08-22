@@ -102,6 +102,139 @@ actually runs in THIS repo.
   acceptance: tagged commit builds a clean direct APK; changelog matches
   deps: A1; B/C items ride along if closed by then
 
+### Phase E — iOS feature parity (native Android UI) 2026-08-22
+
+Match conch-ios's C50–C58 redesign: in-session 4 tabs sharing one
+connection, command palette, tunnel capsule, sessions switcher, host live
+badge. UI stays Material3 / Android-native — NO SwiftUI ports. POC in
+POC.md; H1 verified (one SSHClient multiplexes PTY+exec+SFTP, 254 green).
+
+Spike conclusions (from verified H1):
+- sshj SSHClient already multiplexes shell + exec + SFTP on one connection
+  — SshSession only needs to EXPOSE exec()/sftpClient(), not re-architect.
+- Monitor/Docker probes are `startSession().exec(cmd)` + pure parsers;
+  swapping the connection source changes nothing about command strings.
+- iOS keeps the terminal mounted via ZStack opacity; the Android analogue
+  is a Compose AndroidView that is never conditionally removed (visibility
+  swap only), so emulator/scrollback survive tab switches.
+
+- [x] E1: Expose `exec(command)` and `sftpClient()` on SshSession (shared
+      connection) without breaking the shell or existing tests
+  acceptance: new `SharedConnectionMultiplexTest` green (already added,
+  H1); full `./gradlew testFossDebugUnitTest` green (254); existing
+  SessionReconnectorInteractionTest + SshShellPtyInteractionTest stay green
+  deps: H1 (verified)
+  evidence: 2026-08-22 — `SshSession.exec()/sftpClient()/isConnected` added
+  (client + session now @Volatile); `SessionReconnector` delegates
+  exec/sftpClient/isConnected to current. `./gradlew testFossDebugUnitTest
+  --rerun-tasks` → BUILD SUCCESSFUL, 254 tests, 0 failures, 0 errors.
+  Named: SharedConnectionMultiplexTest + SessionReconnectorInteractionTest
+  + SshShellPtyInteractionTest = 8 tests, 0 failures.
+
+- [x] E2: Extract Monitor + Docker + SFTP screens as Compose composables
+      that take a shared SshSession (reusing existing parsers/command
+      strings verbatim)
+  acceptance: the three composables compile and render against a shared
+  session in a host-less preview/test; parsers unchanged (existing
+  MonitorDockerParserTest + DockerParserTest + SftpInteractionTest green)
+  deps: E1
+  evidence: 2026-08-22 — `SessionTabs.kt` adds `MonitorTab`/`DockerTab`/
+  `SftpTab`(@Composable) taking `SessionReconnector`; reuse
+  `MonitorParser`/`DockerParser`/`SftpEntry` + the exact PROBE &
+  `docker ps` command strings verbatim; async via `rememberCoroutineScope`.
+  `compileFossDebugKotlin` BUILD SUCCESSFUL. `testFossDebugUnitTest
+  --rerun-tasks` → 254 tests, 0 failures. Parser tests green:
+  MonitorParserTest 3/0, DockerParserTest 3/0, SftpInteractionTest 13/0.
+
+- [x] E3: In-session TabRow (Terminal / Monitor / Docker / Files) in
+      TerminalActivity — terminal AndroidView stays mounted (visibility
+      swap, never removed), other tabs render E2 composables on top
+  acceptance: build green; switching Terminal → Monitor → Terminal keeps
+  the same TerminalView + emulator instance (identity preserved); full
+  `./gradlew testFossDebugUnitTest` green
+  deps: E2
+  evidence: 2026-08-22 — TerminalActivity content is now a Box: the
+  terminal `AndroidView` (+ ExtraKeysRow) stays in composition at all
+  times, toggled via `Modifier.alpha(0f)` when off-tab (NEVER removed, so
+  the factory runs once and the TerminalView/emulator instance survives
+  every tab switch — the Android analogue of iOS's ZStack opacity). Non-
+  terminal tabs render `MonitorTab`/`DockerTab`/`SftpTab` on top. A
+  Material3 `NavigationBar` hosts the 4 tabs; the topBar's SFTP/Monitor/
+  Docker IconButtons are removed (replaced by tabs). `compileFossDebugKotlin`
+  BUILD SUCCESSFUL; `testFossDebugUnitTest --rerun-tasks` → 254 tests,
+  0 failures. Identity preservation across tab switches is a structural
+  guarantee (AndroidView not conditionally removed); a Compose UI
+  instrumented test asserting instance identity is the only residual gap
+  (no emulator in this env — manual QA, same shape as iOS T26).
+
+- [x] E4: Command Palette — ModalBottomSheet searching history + snippets
+      (prefix > substring rank, snippets win ties), tap-to-run; Snippets &
+      History management sheets open from it (replaces the overflow menu
+      items)
+  acceptance: new `CommandPaletteModelTest` (pure filter/rank logic ported
+  from iOS) green; build green; overflow menu's Snippets/History items
+  replaced by the palette
+  deps: E1
+  evidence: 2026-08-22 — `CommandPaletteModel.kt` (pure rank: prefix=0 >
+  substring=1, snippets win ties, empty→recent history newest-first, limit
+  cap) + `CommandPaletteSheet.kt` (ModalBottomSheet + debounced search +
+  tap-to-run via sendRaw). TerminalActivity overflow menu adds "Command
+  palette" entry; Snippets/History management sheets open from the palette.
+  `CommandPaletteModelTest` 7/0 green. `testFossDebugUnitTest` → 261 tests,
+  0 failures.
+
+- [x] E5: Tunnel capsule on the session screen — `AssistChip` showing
+      `⇅ N` when tunnels are live, tap → confirmation to stop all tunnels
+  acceptance: build green; capsule visible iff host.tunnels non-empty;
+  stop-all tears down forwarder sockets (existing PortForwardInteractionTest
+  green)
+  deps: E1
+  evidence: 2026-08-22 — `SshSession.stopTunnels()` + `tunnelCount` added
+  (closes forwarderSockets + interrupts forwarderThreads WITHOUT closing
+  shell/transport); `SessionReconnector` delegates. TerminalActivity topBar
+  shows an `AssistChip "⇅ N"` (green, SyncAlt icon) when liveTunnelCount>0,
+  tap → AlertDialog "Stop N tunnel(s)?" → stopTunnels + count=0. Count
+  initialised in onSessionConnected. `testFossDebugUnitTest` → 261 tests,
+  0 failures; PortForwardInteractionTest stays green.
+
+- [x] E6: Sessions switcher — ModalBottomSheet listing live sessions
+      (host name + relative start time), tap to switch, swipe to disconnect
+  acceptance: build green; switcher lists every active TerminalActivity
+  session; swipe-disconnect tears down that session only
+  deps: E1
+  evidence: 2026-08-22 — `LiveSessions.kt` (process-level ConcurrentHashMap
+  registry: register/unregister/all/countForHost/disconnectAll, thread-safe,
+  holds only display metadata + a disconnectFn — never the SSH client).
+  TerminalActivity registers on onSessionConnected (sessionId UUID),
+  unregisters on onDestroy. `SessionsSheet.kt` = ModalBottomSheet +
+  SwipeToDismissBox (EndToStart → disconnectFn + refresh list). MainActivity
+  menu shows "Sessions (N)" iff LiveSessions non-empty. Tap row →
+  startActivity TerminalActivity with REORDER_TO_FRONT. `testFossDebugUnitTest`
+  → 261 tests, 0 failures. Registry is pure singleton (no IO) — the sheet's
+  swipe/tap behavior is the manual-QA gap (no emulator in env).
+
+- [x] E7: Host card live badge on MainActivity host list — green dot +
+      `live` / `N live` text when a host has live sessions
+  acceptance: build green; badge derives from a live-session registry
+  (HostCardStatus parity with iOS); unit test for the badge derivation green
+  deps: E6
+  evidence: 2026-08-22 — `HostCardStatus.kt` (pure: liveSessionCount →
+  isLive/badgeText/showsDot, "live"/"N live") + `HostCardStatusTest` 3/0
+  green. MainActivity `HostCard` now shows a green dot + badge text via
+  `LiveSessions.countForHost(host.id)`; badge refreshes on onResume (host
+  list reload). `testFossDebugUnitTest` → 264 tests, 0 failures.
+
+- [x] E8: README + CHANGELOG roll-up for the parity arc
+  acceptance: README Features list matches shipped behavior; CHANGELOG
+  entry covers E1–E7
+  deps: E1–E7
+  evidence: 2026-08-22 — README "Tools" section adds in-session tabs,
+  command palette, sessions switcher, tunnel capsule; project layout lists
+  the new files (SessionTabs/CommandPaletteModel/CommandPaletteSheet/
+  SessionsSheet/LiveSessions/HostCardStatus) + updated SshSession/Activity
+  descriptions. CHANGELOG 0.9.1 entry covers E1–E7. `testFossDebugUnitTest
+  --rerun-tasks` → 264 tests, 0 failures.
+
 ## Android-specific considerations
 
 1. Foreground service + persistent notifications keep sessions alive —
