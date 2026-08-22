@@ -6,6 +6,7 @@ import android.os.Looper
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.connection.channel.direct.Parameters
 import net.schmizz.sshj.connection.channel.direct.Session
+import net.schmizz.sshj.sftp.SFTPClient
 import java.io.IOException
 import java.io.OutputStream
 import java.net.InetAddress
@@ -49,12 +50,15 @@ class SshSession(
                 p,
             )
         }
+    @Volatile
     private var client: SSHClient? = null
+    @Volatile
     private var session: Session? = null
     private var shell: Session.Shell? = null
     private var shellOut: OutputStream? = null
-    private val forwarderSockets = mutableListOf<ServerSocket>()
-    private val forwarderThreads = mutableListOf<Thread>()
+    private val forwarderSockets = java.util.Collections.synchronizedList(mutableListOf<ServerSocket>())
+    private val forwarderThreads = java.util.Collections.synchronizedList(mutableListOf<Thread>())
+    @Volatile
     private var socksProxy: SocksProxy? = null
     private val closed = AtomicBoolean(false)
 
@@ -193,6 +197,78 @@ class SshSession(
         }
     }
 
+    /**
+     * True iff the SSH transport is connected and this session has not been
+     * torn down. Pure display signal (e.g. the connection-health dot) —
+     * never gates interaction.
+     */
+    val isConnected: Boolean
+        get() = !closed.get() && client?.isConnected == true
+
+    /**
+     * Run a one-shot command on a NEW exec channel over the SAME connection
+     * as the live PTY shell (H1: sshj multiplexes both). Blocks the caller
+     * until the command's stdout is fully drained; call from a background
+     * thread/coroutine. Returns null if no connection is live or the exec
+     * failed. The shell channel is never touched here.
+     */
+    fun exec(command: String): String? {
+        val ssh = client ?: return null
+        if (closed.get()) return null
+        return try {
+            val s = ssh.startSession()
+            val cmd = s.exec(command)
+            val out = cmd.inputStream.readBytes().decodeToString()
+            cmd.close()
+            s.close()
+            out
+        } catch (e: Exception) {
+            CrashReporting.report(e)
+            null
+        }
+    }
+
+    /**
+     * Open an SFTP client over the SAME connection as the live PTY shell.
+     * Caller owns the returned client's lifecycle (close it when the file
+     * browser tab is done). Returns null if no connection is live.
+     */
+    fun sftpClient(): SFTPClient? {
+        val ssh = client ?: return null
+        if (closed.get()) return null
+        return try {
+            ssh.newSFTPClient()
+        } catch (e: Exception) {
+            CrashReporting.report(e)
+            null
+        }
+    }
+
+    /**
+     * Tear down all local-port-forward tunnels AND the SOCKS5 proxy WITHOUT
+     * closing the shell or the SSH transport. The shell channel and any
+     * exec/SFTP channels stay alive (C52 tunnel capsule parity: user taps
+     * "⇅ N" → stop all tunnels). Synchronized so a reconnect's startTunnels
+     * can't race a concurrent stop.
+     */
+    fun stopTunnels() {
+        synchronized(forwarderSockets) {
+            forwarderSockets.forEach { try { it.close() } catch (_: Exception) {} }
+            forwarderSockets.clear()
+            forwarderThreads.forEach { it.interrupt() }
+            forwarderThreads.clear()
+        }
+        socksProxy?.stop()
+        socksProxy = null
+    }
+
+    /** Number of active local-port-forward tunnels + SOCKS proxy (display signal). */
+    val tunnelCount: Int
+        get() {
+            val fw = synchronized(forwarderSockets) { forwarderSockets.count { !it.isClosed } }
+            return fw + (if (socksProxy != null) 1 else 0)
+        }
+
     fun disconnect(reason: String = "Disconnected") {
         disconnectInner(reason)
     }
@@ -200,10 +276,9 @@ class SshSession(
     private fun disconnectInner(reason: String) {
         if (!closed.compareAndSet(false, true)) return
         writerExecutor.shutdownNow()
-        socksProxy?.stop()
+        stopTunnels()
         try { session?.close() } catch (_: Exception) {}
         try { client?.disconnect() } catch (_: Exception) {}
-        forwarderSockets.forEach { try { it.close() } catch (_: Exception) {} }
         val c = callbacks
         post { c.onDisconnected(reason) }
     }

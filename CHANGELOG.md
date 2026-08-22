@@ -2,6 +2,23 @@
 
 ## 0.9.1 (unreleased)
 
+- In-session tabs: Terminal / Monitor / Docker / Files now share ONE SSH
+  connection (the same one as your live shell) via a bottom NavigationBar.
+  Switching away from Terminal and back keeps your buffer, PTY and
+  scrollback intact (the terminal view is never torn down). Monitor/Docker/
+  Files reuse the live connection instead of opening a separate one
+- Command palette: pull-down search over command history + snippets, tap to
+  run — two taps instead of ten characters on glass. Prefix matches rank
+  above substring; snippets win ties. Snippets & History management sheets
+  open from the palette (terminal menu → Command palette)
+- Tunnel capsule: a green `⇅ N` chip on the session toolbar shows active
+  local port forwards; tap → confirm to stop all tunnels (the SSH session
+  stays connected)
+- Sessions switcher: the main menu lists every live terminal session when
+  more than one is open — tap to switch, swipe to disconnect that session
+  only
+- Host cards now show a green dot + `live` / `N live` badge when a host has
+  active sessions
 - Auto-reconnect with exponential backoff (1s → 2s → … → 30s cap, unlimited
   retries): mobile networks drop, and with tmux attached the session lives
   server-side — conch now comes back on its own and restores the screen.

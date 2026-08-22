@@ -7,16 +7,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -44,6 +48,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -86,6 +92,7 @@ class MainActivity : FragmentActivity() {
         var confirmDelete by remember { mutableStateOf<Host?>(null) }
         var showAbout by remember { mutableStateOf(false) }
         var mainMenuOpen by remember { mutableStateOf(false) }
+        var showSessions by remember { mutableStateOf(false) }
         var importResult by remember { mutableStateOf<String?>(null) }
 
         val importLauncher = rememberLauncherForActivityResult(
@@ -162,6 +169,16 @@ class MainActivity : FragmentActivity() {
                                     startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
                                 }
                             )
+                            if (!LiveSessions.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("Sessions (${LiveSessions.all().size})") },
+                                    leadingIcon = { Icon(Icons.Filled.MoreVert, contentDescription = null) },
+                                    onClick = {
+                                        mainMenuOpen = false
+                                        showSessions = true
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("About") },
                                 onClick = { mainMenuOpen = false; showAbout = true }
@@ -239,6 +256,18 @@ class MainActivity : FragmentActivity() {
             )
         }
 
+        if (showSessions) {
+            SessionsSheet(
+                onOpen = { live ->
+                    val intent = Intent(this@MainActivity, TerminalActivity::class.java)
+                    intent.putExtra("hostId", live.hostId)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    startActivity(intent)
+                },
+                onDismiss = { showSessions = false },
+            )
+        }
+
         if (showAbout) {
             AlertDialog(
                 onDismissRequest = { showAbout = false },
@@ -263,6 +292,7 @@ class MainActivity : FragmentActivity() {
     @Composable
     private fun HostCard(host: Host, onClick: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
         var menuOpen by remember { mutableStateOf(false) }
+        val status = HostCardStatus(liveSessionCount = LiveSessions.countForHost(host.id))
         Box {
             Card(
                 Modifier
@@ -273,7 +303,26 @@ class MainActivity : FragmentActivity() {
                     )
             ) {
                 Column(Modifier.padding(14.dp)) {
-                    Text(host.displayName(), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(host.displayName(), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        if (status.showsDot) {
+                            Box(
+                                Modifier
+                                    .padding(start = 6.dp)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF23D18B))
+                            )
+                            status.badgeText?.let { badge ->
+                                Text(
+                                    badge,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF23D18B),
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
+                        }
+                    }
                     Text(
                         buildString {
                             append("${host.username}@${host.hostname}:${host.port}")

@@ -39,12 +39,17 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -55,6 +60,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -99,6 +106,10 @@ class TerminalActivity : FragmentActivity() {
     private val finishRequested = mutableStateOf(false)
     private val keyPromptState = mutableStateOf<Pair<KeyPromptRequest, (Boolean) -> Unit>?>(null)
     private val snippetsSheetVisible = mutableStateOf(false)
+    private val paletteSheetVisible = mutableStateOf(false)
+    private val tunnelConfirmVisible = mutableStateOf(false)
+    private val liveTunnelCount = mutableStateOf(0)
+    private val connectionGen = mutableStateOf(0)
     private val scrollOffset = mutableStateOf(0)
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -115,6 +126,9 @@ class TerminalActivity : FragmentActivity() {
     private val tofuPrompt: KeyPrompt = { request, answer ->
         keyPromptState.value = request to answer
     }
+
+    /** Unique id for this terminal instance in the live-sessions registry. */
+    private val sessionId = java.util.UUID.randomUUID().toString()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -193,6 +207,20 @@ class TerminalActivity : FragmentActivity() {
         connState.value = ConnState.CONNECTED
         statusText.value = "Connected ${host?.username}@${host?.hostname}"
         statusColor.value = Color(0xFF4CAF50)
+        liveTunnelCount.value = reconnector?.tunnelCount ?: 0
+        connectionGen.value += 1
+        val h = host
+        if (h != null) {
+            LiveSessions.register(
+                LiveSessions.Live(
+                    id = sessionId,
+                    hostId = h.id,
+                    displayName = if (h.alias.isNotBlank()) h.alias else h.hostname,
+                    startedAt = System.currentTimeMillis(),
+                    disconnectFn = { runOnUiThread { disconnectAndFinish() } },
+                )
+            )
+        }
         host?.let { h ->
             val name = if (h.alias.isNotBlank()) h.alias else h.hostname
             // Only start the foreground service while we're in the foreground;
@@ -244,6 +272,7 @@ class TerminalActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        LiveSessions.unregister(sessionId)
         reconnector?.stop()
         reconnector = null
         SessionService.stop(this)
@@ -284,6 +313,7 @@ class TerminalActivity : FragmentActivity() {
         val host = this.host
         var menuOpen by remember { mutableStateOf(false) }
         val snippets = remember { SnippetStore(this).load() }
+        var tab by remember { mutableStateOf(SessionTab.TERMINAL) }
 
         Scaffold(
             containerColor = Color(0xFF1A1B26),
@@ -325,22 +355,28 @@ class TerminalActivity : FragmentActivity() {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { openSftp() }) {
-                            Icon(Icons.Filled.Storage, contentDescription = "Files")
-                        }
-                        IconButton(onClick = { openMonitor() }) {
-                            Icon(Icons.Filled.Monitor, contentDescription = "Monitor")
-                        }
-                        IconButton(onClick = {
-                            val host = this@TerminalActivity.host ?: return@IconButton
-                            startActivity(android.content.Intent(this@TerminalActivity, DockerActivity::class.java).putExtra("hostId", host.id))
-                        }) {
-                            Icon(Icons.Filled.Storage, contentDescription = "Docker")
+                        if (liveTunnelCount.value > 0) {
+                            AssistChip(
+                                onClick = { tunnelConfirmVisible.value = true },
+                                label = { Text("⇅ ${liveTunnelCount.value}", fontSize = 12.sp) },
+                                leadingIcon = { Icon(Icons.Filled.SyncAlt, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = Color(0xFF1B5E20),
+                                    labelColor = Color(0xFFA5D6A7),
+                                    leadingIconContentColor = Color(0xFFA5D6A7),
+                                ),
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
                         }
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "Menu")
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Command palette") },
+                                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                                onClick = { menuOpen = false; paletteSheetVisible.value = true }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Snippets") },
                                 leadingIcon = { Icon(Icons.Filled.Code, contentDescription = null) },
@@ -397,60 +433,88 @@ class TerminalActivity : FragmentActivity() {
                     .background(Color(0xFF1A1B26))
                     .imePadding()
             ) {
-                statusText.value?.let { text ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(statusColor.value)
-                            .clickable(
-                                enabled = connState.value == ConnState.RECONNECTING,
-                                onClick = { stopReconnecting() }
+                // Health banner lives on the terminal tab only (iOS parity:
+                // the dot+banner is terminal context, not Monitor/Docker/Files).
+                if (tab == SessionTab.TERMINAL) {
+                    statusText.value?.let { text ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(statusColor.value)
+                                .clickable(
+                                    enabled = connState.value == ConnState.RECONNECTING,
+                                    onClick = { stopReconnecting() }
+                                )
+                                .padding(horizontal = 10.dp, vertical = 3.dp)
+                        ) {
+                            StatusDot(
+                                state = connState.value,
+                                keepAlive = host?.keepAlive ?: false,
                             )
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
-                    ) {
-                        StatusDot(
-                            state = connState.value,
-                            keepAlive = host?.keepAlive ?: false,
-                        )
-                        Text(
-                            text,
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(start = 6.dp)
-                        )
+                            Text(
+                                text,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 6.dp)
+                            )
+                        }
                     }
                 }
-                AndroidView(
-                    factory = { ctx ->
-                        TerminalView(ctx).apply {
-                            terminalView = this
-                            this.emulator = this@TerminalActivity.emulator
-                            onData = { data ->
-                                reconnector?.write(data)
-                                historyAssembler?.feed(data)
-                            }
-                            onPtyResize = { c, r -> reconnector?.resizePty(c, r) }
-                            onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
-                            onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.value = off }
-                            if (host?.fontSizeSp ?: 0f > 0f) {
-                                fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
-                            }
-                            theme = TerminalTheme.byName(
-                                getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-                                    .getString(TerminalTheme.PREF_KEY, null)
-                            )
-                            setOnClickListener { showSoftKeyboard() }
-                            post { requestFocus() }
-                        }
-                    },
-                    modifier = Modifier
+                // Terminal stays mounted under everything (opacity swap, never
+                // removed from composition) so buffer + PTY + scrollback survive
+                // every tab switch — the invariant iOS enforces via ZStack.
+                Box(
+                    Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                )
-                if (keyboardRowVisible.value) {
-                    ExtraKeysRow()
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .then(if (tab == SessionTab.TERMINAL) Modifier else Modifier.alpha(0f))
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                TerminalView(ctx).apply {
+                                    terminalView = this
+                                    this.emulator = this@TerminalActivity.emulator
+                                    onData = { data ->
+                                        reconnector?.write(data)
+                                        historyAssembler?.feed(data)
+                                    }
+                                    onPtyResize = { c, r -> reconnector?.resizePty(c, r) }
+                                    onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
+                                    onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.value = off }
+                                    if (host?.fontSizeSp ?: 0f > 0f) {
+                                        fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
+                                    }
+                                    theme = TerminalTheme.byName(
+                                        getSharedPreferences("conchapp_settings", MODE_PRIVATE)
+                                            .getString(TerminalTheme.PREF_KEY, null)
+                                    )
+                                    setOnClickListener { showSoftKeyboard() }
+                                    post { requestFocus() }
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        )
+                        if (keyboardRowVisible.value && tab == SessionTab.TERMINAL) {
+                            ExtraKeysRow()
+                        }
+                    }
+                    // Non-terminal tabs render ON TOP of the (hidden) terminal.
+                    val rc = reconnector
+                    when (tab) {
+                        SessionTab.TERMINAL -> {}
+                        SessionTab.MONITOR -> if (rc != null) MonitorTab(rc) else LoadingTab("Monitor")
+                        SessionTab.DOCKER -> if (rc != null) DockerTab(rc) else LoadingTab("Docker")
+                        SessionTab.FILES -> if (rc != null) SftpTab(rc, connectionGen.value) else LoadingTab("Files")
+                    }
                 }
+                SessionTabBar(tab = tab, onTab = { tab = it })
             }
         }
 
@@ -503,6 +567,43 @@ class TerminalActivity : FragmentActivity() {
             )
         }
 
+        if (tunnelConfirmVisible.value) {
+            AlertDialog(
+                onDismissRequest = { tunnelConfirmVisible.value = false },
+                title = { Text("Stop ${liveTunnelCount.value} tunnel(s)?") },
+                text = { Text("This tears down all local port forwards. The SSH session stays connected.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        reconnector?.stopTunnels()
+                        liveTunnelCount.value = 0
+                        tunnelConfirmVisible.value = false
+                    }) { Text("Stop all tunnels", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { tunnelConfirmVisible.value = false }) { Text("Cancel") }
+                }
+            )
+        }
+
+        if (paletteSheetVisible.value) {
+            val hostId = this.host?.id ?: return@TerminalScreen
+            CommandPaletteSheet(
+                hostId = hostId,
+                historyStore = historyStore,
+                snippetStore = SnippetStore(this),
+                runCommand = { line -> terminalView?.sendRaw(line.toByteArray(Charsets.UTF_8)) },
+                onDismiss = { paletteSheetVisible.value = false },
+                onOpenSnippets = {
+                    paletteSheetVisible.value = false
+                    snippetsSheetVisible.value = true
+                },
+                onOpenHistory = {
+                    paletteSheetVisible.value = false
+                    historySheetVisible.value = true
+                },
+            )
+        }
+
         if (snippetsSheetVisible.value) {
             ModalBottomSheet(onDismissRequest = { snippetsSheetVisible.value = false }) {
                 Text(
@@ -524,7 +625,11 @@ class TerminalActivity : FragmentActivity() {
                                 .fillMaxWidth()
                                 .clickable {
                                     snippetsSheetVisible.value = false
-                                    terminalView?.sendText(snip.command + "\r")
+                                    // sendRaw, not sendText: a single-char
+                                    // command must never be interpreted as
+                                    // an armed Ctrl-letter (parity with the
+                                    // palette + history sheet paths).
+                                    terminalView?.sendRaw((snip.command + "\r").toByteArray(Charsets.UTF_8))
                                 }
                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                         ) {
@@ -815,5 +920,49 @@ class TerminalActivity : FragmentActivity() {
         reconnector = null
         SessionService.stop(this)
         finish()
+    }
+
+    /** In-session tabs (C52 redesign): Terminal / Monitor / Docker / Files. */
+    private enum class SessionTab(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+        TERMINAL("Terminal", Icons.Filled.Code),
+        MONITOR("Monitor", Icons.Filled.Monitor),
+        DOCKER("Docker", Icons.Filled.Storage),
+        FILES("Files", Icons.Filled.Folder),
+    }
+
+    @Composable
+    private fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -> Unit) {
+        NavigationBar(containerColor = Color(0xFF10151E)) {
+            SessionTab.entries.forEach { t ->
+                NavigationBarItem(
+                    selected = tab == t,
+                    onClick = { onTab(t) },
+                    icon = { Icon(t.icon, contentDescription = t.title) },
+                    label = { Text(t.title, fontSize = 11.sp) },
+                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFFE0E0E0),
+                        selectedTextColor = Color(0xFFE0E0E0),
+                        indicatorColor = Color(0xFF1E62B4),
+                        unselectedIconColor = Color(0xFF9E9E9E),
+                        unselectedTextColor = Color(0xFF9E9E9E),
+                    ),
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun LoadingTab(label: String) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                LinearProgressIndicator(Modifier.fillMaxWidth(0.6f))
+                Text(
+                    "Connecting…",
+                    fontSize = 13.sp,
+                    color = Color(0xFF9E9E9E),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
     }
 }

@@ -40,10 +40,20 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Opt-in crash reporting** — self-hosted Sentry, off by default, host addresses scrubbed, no PII (builds without a DSN have it fully disabled)
 
 ### Tools
+- **In-session tabs** — Terminal / Monitor / Docker / Files share ONE SSH
+  connection (the same one as your live shell) via a bottom navigation bar;
+  switching away from Terminal and back keeps your buffer, PTY and
+  scrollback intact
+- **Command palette** — pull-down search over command history + snippets,
+  tap to run; prefix matches rank above substring, snippets win ties
+- **Sessions switcher** — list every live terminal session, tap to switch,
+  swipe to disconnect that session only
 - **SFTP** — browse, download, upload, rename, delete, mkdir/new-file, sort by name/size/time
 - **Monitor** — live CPU / memory / swap / disk / load / uptime dashboard
 - **Docker** — list containers, start/stop/restart, view logs
 - **Snippets** — save frequent commands, run them from the terminal menu
+- **Tunnel capsule** — a green `⇅ N` chip on the session toolbar shows
+  active local port forwards; tap to stop all tunnels (session stays connected)
 - **Home-screen widget** — first four hosts, one tap deep-links into a terminal
 - **OpenSSH config import** — pull `Host` blocks from your `~/.ssh/config`
 - **Encrypted backup & restore** — single-file export of everything (hosts, passwords, keys, snippets, known hosts), passphrase-protected (AES-256-GCM + PBKDF2), restores on any device
@@ -114,7 +124,7 @@ Optional build inputs (via `local.properties`, never committed):
 app/src/main/java/at/least/conch/
   TerminalEmulator.kt      # VT100/xterm state machine (pure Kotlin, unit-tested)
   TerminalView.kt          # canvas renderer + gesture/keyboard input
-  SshSession.kt            # sshj shell + PTY + tunnels + SOCKS5
+  SshSession.kt            # sshj shell + PTY + tunnels + SOCKS5 + shared exec/SFTP
   SessionReconnector.kt    # drop → backoff → rebuild → re-attach orchestration
   ReconnectPolicy.kt       # exponential backoff (1s…30s cap, unlimited retries)
   SocksProxy.kt            # minimal SOCKS5 server bridging to direct-tcpip
@@ -123,9 +133,15 @@ app/src/main/java/at/least/conch/
   SecretsStore.kt          # Android Keystore AES-GCM vault
   KnownHosts.kt            # known_hosts store + TOFU verifier
   BackupCodec.kt           # portable encrypted backup format (PBKDF2+GCM)
-  SftpActivity.kt          # SFTP browser
-  MonitorActivity.kt       # metrics dashboard (pure parser unit-tested)
-  DockerActivity.kt        # container management (docker CLI over SSH)
+  SessionTabs.kt           # in-session Monitor/Docker/Files composables (shared connection)
+  CommandPaletteModel.kt   # pure filter/rank for the command palette
+  CommandPaletteSheet.kt   # pull-down search history+snippets, tap-to-run
+  SessionsSheet.kt         # live-sessions switcher (tap switch, swipe disconnect)
+  LiveSessions.kt          # process-level live-session registry
+  HostCardStatus.kt        # pure host-card live badge derivation
+  SftpActivity.kt          # SFTP browser (standalone entry point)
+  MonitorActivity.kt       # metrics dashboard (standalone entry point; pure parser unit-tested)
+  DockerActivity.kt        # container management (standalone entry point; docker CLI over SSH)
   SessionService.kt        # foreground service keeping sessions alive
   HostsWidget.kt           # home-screen widget
   CrashReporting.kt        # opt-in Sentry wrapper with host scrubbing

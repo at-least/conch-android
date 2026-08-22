@@ -68,6 +68,21 @@ class SessionReconnector(
         current?.resizePty(cols, rows)
     }
 
+    /** Run a one-shot exec on the current live session's shared connection. */
+    fun exec(command: String): String? = current?.exec(command)
+
+    /** Open an SFTP client on the current live session's shared connection. */
+    fun sftpClient() = current?.sftpClient()
+
+    /** Live-connection display signal for the health dot. */
+    val isConnected: Boolean get() = current?.isConnected == true
+
+    /** Stop all local-port-forward tunnels on the live session (shell stays). */
+    fun stopTunnels() = current?.stopTunnels()
+
+    /** Active tunnel count for the session-card capsule. */
+    val tunnelCount: Int get() = current?.tunnelCount ?: 0
+
     /**
      * User-initiated stop: no further retries, and late callbacks from the
      * dying session (e.g. an onConnected that raced past SshSession's
