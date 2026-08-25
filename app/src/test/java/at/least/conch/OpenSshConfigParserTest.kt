@@ -163,4 +163,35 @@ class MonitorParserTest {
         assertNull(MonitorParser.parse("garbage output\nnothing here"))
         assertNull(MonitorParser.parse("---CPU\ncpu 1 2 3 4"))
     }
+
+    @Test
+    fun `idle-only delta reads as zero percent busy`() {
+        // all new ticks landed in idle -> busy share 0% (iOS parity edge)
+        val busy = MonitorParser.cpuUsage(
+            "cpu  100 0 0 900 0 0 0 0 0 0",
+            "cpu  100 0 0 1000 0 0 0 0 0 0",
+        )
+        assertEquals(0.0, busy, 0.001)
+    }
+
+    @Test
+    fun `busy-only delta reads as one hundred percent busy`() {
+        // no idle growth at all -> fully saturated (iOS parity edge)
+        val busy = MonitorParser.cpuUsage(
+            "cpu  100 0 0 900 0 0 0 0 0 0",
+            "cpu  200 0 0 900 0 0 0 0 0 0",
+        )
+        assertEquals(100.0, busy, 0.001)
+    }
+
+    @Test
+    fun `probe command shape is the parser contract`() {
+        // mirrors iOS testProbeCommandExact — every section the parser
+        // requires must be produced by the probe, or parse() returns null
+        assertTrue(MonitorParser.PROBE.startsWith("echo ---CPU; grep 'cpu ' /proc/stat"))
+        assertTrue(MonitorParser.PROBE.contains("free -b"))
+        assertTrue(MonitorParser.PROBE.contains("df -B1 /"))
+        assertTrue(MonitorParser.PROBE.contains("cat /proc/loadavg"))
+        assertTrue(MonitorParser.PROBE.contains("cat /proc/uptime"))
+    }
 }

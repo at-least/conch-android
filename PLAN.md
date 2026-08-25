@@ -266,11 +266,18 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   (d) palette sends text+"\r" straight to the PTY (iOS writes "\n" and
   relies on icrnl) — inline in TerminalActivity, no shared helper yet.
 
-- [ ] F2: MonitorParser probe command exact bytes + cpu clamp edge cases
-  acceptance: `MonitorParserTest` (currently 3 tests) gains probe-command
+- [x] F2: MonitorParser probe command exact bytes + cpu clamp edge cases
+  acceptance: `MonitorParserTest` (was 3 tests) gains probe-command
   exact-string assertion + zero-delta clamp + full-idle + full-busy cases;
   green in `./gradlew testFossDebugUnitTest`
   deps: none
+  evidence: 2026-08-25 — MonitorParserTest → 6 tests, 0 failures
+  (`idle-only delta reads as zero percent busy`, `busy-only delta reads
+  as one hundred percent busy`, `probe command shape is the parser
+  contract` mirroring iOS testProbeCommandExact incl. free -B check).
+  Zero-delta→100% clamp was ALREADY covered by the existing
+  `cpu usage from two samples` first case; full-string byte pin landed in
+  F1's InteractionStringContractTest instead of here (single pin site).
 
 - [ ] F3: BackupCodec header layout / bad magic / too short / unsupported
       version
