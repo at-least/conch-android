@@ -43,12 +43,15 @@ class TerminalEmulatorScrollbackTest {
     }
 
     @Test
-    fun `scroll region inside screen does not push scrollback`() {
+    fun `scroll region grows transcript (upstream semantics, differs from xterm)`() {
         val emu = TerminalEmulator(cols = 10, rows = 5)
         emu.feed("\u001b[2;4r") // region rows 1..3
         repeat(10) { emu.feed("x\r\n") }
-        // scrolls confined to region -> no scrollback
-        assertEquals(0, emu.scrollbackSize)
+        // PINNED DIVERGENCE: the vendored Termux engine advances the
+        // transcript on ANY scrollDownOneLine — including region-confined
+        // scrolls (xterm keeps scrollback untouched for those). Old in-house
+        // engine pinned 0 here; upstream semantics accepted with the swap.
+        assertTrue(emu.scrollbackSize > 0)
     }
 
     @Test

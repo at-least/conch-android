@@ -68,6 +68,12 @@ android {
         // Inject via local.properties: SENTRY_DSN=..., SENTRY_URL=..., SENTRY_TOKEN=...
         buildConfigField("String", "SENTRY_DSN", "\"${project.findProperty("SENTRY_DSN") ?: ""}\"")
     }
+
+    testOptions {
+        // Vendored com.termux.terminal unit tests touch android.util.Log/Base64
+        // on non-fatal paths; mirror upstream's build config so JVM tests run.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

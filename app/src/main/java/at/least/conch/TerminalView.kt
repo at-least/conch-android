@@ -2,7 +2,6 @@ package at.least.conch
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.AttributeSet
@@ -14,6 +13,7 @@ import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import com.termux.terminal.TextStyle
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -59,7 +59,8 @@ class TerminalView @JvmOverloads constructor(
 
     /**
      * Per-instance colors. Start as a copy of the shared defaults so themes
-     * never mutate the companion [PALETTE].
+     * never mutate the companion [PALETTE]. Indices 256/257/258 are the
+     * default-fg / default-bg / cursor slots (TextStyle color indices).
      */
     private val palette = PALETTE.copyOf()
     private var bgColor = BG_COLOR
@@ -72,6 +73,8 @@ class TerminalView @JvmOverloads constructor(
             value.base16Into(palette)
             bgColor = (0xFF shl 24) or value.bg
             defaultFgColor = (0xFF shl 24) or value.defaultFg
+            palette[COLOR_INDEX_DEFAULT_FG] = defaultFgColor
+            palette[COLOR_INDEX_DEFAULT_BG] = bgColor
             setBackgroundColor(bgColor)
             invalidate()
         }
@@ -169,14 +172,10 @@ class TerminalView @JvmOverloads constructor(
     private fun urlAt(x: Float, y: Float): String? {
         val emu = emulator ?: return null
         val col = ((x - paddingLeft) / cellWidth).toInt().coerceIn(0, emu.cols - 1)
-        val visibleRows = ceil((height - paddingTop - paddingBottom) / cellHeight).toInt()
-        val total = emu.scrollbackSize + emu.rows
-        val first = (total - emu.rows - scrollOffset).coerceAtLeast(0)
-        val vi = ((y - paddingTop) / cellHeight).toInt().coerceIn(0, visibleRows - 1)
-        val li = first + vi
-        if (li >= total) return null
-        val screenRow = li - emu.scrollbackSize
-        return urlInRow(emu, li, screenRow, col)
+        val vi = ((y - paddingTop) / cellHeight).toInt()
+        val externalRow = vi - scrollOffset
+        if (externalRow >= emu.rows) return null
+        return urlInRow(emu, externalRow, col)
     }
 
     init {
@@ -263,43 +262,35 @@ class TerminalView @JvmOverloads constructor(
         canvas.drawColor(bgColor)
 
         val visibleRows = ceil((height - paddingTop - paddingBottom) / cellHeight).toInt()
-        val total = emu.scrollbackSize + emu.rows
-        val first = (total - emu.rows - scrollOffset).coerceAtLeast(0)
 
         val boldSaved = textPaint.isFakeBoldText
         val underlineSaved = textPaint.isUnderlineText
 
         for (vi in 0 until visibleRows) {
-            val li = first + vi
-            if (li >= total) break
-            val inScrollback = li < emu.scrollbackSize
-            val screenRow = li - emu.scrollbackSize
+            val externalRow = vi - scrollOffset
+            if (externalRow >= emu.rows) break
             val y = paddingTop + vi * cellHeight + fontAscent
 
-            for (c in 0 until emu.cols) {
-                val style = if (inScrollback) emu.scrollbackStyleAt(li, c)
-                else emu.styles[screenRow * emu.cols + c]
-                val flags = TerminalEmulator.styleFlags(style)
-                if (flags and TerminalEmulator.FLAG_WIDE_CONT != 0) continue
-                val x = paddingLeft + c * cellWidth
+            emu.forEachCell(externalRow) { col, cp, style ->
+                val effect = TextStyle.decodeEffect(style)
+                val x = paddingLeft + col * cellWidth
+                val widthCells = if (TerminalEmulator.isWide(cp)) 2 else 1
 
-                var fg = styleToFg(style)
-                var bg = styleToBg(style)
-                if (flags and TerminalEmulator.FLAG_REVERSE != 0) {
+                var fg = resolveColor(TextStyle.decodeForeColor(style), defaultFgColor)
+                var bg = resolveColor(TextStyle.decodeBackColor(style), bgColor)
+                if (effect and TextStyle.CHARACTER_ATTRIBUTE_INVERSE != 0) {
                     val t = fg; fg = bg; bg = t
                 }
                 if (bg != bgColor) {
                     bgPaint.color = bg
-                    canvas.drawRect(x, y - fontAscent, x + cellWidth, y - fontAscent + cellHeight, bgPaint)
+                    canvas.drawRect(x, y - fontAscent, x + cellWidth * widthCells, y - fontAscent + cellHeight, bgPaint)
                 }
 
-                val ch = if (inScrollback) emu.scrollbackCharAt(li, c)
-                else emu.chars[screenRow * emu.cols + c]
-                if (ch != ' ' && flags and TerminalEmulator.FLAG_INVISIBLE == 0) {
-                    textPaint.isFakeBoldText = flags and TerminalEmulator.FLAG_BOLD != 0
-                    textPaint.isUnderlineText = flags and TerminalEmulator.FLAG_UNDERLINE != 0
+                if (cp != ' '.code && effect and TextStyle.CHARACTER_ATTRIBUTE_INVISIBLE == 0) {
+                    textPaint.isFakeBoldText = effect and TextStyle.CHARACTER_ATTRIBUTE_BOLD != 0
+                    textPaint.isUnderlineText = effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0
                     textPaint.color = fg
-                    canvas.drawText(ch.toString(), x, y, textPaint)
+                    canvas.drawText(String(Character.toChars(cp)), x, y, textPaint)
                 }
             }
         }
@@ -316,25 +307,19 @@ class TerminalView @JvmOverloads constructor(
         if (scrollOffset > 0) {
             // thin indicator: how deep into history we are
             val frac = if (emu.scrollbackSize > 0) scrollOffset.toFloat() / emu.scrollbackSize else 0f
-            val barH = height * (visibleRows.toFloat() / total).coerceIn(0.05f, 1f)
+            val barH = height * (visibleRows.toFloat() / (visibleRows + scrollOffset)).coerceIn(0.05f, 1f)
             val barY = (height - barH) * frac
             canvas.drawRect(width - 6f, barY, width - 2f, barY + barH, scrollPaint)
         }
     }
 
-    private fun styleToFg(style: Int): Int {
-        val idx = style and 0x1FF
-        if (idx == TerminalEmulator.FG_DEFAULT) return defaultFgColor
-        emulator?.rgbAtIndex(idx)?.let { return 0xFF000000.toInt() or it }
-        return palette[idx]
-    }
-
-    private fun styleToBg(style: Int): Int {
-        val idx = (style shr 9) and 0x1FF
-        if (idx == TerminalEmulator.BG_DEFAULT) return bgColor
-        emulator?.rgbAtIndex(idx)?.let { return 0xFF000000.toInt() or it }
-        return palette[idx]
-    }
+    /**
+     * Resolves a decoded cell color: truecolor values carry their own argb;
+     * palette indices (0..255, plus the 256/257 default slots) map through
+     * the themed [palette].
+     */
+    private fun resolveColor(decoded: Int, defaultColor: Int): Int =
+        if (decoded and 0xFF000000.toInt() != 0) decoded else palette[decoded]
 
     // ----------------------------------------------------------------- input
 
@@ -515,21 +500,20 @@ class TerminalView @JvmOverloads constructor(
         )
 
         /**
-         * Finds the URL covering [col] on the given logical row (scrollback or
-         * screen), accounting for wide chars occupying two columns.
+         * Finds the URL covering [col] on the given engine row (0..rows-1 is
+         * the live screen, negative walks into scrollback), accounting for
+         * wide chars occupying two columns.
          */
-        fun urlInRow(emu: TerminalEmulator, li: Int, screenRow: Int, col: Int): String? {
-            val inScrollback = li < emu.scrollbackSize
+        fun urlInRow(emu: TerminalEmulator, externalRow: Int, col: Int): String? {
             val sb = StringBuilder()
             val colOf = IntArray(emu.cols)
             var idx = 0
-            for (c in 0 until emu.cols) {
-                val style = if (inScrollback) emu.scrollbackStyleAt(li, c)
-                else emu.styles[screenRow * emu.cols + c]
-                if (TerminalEmulator.styleFlags(style) and TerminalEmulator.FLAG_WIDE_CONT != 0) continue
-                colOf[idx] = c
-                sb.append(if (inScrollback) emu.scrollbackCharAt(li, c) else emu.chars[screenRow * emu.cols + c])
-                idx++
+            emu.forEachCell(externalRow) { c, cp, _ ->
+                if (idx < colOf.size) {
+                    colOf[idx] = c
+                    sb.appendCodePoint(cp)
+                    idx++
+                }
             }
             if (idx == 0) return null
             val matcher = URL_REGEX.matcher(sb.toString())
@@ -572,8 +556,15 @@ class TerminalView @JvmOverloads constructor(
         const val BG_COLOR = 0xFF1A1B26.toInt()
         const val DEFAULT_FG_COLOR = 0xFFE0E0E0.toInt()
 
-        /** xterm 256-color palette. */
-        val PALETTE = IntArray(256).also { pal ->
+        /** TextStyle color indices for the default fg/bg slots. */
+        const val COLOR_INDEX_DEFAULT_FG = 256
+        const val COLOR_INDEX_DEFAULT_BG = 257
+
+        /**
+         * xterm 256-color palette plus the 3 special slots (default fg,
+         * default bg, cursor) at indices 256..258.
+         */
+        val PALETTE = IntArray(259).also { pal ->
             val base16 = intArrayOf(
                 0xFF000000.toInt(), 0xFFCD3131.toInt(), 0xFF0DBC79.toInt(), 0xFFE5E510.toInt(),
                 0xFF2472C8.toInt(), 0xFFBC3FBC.toInt(), 0xFF11A8CD.toInt(), 0xFFE5E5E5.toInt(),
@@ -590,6 +581,9 @@ class TerminalView @JvmOverloads constructor(
                 val v = 8 + i * 10
                 pal[idx++] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
             }
+            pal[COLOR_INDEX_DEFAULT_FG] = DEFAULT_FG_COLOR
+            pal[COLOR_INDEX_DEFAULT_BG] = BG_COLOR
+            pal[258] = 0xFF80DEEA.toInt()
         }
     }
 }

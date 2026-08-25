@@ -2,6 +2,15 @@
 
 ## 0.9.1 (unreleased)
 
+- Terminal engine swap: the in-house VT100/xterm parser is replaced by the
+  battle-tested Termux terminal-emulator (vendored, pinned upstream commit;
+  GPL-compatible — see app/src/main/java/com/termux/terminal/VENDOR.md).
+  User-visible wins: exact per-cell 24-bit truecolor (no more palette
+  quantization when many colors are on screen), full wide/combining-char
+  coverage (emoji included), modern escape-sequence support (colon-SGR
+  underlines, fish 4.0 / kitty / tmux fixes), and terminal device queries
+  (cursor-position reports etc.) now answered instead of silently dropped.
+  Same renderer, gestures, themes and scrollback (4000 lines)
 - In-session tabs: Terminal / Monitor / Docker / Files now share ONE SSH
   connection (the same one as your live shell) via a bottom NavigationBar.
   Switching away from Terminal and back keeps your buffer, PTY and

@@ -483,6 +483,10 @@ class TerminalActivity : FragmentActivity() {
                                         reconnector?.write(data)
                                         historyAssembler?.feed(data)
                                     }
+                                    // Engine device replies (CPR/DA/...) go to the SSH channel too.
+                                    this@TerminalActivity.emulator?.onResponse = { data ->
+                                        reconnector?.write(data)
+                                    }
                                     onPtyResize = { c, r -> reconnector?.resizePty(c, r) }
                                     onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
                                     onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.value = off }
