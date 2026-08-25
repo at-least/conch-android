@@ -60,14 +60,6 @@ class MonitorActivity : ComponentActivity() {
         answer(false)
     }
 
-    companion object {
-        private const val PROBE = "echo ---CPU; grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat; " +
-            "echo ---MEM; free -b | grep -E '^Mem:|^Swap:'; " +
-            "echo ---DISK; df -B1 / | tail -1; " +
-            "echo ---LOAD; cat /proc/loadavg; " +
-            "echo ---UP; cat /proc/uptime"
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val hostId = intent.getStringExtra("hostId") ?: return finish()
@@ -113,7 +105,7 @@ class MonitorActivity : ComponentActivity() {
         return try {
             val s = ssh.startSession()
             session = s
-            val cmd = s.exec(PROBE)
+            val cmd = s.exec(MonitorParser.PROBE)
             val out = cmd.inputStream.readBytes().decodeToString()
             cmd.close()
             s.close()

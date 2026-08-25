@@ -102,7 +102,7 @@ class DockerActivity : androidx.fragment.app.FragmentActivity() {
 
     private fun refresh() {
         busy.value = true
-        exec("docker ps -a --format '{{json .}}'") { out ->
+        exec(DockerParser.LIST_COMMAND) { out ->
             containers.value = DockerParser.parse(out)
             busy.value = false
             status.value = if (containers.value.isEmpty() && out.contains("error", true))

@@ -82,7 +82,9 @@ actually runs in THIS repo.
 - [ ] B2: Harden the tmux attach line — `command -v` guard + `printf` wipe + wait-for-first-output before sending
   acceptance: H3 verify green (tmux-less silent fallback; truecolor
   attach; reconnect-into-existing-session with zero residue); no behavior
-  change when tmuxAutoAttach is off
+  change when tmuxAutoAttach is off; update the F1
+  InteractionStringContractTest tmux pin to the hardened line in the same
+  change
   deps: none
 
 - [ ] B3: Ctrl latch audit — release on ANY keystroke (iOS C42 shape)
@@ -234,6 +236,152 @@ Spike conclusions (from verified H1):
   SessionsSheet/LiveSessions/HostCardStatus) + updated SshSession/Activity
   descriptions. CHANGELOG 0.9.1 entry covers E1–E7. `testFossDebugUnitTest
   --rerun-tasks` → 264 tests, 0 failures.
+
+### Phase F — test parity with conch-ios (fill coverage gaps)
+
+Audit on 2026-08-22 compared every conch-ios test (ConchTests +
+ConchIntegrationTests + ConchUITests, ~140 unit + ~30 integration/UI
+methods across 26+ feature areas) against conch-android's 35 test files
+(~160 @Test methods). Below are the gaps, prioritized by
+invariant-broken severity × current-zero-coverage. Acceptance for every
+task is the named test file green inside `./gradlew testFossDebugUnitTest`.
+
+### Phase F-P0 — cross-platform byte contracts (parity risk highest)
+
+- [x] F1: InteractionStringContractTest — pin tmux attach line, keep-alive
+      interval, docker list command, monitor probe byte contracts
+  acceptance: new `InteractionStringContractTest.kt` green in
+  `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — constants extracted & deduped (SshSession.
+  TMUX_ATTACH_LINE, SshConnectionFactory.KEEP_ALIVE_INTERVAL_SECONDS=15,
+  MonitorParser.PROBE — was copy-pasted in MonitorActivity + SessionTabs,
+  DockerParser.LIST_COMMAND); new InteractionStringContractTest (5 tests)
+  pins them. Full `./gradlew testFossDebugUnitTest` → 269 tests, 0
+  failures, 1 skipped (pre-existing opt-in local sshd). DIVERGENCES FROM
+  iOS documented in the test KDoc (product decisions pending, not bugs):
+  (a) tmux attach lacks the iOS `command -v` guard + printf wipe — B2 must
+  move this pin with its fix; (b) keep-alive is sshj transport-level 15s,
+  not iOS's `:` shell beat; (c) docker list lacks iOS's C33 PATH prefix;
+  (d) palette sends text+"\r" straight to the PTY (iOS writes "\n" and
+  relies on icrnl) — inline in TerminalActivity, no shared helper yet.
+
+- [ ] F2: MonitorParser probe command exact bytes + cpu clamp edge cases
+  acceptance: `MonitorParserTest` (currently 3 tests) gains probe-command
+  exact-string assertion + zero-delta clamp + full-idle + full-busy cases;
+  green in `./gradlew testFossDebugUnitTest`
+  deps: none
+
+- [ ] F3: BackupCodec header layout / bad magic / too short / unsupported
+      version
+  acceptance: `BackupCodecTest` gains 4 structural-rejection assertions
+  matching iOS `BackupCodecTests.swift` (header offset layout, badMagic,
+  tooShort, unsupportedVersion); green in `./gradlew testFossDebugUnitTest`
+  deps: none
+
+- [ ] F4: BackupCodec export/restore merge semantics + export-includes-secrets
+  acceptance: `BackupCodecTest` gains a restore-merge test (existing host id
+  NOT overwritten, new id added, known_hosts union) + an export-includes-
+  secrets assertion (Keychain/EncryptedPrefs content present in decrypted
+  blob); green in `./gradlew testFossDebugUnitTest`
+  deps: F3
+
+### Phase F-P1 — feature exists in main, zero tests (silent breakage risk)
+
+- [ ] F5: SnippetStoreTest — crud roundtrip, load empty/corrupt no crash,
+      JSON field names match iOS, delete by id
+  acceptance: new `SnippetStoreTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 4 iOS `SnippetStoreTests.swift`
+  cases
+  deps: none
+
+- [ ] F6: AppLockTest — grace window inside/outside, disabled by default,
+      toggle flips state
+  acceptance: new `AppLockTest.kt` green in `./gradlew testFossDebugUnitTest`;
+  covers the 2 iOS `AppLockTests.swift` cases (grace window + default-off)
+  deps: none
+
+- [ ] F7: ExtraKeysConfigTest — default row, save/load roundtrip, unknown id
+      dropped, legacy symbol ids filtered, pool emits no plain printable,
+      empty falls back to default, arrow escape bytes, CTRL is toggle (null
+      bytes)
+  acceptance: new `ExtraKeysConfigTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 8 iOS
+  `ExtraKeysAndThemeTests.swift` ExtraKeysConfig cases
+  deps: none
+
+- [ ] F8: SessionTabsTest + TunnelStatusTest — SessionTab enum exactly 4
+      with title+icon non-empty; TunnelStatus count (forward + socks),
+      label singular/plural, isEmpty
+  acceptance: new `SessionTabsTest.kt` + `TunnelStatusTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 5 iOS `TunnelStatusTests.swift`
+  cases (SessionTabs.kt is 699 lines with 0 tests today)
+  deps: none
+
+- [ ] F9: ConnectionHealthDeriveTest — derive(connected=false)=dead,
+      connected+no beats=live, recent beat=beating, stale falls back to
+      live, -19s edge still beating
+  acceptance: new `ConnectionHealthDeriveTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 5 iOS
+  `TmuxDefaultAndHealthTests.swift` health-derive cases (HostCardStatus.kt
+  has the derive logic but only 0/1/N live count is tested today)
+  deps: none
+
+### Phase F-P2 — logic trapped in Activity, refactor-first to testable pure fn
+
+- [ ] F10: Extract Ctrl latch transform from TerminalActivity into a pure
+      function, then add CtrlLatchTest + CtrlComboTest
+  acceptance: new `CtrlLatchTest.kt` + `CtrlComboTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers iOS `CtrlKeyTransformTests.swift`
+  + `CtrlLatchLifecycleTests.swift` + `CtrlComboTests.swift` (~20 cases:
+  letter→C0, non-letter releases latch, Ctrl+arrow→`ESC[1;5A`, Ctrl+S→XOFF,
+  Ctrl+Q→XON, ESC-then-letter→Meta, latch consumes exactly once)
+  deps: none (refactor is part of this task)
+
+- [ ] F11: Extract nav-gesture + alt/meta modifier logic from
+      TerminalActivity into pure functions, then add NavAndAltTest
+  acceptance: new `NavAndAltTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 14 iOS `NavAndAltTests.swift`
+  cases (drag→arrows, long drag multi-step, sub-threshold jitter, fast
+  flick→PGUP/PGDN, slow drag no page, horizontal-dominant no page, Alt+x=
+  ESC+x, Ctrl+Alt+C=ESC ETX, Alt+arrow=ESC+arrow, drawer contents)
+  deps: F10 (shared latch infrastructure)
+
+- [ ] F12: KeepAliveLoopTest — beat at interval until stop, single failed
+      beat stops loop (failed beats not counted), start() idempotent,
+      default 15s interval
+  acceptance: new `KeepAliveLoopTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 4 iOS `KeepAliveLoopTests.swift`
+  cases (loop logic likely in TerminalActivity/SshConnectionFactory —
+  extract if needed)
+  deps: none
+
+- [ ] F13: CrashReportingLifecycleTest — default-off no report even with
+      marker, enabled+empty-endpoint disabled, marker survives→report with
+      reason+timestamp, background removes marker, payload schema exactly
+      {appVersion, osVersion, reason, crashedAt}, deliverIfEnabled rejects
+      non-URL endpoint
+  acceptance: new `CrashReportingLifecycleTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 6 iOS `CrashReporterTests.swift`
+  cases (only the scrubber is tested today)
+  deps: none
+
+### Phase F-P3 — cross-platform invariants, nice-to-have
+
+- [ ] F14: TerminalReplay fresh-attach fixture — assert rendered buffer has
+      no tmux attach-command residue (iOS C53/C54/C57 shape)
+  acceptance: new fixture replay test green in
+  `./gradlew testFossDebugUnitTest`; at least the fresh-attach + reconnect-
+  attach no-residue cases from iOS `TerminalReplayTests.swift`
+  deps: none
+
+- [ ] F15: LogAndContinueTest — keepAlive beat failure fires onError once,
+      healthy beats never fire onError, monitor parse failure preserves
+      prior snapshot (value-type safety)
+  acceptance: new `LogAndContinueTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 3 iOS `LogAndContinueTests.swift`
+  cases
+  deps: F12 (KeepAliveLoop extracted)
 
 ## Android-specific considerations
 

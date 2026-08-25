@@ -34,6 +34,16 @@ class SshSession(
     post: ((Runnable) -> Unit)? = null,
     connector: ((Host, KeyPrompt?) -> SSHClient)? = null,
 ) {
+    companion object {
+        /**
+         * Wire contract: the inner command is byte-identical to the iOS
+         * suffix (InteractionStringTests.swift); Android does not yet carry
+         * the iOS `command -v tmux` guard + printf wipe prefix (PLAN B2/H3).
+         * Pinned by InteractionStringContractTest.
+         */
+        const val TMUX_ATTACH_LINE = "COLORTERM=truecolor tmux new -A -s conch\r"
+    }
+
     interface Callbacks {
         fun onConnected()
         fun onData(data: ByteArray)
@@ -114,7 +124,7 @@ class SshSession(
                     // -A: attach if the session exists, create it otherwise;
                     // COLORTERM lets remote apps use RGB (truecolor) output
                     synchronized(sh.outputStream) {
-                        sh.outputStream.write("COLORTERM=truecolor tmux new -A -s conch\r".toByteArray())
+                        sh.outputStream.write(TMUX_ATTACH_LINE.toByteArray())
                         sh.outputStream.flush()
                     }
                 }

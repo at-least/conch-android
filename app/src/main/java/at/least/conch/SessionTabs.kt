@@ -78,12 +78,6 @@ import java.util.Locale
 // Monitor
 // =====================================================================
 
-private const val MONITOR_PROBE = "echo ---CPU; grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat; " +
-    "echo ---MEM; free -b | grep -E '^Mem:|^Swap:'; " +
-    "echo ---DISK; df -B1 / | tail -1; " +
-    "echo ---LOAD; cat /proc/loadavg; " +
-    "echo ---UP; cat /proc/uptime"
-
 @Composable
 fun MonitorTab(session: SessionReconnector) {
     var snapshot by remember { mutableStateOf<MonitorParser.Snapshot?>(null) }
@@ -140,7 +134,7 @@ fun MonitorTab(session: SessionReconnector) {
     LaunchedEffect(autoRefresh) {
         if (!autoRefresh) return@LaunchedEffect
         while (true) {
-            val out = withContext(Dispatchers.IO) { session.exec(MONITOR_PROBE) }
+            val out = withContext(Dispatchers.IO) { session.exec(MonitorParser.PROBE) }
             if (out != null) {
                 val parsed = MonitorParser.parse(out)
                 if (parsed != null) {
@@ -208,7 +202,7 @@ fun DockerTab(session: SessionReconnector) {
         busy = true
         scope.launch {
             val out = withContext(Dispatchers.IO) {
-                session.exec("docker ps -a --format '{{json .}}'")
+                session.exec(DockerParser.LIST_COMMAND)
             } ?: ""
             containers.clear()
             containers.addAll(DockerParser.parse(out))

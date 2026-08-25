@@ -12,6 +12,13 @@ import net.schmizz.sshj.userauth.keyprovider.KeyProvider
  */
 object SshConnectionFactory {
 
+    /**
+     * Wire contract: 15-second keep-alive, matching the iOS JSch default
+     * (KeepAliveLoopTests). Android uses sshj's transport-level keep-alive,
+     * not iOS's `:` shell beat. Pinned by InteractionStringContractTest.
+     */
+    const val KEEP_ALIVE_INTERVAL_SECONDS = 15
+
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     /**
@@ -66,7 +73,7 @@ object SshConnectionFactory {
             }
         }
         if (host.keepAlive) {
-            ssh.connection.keepAlive.setKeepAliveInterval(15)
+            ssh.connection.keepAlive.setKeepAliveInterval(KEEP_ALIVE_INTERVAL_SECONDS)
         }
         return ssh
     }
