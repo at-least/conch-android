@@ -216,7 +216,6 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   LIST_COMMAND); InteractionStringContractTest 5/0 pins them; full suite
   269/0. iOS DIVERGENCES documented in test KDoc (tmux guard/wipe = B2;
   keep-alive mechanism; docker PATH prefix; palette CR vs LF).
-.
 
 - [x] F2: MonitorParser probe command exact bytes + cpu clamp edge cases
   acceptance: `MonitorParserTest` (was 3 tests) gains probe-command
@@ -226,7 +225,6 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   evidence: 2026-08-25 — MonitorParserTest → 6/0 (full-idle 0%, full-busy
   100%, probe shape mirroring iOS testProbeCommandExact). Zero-delta clamp
   was already covered; full-string pin lives in F1's contract test.
-.
 
 - [x] F3: BackupCodec header layout / bad magic / too short / unsupported
       version
@@ -238,7 +236,6 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   salt/iv randomness at offsets, badMagic, tooShort, version=99 rejected —
   hand-built blob also pins PBKDF2-HMAC-SHA256 600k/256. iOS's RFC-7914
   vector test N/A: Android uses the JDK's PBKDF2, not a hand-rolled one).
-.
 
 - [x] F4: BackupCodec export/restore merge semantics + export-includes-secrets
   acceptance: `BackupCodecTest` gains a restore-merge test (existing host id
@@ -262,7 +259,6 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   evidence: 2026-08-25 — SnippetStore File-seam ctor; SnippetStoreTest 5/0
   (cross-instance roundtrip, corrupt→[], field set {id,label,command},
   delete-by-id); suite 286/0.
-.
 
 - [x] F6: AppLockTest — grace window inside/outside, disabled by default,
       toggle flips state
