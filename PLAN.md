@@ -345,14 +345,19 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   iOS CSI-rewrite-under-latch tests N/A: Android ctrl+arrows come from the
   hardware-keyboard path (isCtrlPressed → CTRL_ARROW_*), not the latch.
 
-- [ ] F11: Extract nav-gesture + alt/meta modifier logic from
-      TerminalActivity into pure functions, then add NavAndAltTest
-  acceptance: new `NavAndAltTest.kt` green in
-  `./gradlew testFossDebugUnitTest`; covers the 14 iOS `NavAndAltTests.swift`
-  cases (drag→arrows, long drag multi-step, sub-threshold jitter, fast
-  flick→PGUP/PGDN, slow drag no page, horizontal-dominant no page, Alt+x=
-  ESC+x, Ctrl+Alt+C=ESC ETX, Alt+arrow=ESC+arrow, drawer contents)
-  deps: F10 (shared latch infrastructure)
+- [x] F11: NavAndAltTest — N/A (Android has no nav-gesture/alt features)
+  acceptance: documented N/A with audit note (PLAN B3 precedent)
+  deps: none
+  evidence: 2026-08-25 — N/A AUDIT: iOS NavAndAlt tests cover (a) touch
+  gestures that EMIT keys (horizontal drag → arrows, fast flick → PGUP/
+  PGDN) — Android's TerminalView gestures instead scroll the LOCAL
+  scrollback buffer (onScroll/onFling → scrollOffset, no keys sent), a
+  different product behavior; (b) Alt/Meta latches (Alt+x=ESC x,
+  Ctrl+Alt, Alt+arrow) — Android has no ALT key or meta modifier anywhere
+  (ExtraKeysConfig.ALL has none; TerminalView has no META handling); (c)
+  the extra-keys drawer — Android has no drawer (single row + settings
+  picker). If these features get ported from iOS, their tests land with
+  them; pinning non-existent features would be dead test-only code.
 
 - [ ] F12: KeepAliveLoopTest — beat at interval until stop, single failed
       beat stops loop (failed beats not counted), start() idempotent,
