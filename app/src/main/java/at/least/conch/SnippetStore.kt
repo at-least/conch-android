@@ -12,8 +12,13 @@ data class Snippet(
     var command: String = "",
 )
 
-class SnippetStore(context: Context) {
-    private val file: File = File(context.filesDir, "snippets.json")
+/**
+ * Snippet persistence. Primary constructor takes the backing [file] so the
+ * store is JVM-testable; the Android constructor resolves filesDir.
+ */
+class SnippetStore(private val file: File) {
+
+    constructor(context: Context) : this(File(context.filesDir, "snippets.json"))
 
     fun load(): MutableList<Snippet> {
         val list = mutableListOf<Snippet>()
