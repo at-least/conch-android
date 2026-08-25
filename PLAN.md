@@ -279,12 +279,21 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   `cpu usage from two samples` first case; full-string byte pin landed in
   F1's InteractionStringContractTest instead of here (single pin site).
 
-- [ ] F3: BackupCodec header layout / bad magic / too short / unsupported
+- [x] F3: BackupCodec header layout / bad magic / too short / unsupported
       version
   acceptance: `BackupCodecTest` gains 4 structural-rejection assertions
   matching iOS `BackupCodecTests.swift` (header offset layout, badMagic,
   tooShort, unsupportedVersion); green in `./gradlew testFossDebugUnitTest`
   deps: none
+  evidence: 2026-08-25 — BackupCodecTest → 10 tests, 0 failures. Added:
+  `header layout…` (exact size 8+16+12+plain+16 on a known payload, salt
+  differs at [8,24), iv differs at [24,36), magic stable at [0,8)),
+  `corrupted magic → bad magic`, `magic-only → too short` (the existing
+  garbage-input test at 50 bytes actually exercised tooShort too —
+  previously unpinned), `version=99 → Unsupported backup version` (blob
+  built by hand with PBKDF2-HMAC-SHA256 600k/256-bit, which also pins the
+  KDF parameters implicitly; iOS's separate PBKDF2 RFC-7914 vector test
+  is N/A here — Android uses the JDK's PBKDF2, not a hand-rolled one).
 
 - [ ] F4: BackupCodec export/restore merge semantics + export-includes-secrets
   acceptance: `BackupCodecTest` gains a restore-merge test (existing host id

@@ -95,4 +95,86 @@ class BackupCodecTest {
         val out = BackupCodec.decrypt(blob, "パスフレーズ123".toCharArray())
         assertEquals("パスワード🔑", out.hostSecrets["h1"])
     }
+
+    @Test
+    fun `header layout is magic salt iv ciphertext tag at pinned offsets`() {
+        // magic[8] || salt[16] || iv[12] || ciphertext||tag — the same
+        // layout iOS BackupCodecTests testHeaderLayout pins. GCM's doFinal
+        // appends the 16-byte tag to the ciphertext, so a blob carrying a
+        // 1-byte payload plaintext is exactly 8+16+12+1+16 = 53 bytes.
+        val tiny = samplePayload().copy(
+            hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(),
+            keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "",
+        )
+        val plain = BackupCodec.payloadToJson(tiny).toString().toByteArray(Charsets.UTF_8)
+        val blob = BackupCodec.encrypt(tiny, "pw".toCharArray())
+        assertEquals(8 + 16 + 12 + plain.size + 16, blob.size)
+
+        // salt and iv live at the documented offsets: two encryptions of
+        // the same payload must differ in [8,24) and [24,36) but be
+        // byte-equal in the magic segment [0,8).
+        val other = BackupCodec.encrypt(tiny, "pw".toCharArray())
+        assertEquals(
+            String(blob, 0, 8, Charsets.US_ASCII),
+            String(other, 0, 8, Charsets.US_ASCII),
+        )
+        assertNotEquals(blob.copyOfRange(8, 24).toList(), other.copyOfRange(8, 24).toList())
+        assertNotEquals(blob.copyOfRange(24, 36).toList(), other.copyOfRange(24, 36).toList())
+    }
+
+    @Test
+    fun `blob with corrupted magic is rejected as bad magic`() {
+        val blob = BackupCodec.encrypt(samplePayload(), "pw".toCharArray())
+        blob[0] = 'X'.code.toByte()
+        try {
+            BackupCodec.decrypt(blob, "pw".toCharArray())
+            fail("expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("message: ${e.message}", e.message!!.contains("bad magic"))
+        }
+    }
+
+    @Test
+    fun `magic-only blob is rejected as too short`() {
+        try {
+            BackupCodec.decrypt("TILDBAK1".toByteArray(Charsets.US_ASCII), "pw".toCharArray())
+            fail("expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("message: ${e.message}", e.message!!.contains("too short"))
+        }
+    }
+
+    @Test
+    fun `payload with unknown version is rejected as unsupported version`() {
+        // Build the blob by hand (same suite the codec uses) so the ONLY
+        // thing decrypt can reject is version=99 — this also pins the KDF
+        // parameters: PBKDF2-HMAC-SHA256, 600k iterations, 256-bit key.
+        val tiny = samplePayload().copy(
+            hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(),
+            keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "",
+        )
+        val json = BackupCodec.payloadToJson(tiny).put("version", 99)
+        val passphrase = "pw".toCharArray()
+        val salt = ByteArray(16)
+        val iv = ByteArray(12)
+        java.security.SecureRandom().nextBytes(salt)
+        java.security.SecureRandom().nextBytes(iv)
+        val key = javax.crypto.spec.SecretKeySpec(
+            javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                .generateSecret(javax.crypto.spec.PBEKeySpec(passphrase, salt, 600_000, 256))
+                .encoded,
+            "AES",
+        )
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key, javax.crypto.spec.GCMParameterSpec(128, iv))
+        val blob = "TILDBAK1".toByteArray(Charsets.US_ASCII) + salt + iv + cipher.doFinal(
+            json.toString().toByteArray(Charsets.UTF_8)
+        )
+        try {
+            BackupCodec.decrypt(blob, passphrase)
+            fail("expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("message: ${e.message}", e.message!!.contains("Unsupported backup version"))
+        }
+    }
 }
