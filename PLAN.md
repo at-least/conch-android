@@ -284,11 +284,17 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   persisted field set == {id,label,command}, delete-by-id pattern from
   SnippetsActivity). Full suite 286/0.
 
-- [ ] F6: AppLockTest — grace window inside/outside, disabled by default,
+- [x] F6: AppLockTest — grace window inside/outside, disabled by default,
       toggle flips state
   acceptance: new `AppLockTest.kt` green in `./gradlew testFossDebugUnitTest`;
   covers the 2 iOS `AppLockTests.swift` cases (grace window + default-off)
   deps: none
+  evidence: 2026-08-25 — AppLock gained pure `withinGrace()` + public
+  DEFAULT_ENABLED/GRACE_MS consts (lockIfNeeded rewritten on top,
+  behavior-identical; withinGrace guards unlockedSince==0 = relocked).
+  AppLockTest 4/0 green (within 30s / beyond / relock-at-0 / defaults pin:
+  OFF + 30_000ms iOS parity). Full suite 290/0. SharedPreferences toggle
+  wiring + BiometricPrompt = instrumented-QA (no Robolectric in repo).
 
 - [ ] F7: ExtraKeysConfigTest — default row, save/load roundtrip, unknown id
       dropped, legacy symbol ids filtered, pool emits no plain printable,

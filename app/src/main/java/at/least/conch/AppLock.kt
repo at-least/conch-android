@@ -15,8 +15,21 @@ object AppLock {
     private const val PREFS = "conchapp_settings"
     private const val KEY = "appLockEnabled"
 
+    /** iOS parity: app lock ships OFF; users opt in from Settings. */
+    const val DEFAULT_ENABLED = false
+
+    /** iOS parity: 30s unlock grace window (activity switches don't re-prompt). */
+    internal const val GRACE_MS = 30_000L
+
+    /**
+     * Pure grace-window check (iOS AppLockTests parity): 0 means
+     * locked/relocked, otherwise unlocked for [GRACE_MS] after the timestamp.
+     */
+    fun withinGrace(unlockedSinceMs: Long, nowMs: Long): Boolean =
+        unlockedSinceMs > 0 && nowMs - unlockedSinceMs < GRACE_MS
+
     fun isEnabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, DEFAULT_ENABLED)
 
     fun setEnabled(context: Context, on: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -42,7 +55,7 @@ object AppLock {
      */
     fun lockIfNeeded(activity: FragmentActivity) {
         if (!isEnabled(activity) || !canAuthenticate(activity)) return
-        if (System.currentTimeMillis() - unlockedSince < GRACE_MS) return
+        if (withinGrace(unlockedSince, System.currentTimeMillis())) return
         val prompt = BiometricPrompt(
             activity,
             androidx.core.content.ContextCompat.getMainExecutor(activity),
@@ -68,6 +81,4 @@ object AppLock {
     fun onWentToBackground() {
         unlockedSince = 0L
     }
-
-    private const val GRACE_MS = 30_000L
 }
