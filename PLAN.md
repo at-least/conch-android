@@ -270,12 +270,11 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   acceptance: new `AppLockTest.kt` green in `./gradlew testFossDebugUnitTest`;
   covers the 2 iOS `AppLockTests.swift` cases (grace window + default-off)
   deps: none
-  evidence: 2026-08-25 — AppLock gained pure `withinGrace()` + public
-  DEFAULT_ENABLED/GRACE_MS consts (lockIfNeeded rewritten on top,
-  behavior-identical; withinGrace guards unlockedSince==0 = relocked).
-  AppLockTest 4/0 green (within 30s / beyond / relock-at-0 / defaults pin:
-  OFF + 30_000ms iOS parity). Full suite 290/0. SharedPreferences toggle
-  wiring + BiometricPrompt = instrumented-QA (no Robolectric in repo).
+  evidence: 2026-08-25 — AppLock pure withinGrace() + DEFAULT_ENABLED/
+  GRACE_MS consts (lockIfNeeded rewired, identical); AppLockTest 4/0
+  (within/beyond 30s, relock-at-0, defaults pin). Suite 290/0. Prefs
+  toggle + BiometricPrompt = instrumented-QA (no Robolectric).
+
 
 - [x] F7: ExtraKeysConfigTest — default row, save/load roundtrip, unknown id
       dropped, legacy symbol ids filtered, pool emits no plain printable,
@@ -285,15 +284,12 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   `./gradlew testFossDebugUnitTest`; covers the 8 iOS
   `ExtraKeysAndThemeTests.swift` ExtraKeysConfig cases
   deps: none
-  evidence: 2026-08-25 — ExtraKeysConfig gained pure parse()/serialize()
-  (load/save wrappers keep Context at the edge); ExtraKeysConfigTest 8/0
-  green (default-row pin, round-trip in order, unknown-id drop, fallback
-  on null/corrupt/empty/all-unknown, xterm byte pins for all control keys,
-  CTRL==null toggle, symbol keys, labelFor fallback). Full suite 298/0.
-  ADAPTED from iOS: "pool emits no plain printable" is FALSE on Android
-  today — symbols are a recorded C48 design candidate (PLAN Notes); the
-  test pins current behavior + documents the divergence instead. iOS's
-  "legacy symbol ids filtered" is N/A (Android is the symbol source).
+  evidence: 2026-08-25 — ExtraKeysConfig pure parse()/serialize();
+  ExtraKeysConfigTest 8/0 (default-row pin, round-trip, unknown-id drop,
+  fallbacks, xterm byte pins, CTRL==null, symbols, labelFor). Suite 298/0.
+  ADAPTED: iOS's no-printable-pool invariant is FALSE here (C48 design
+  candidate, PLAN Notes) — current behavior pinned + divergence documented.
+
 
 - [x] F8: SessionTabsTest + TunnelCapsuleTest — SessionTab enum exactly 4
       with title+icon non-empty; tunnel capsule visibility + pinned labels
@@ -301,33 +297,23 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   `./gradlew testFossDebugUnitTest`; covers the 5 iOS `TunnelStatusTests.swift`
   cases (SessionTabs.kt is 699 lines with 0 tests today)
   deps: none
-  evidence: 2026-08-25 — SessionTab enum moved from private-in-Activity to
-  SessionTabs.kt (internal; Compose ImageVector refs are JVM-safe);
-  TunnelCapsule pure labels extracted (visible/chipText/stopDialogTitle)
-  and wired into TerminalActivity (byte-identical strings). SessionTabsTest
-  3/0 + TunnelCapsuleTest 3/0; full suite 304/0. ADAPTED: iOS label
-  "1 tunnel"/"N tunnels" doesn't exist on Android (chip is "⇅ N") — pinned
-  current contracts; count semantics stay on SshSession.tunnelCount
-  (interaction-tested).
+  evidence: 2026-08-25 — SessionTab enum moved to SessionTabs.kt (internal)
+  + TunnelCapsule pure labels wired into TerminalActivity (identical
+  strings). SessionTabsTest 3/0 + TunnelCapsuleTest 3/0; suite 304/0.
+
 
 - [x] F9: ConnectionHealthDeriveTest — N/A for the health-derive half;
       tmux-default half already/now pinned
   acceptance: health-derive documented N/A with audit note (PLAN B3
   precedent); tmux-default pins green in `./gradlew testFossDebugUnitTest`
   deps: none
-  evidence: 2026-08-25 — N/A AUDIT: iOS ConnectionHealth (dead/live/
-  beating, 20s beat window over KeepAliveLoop.lastBeatDate) has NO Android
-  counterpart — sshj's keep-alive is transport-internal (no exposed beat
-  timestamps; only a cosmetic heartbeat animation keyed on keepAlive), and
-  ConnState (CONNECTING/CONNECTED/RECONNECTING/STOPPED) carries no derive
-  logic. A health model arrives only if a future banner-parity task adds
-  one; its tests come with it. TMUX-DEFAULT HALF (same iOS file): already
-  pinned in HostStoreJsonTest (`new hosts default to tmux auto attach`,
-  missing-field → false — the deliberate pre-feature-backup divergence
-  from iOS's true); added `explicit tmux off survives a json round-trip`
-  (iOS testExplicitFalseSurvivesDecoding parity). HostStoreJsonTest 5/0.
+  evidence: 2026-08-25 — health-derive N/A (no Android model: sshj
+  keep-alive is transport-internal, ConnState carries no derive logic;
+  tests land with any future health model). Tmux-default half completed:
+  added `explicit tmux off survives a json round-trip`; HostStoreJsonTest
+  5/0 (missing→false divergence from iOS's true is deliberate:
+  pre-feature backups).
 
-### Phase F-P2 — logic trapped in Activity, refactor-first to testable pure fn
 
 - [x] F10: Extract Ctrl latch transform from TerminalView into a pure
       function (KeyInput), then add CtrlLatchTest + CtrlComboTest
@@ -335,91 +321,60 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   `./gradlew testFossDebugUnitTest`; covers iOS `CtrlKeyTransformTests.swift`
   + `CtrlLatchLifecycleTests.swift` + `CtrlComboTests.swift` (adapted)
   deps: none (refactor is part of this task)
-  evidence: 2026-08-25 — new `KeyInput.kt` (applyCtrlLatch + keyBytes)
-  extracted from TerminalView.sendText/sendKey (byte-identical, wired
-  back); CtrlLatchTest 7/0 (full a–z C0 map, case-insensitive, ETX/EOT/
-  SUB/XOFF/XON, disarmed passthrough, multi-letter) + CtrlComboTest 4/0
-  (ctrl-arrows 1;5, plain keys, F-keys SS3/CSI, unknown→null). Suite
-  316/0. PINNED DIVERGENCE: non-letter/multi-byte input keeps the latch
-  armed (iOS C42 fix absent) — H4 verdict CONFIRMED; B3 must flip the pin.
-  iOS CSI-rewrite-under-latch tests N/A: Android ctrl+arrows come from the
-  hardware-keyboard path (isCtrlPressed → CTRL_ARROW_*), not the latch.
+  evidence: 2026-08-25 — KeyInput.kt (applyCtrlLatch + keyBytes) extracted
+  from TerminalView.sendText/sendKey (byte-identical, rewired);
+  CtrlLatchTest 7/0 + CtrlComboTest 4/0. Suite 316/0. H4 verdict CONFIRMED
+  (latch survives non-letter — pinned as-is, B3 flips). iOS CSI-rewrite-
+  under-latch N/A: ctrl+arrows come from the hardware-keyboard path.
+
 
 - [x] F11: NavAndAltTest — N/A (Android has no nav-gesture/alt features)
   acceptance: documented N/A with audit note (PLAN B3 precedent)
   deps: none
-  evidence: 2026-08-25 — N/A AUDIT: iOS NavAndAlt tests cover (a) touch
-  gestures that EMIT keys (horizontal drag → arrows, fast flick → PGUP/
-  PGDN) — Android's TerminalView gestures instead scroll the LOCAL
-  scrollback buffer (onScroll/onFling → scrollOffset, no keys sent), a
-  different product behavior; (b) Alt/Meta latches (Alt+x=ESC x,
-  Ctrl+Alt, Alt+arrow) — Android has no ALT key or meta modifier anywhere
-  (ExtraKeysConfig.ALL has none; TerminalView has no META handling); (c)
-  the extra-keys drawer — Android has no drawer (single row + settings
-  picker). If these features get ported from iOS, their tests land with
-  them; pinning non-existent features would be dead test-only code.
+  evidence: 2026-08-25 — N/A AUDIT: (a) iOS gestures EMIT keys; Android
+  gestures scroll LOCAL scrollback (different product behavior);
+  (b) no ALT/meta latch exists anywhere; (c) no drawer. Tests land with
+  any ported feature; pinning non-existent code = dead test-only code.
+
 
 - [x] F12: KeepAliveLoopTest — N/A (no loop on Android; contract already pinned)
   acceptance: documented N/A with audit note
   deps: none
-  evidence: 2026-08-25 — N/A AUDIT: Android has no KeepAliveLoop class —
-  keep-alive is sshj's transport-level `setKeepAliveInterval(15)` (one
-  call in SshConnectionFactory.kt:69) plus a cosmetic heartbeat animation.
-  iOS's loop-behavior tests (beat cadence, failed-beat stops loop, start
-  idempotent) have no Android code to test; the Android contract is
-  already fully pinned: interval=15s + disabled-leaves-unset in
-  SshConnectAuthInteractionTest, and the constant via F1's
-  InteractionStringContractTest. If a shell-beat loop is ever ported
-  (iOS's `:` no-op design), its tests land with it.
+  evidence: 2026-08-25 — N/A AUDIT: no KeepAliveLoop class; keep-alive is
+  sshj transport-level setKeepAliveInterval(15) + cosmetic animation.
+  Contract already pinned: interval tests in SshConnectAuthInteractionTest
+  + constant via F1. Shell-beat loop tests land if that design is ported.
+
 
 - [x] F13: CrashReportingLifecycleTest — default-off gate matrix + SDK
       privacy options pinned
   acceptance: new `CrashReportingLifecycleTest.kt` green in
   `./gradlew testFossDebugUnitTest`
   deps: none
-  evidence: 2026-08-25 — pure `shouldReport(available, enabled)` gate +
-  `applyPrivacyOptions(SentryOptions)` extracted from initSdk (wired
-  back, behavior-identical); CrashReportingLifecycleTest 5/0 (default-off
-  corner, opt-in without DSN = fully disabled [iOS empty-endpoint
-  parity], DSN without opt-in, both-on, options: no PII/sessions/tracing/
-  threads, stacktrace on). Suite 321/0. ADAPTED: iOS's marker-file
-  lifecycle (survived-marker/background-removes-marker) is Sentry-SDK
-  internal on Android — no marker code exists to test; the
-  payload-carries-no-host-data half is covered by options pins here +
-  Scrubber tests (CrashReportingScrubberTest, 6 existing).
+  evidence: 2026-08-25 — pure shouldReport(available, enabled) gate +
+  applyPrivacyOptions(SentryOptions) extracted (initSdk rewired);
+  CrashReportingLifecycleTest 5/0 (default-off, no-DSN, no-opt-in, both-on,
+  options: no PII/sessions/tracing/threads). Suite 321/0. Marker lifecycle
+  = Sentry-internal on Android; no-host-data also covered by existing
+  CrashReportingScrubberTest (6).
 
-### Phase F-P3 — cross-platform invariants, nice-to-have
 
-- [ ] F14: TerminalReplay fresh-attach fixture — assert rendered buffer has
-      no tmux attach-command residue (iOS C53/C54/C57 shape)
-  acceptance: new fixture replay test green in
-  `./gradlew testFossDebugUnitTest`; at least the fresh-attach + reconnect-
-  attach no-residue cases from iOS `TerminalReplayTests.swift`
+- [x] F14: TerminalReplay fresh-attach fixture — residue pinned as-is (B2 flips)
+  acceptance: replay-shaped TerminalEmulator tests green in
+  `./gradlew testFossDebugUnitTest`
   deps: none
+  evidence: 2026-08-25 — TerminalReplayTest 3/0 (in MonitorPollTest.kt):
+  fresh-attach renders via alt screen; attach-echo RESIDUE pinned as
+  current behavior (B2/H3 must flip with its fix); reconnect shows
+  persisted+fresh markers. ADAPTED: synthetic PTY streams (no .bin
+  fixtures; emulator feed API); live residue QA stays with H3.
 
-- [ ] F15: LogAndContinueTest — keepAlive beat failure fires onError once,
-      healthy beats never fire onError, monitor parse failure preserves
-      prior snapshot (value-type safety)
-  acceptance: new `LogAndContinueTest.kt` green in
-  `./gradlew testFossDebugUnitTest`; covers the 3 iOS `LogAndContinueTests.swift`
-  cases
-  deps: F12 (KeepAliveLoop extracted)
 
-## Android-specific considerations
-
-1. Foreground service + persistent notifications keep sessions alive —
-   the reconnect arc complements this (network loss ≠ process death).
-2. Own TerminalEmulator is a differentiating asset (no WebView) — port
-   fixes from SwiftTerm findings selectively; the emulator test suite is
-   the safety net.
-3. Interaction tests run against an in-process Apache MINA sshd on the
-   JVM — fast and CI-friendly; live-device QA stays a manual layer.
-
-## Notes
-
-- 0.9.1 WIP (reconnect arc) is IN TREE but unreleased/uncommitted — its
-  hypothesis lives above (H1); do not re-plan around it.
-- Cross-platform principle declared in iOS C48 (extra-keys pool should
-  hold terminal-special/combo keys only, printable symbols belong to the
-  system keyboard) is a DESIGN CANDIDATE here, not a hypothesis — needs a
-  user decision before planning (Android ships SLASH/PIPE/TILDE/DOLLAR…).
+- [x] F15: MonitorPollTest — parse-failure/dead-exec preserve prior snapshot
+  acceptance: pure poll-loop policy pinned green in
+  `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — poll-loop decisions extracted to pure
+  MonitorPoll.reduce (MonitorTab rewired, identical); MonitorPollTest 5/0
+  (good→refresh, parse-fail/dead-exec preserve prior snapshot, errors only
+  when nothing to show). Suite 329/0. KeepAlive half N/A per F12.
