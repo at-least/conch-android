@@ -210,31 +210,23 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   acceptance: new `InteractionStringContractTest.kt` green in
   `./gradlew testFossDebugUnitTest`
   deps: none
-  evidence: 2026-08-25 — constants extracted & deduped (SshSession.
-  TMUX_ATTACH_LINE, SshConnectionFactory.KEEP_ALIVE_INTERVAL_SECONDS=15,
-  MonitorParser.PROBE — was copy-pasted in MonitorActivity + SessionTabs,
-  DockerParser.LIST_COMMAND); new InteractionStringContractTest (5 tests)
-  pins them. Full `./gradlew testFossDebugUnitTest` → 269 tests, 0
-  failures, 1 skipped (pre-existing opt-in local sshd). DIVERGENCES FROM
-  iOS documented in the test KDoc (product decisions pending, not bugs):
-  (a) tmux attach lacks the iOS `command -v` guard + printf wipe — B2 must
-  move this pin with its fix; (b) keep-alive is sshj transport-level 15s,
-  not iOS's `:` shell beat; (c) docker list lacks iOS's C33 PATH prefix;
-  (d) palette sends text+"\r" straight to the PTY (iOS writes "\n" and
-  relies on icrnl) — inline in TerminalActivity, no shared helper yet.
+  evidence: 2026-08-25 — constants extracted & deduped (SshSession.TMUX_ATTACH_LINE,
+  SshConnectionFactory.KEEP_ALIVE_INTERVAL_SECONDS=15, MonitorParser.PROBE
+  — was copy-pasted in MonitorActivity + SessionTabs, DockerParser.
+  LIST_COMMAND); InteractionStringContractTest 5/0 pins them; full suite
+  269/0. iOS DIVERGENCES documented in test KDoc (tmux guard/wipe = B2;
+  keep-alive mechanism; docker PATH prefix; palette CR vs LF).
+.
 
 - [x] F2: MonitorParser probe command exact bytes + cpu clamp edge cases
   acceptance: `MonitorParserTest` (was 3 tests) gains probe-command
   exact-string assertion + zero-delta clamp + full-idle + full-busy cases;
   green in `./gradlew testFossDebugUnitTest`
   deps: none
-  evidence: 2026-08-25 — MonitorParserTest → 6 tests, 0 failures
-  (`idle-only delta reads as zero percent busy`, `busy-only delta reads
-  as one hundred percent busy`, `probe command shape is the parser
-  contract` mirroring iOS testProbeCommandExact incl. free -B check).
-  Zero-delta→100% clamp was ALREADY covered by the existing
-  `cpu usage from two samples` first case; full-string byte pin landed in
-  F1's InteractionStringContractTest instead of here (single pin site).
+  evidence: 2026-08-25 — MonitorParserTest → 6/0 (full-idle 0%, full-busy
+  100%, probe shape mirroring iOS testProbeCommandExact). Zero-delta clamp
+  was already covered; full-string pin lives in F1's contract test.
+.
 
 - [x] F3: BackupCodec header layout / bad magic / too short / unsupported
       version
@@ -242,15 +234,11 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   matching iOS `BackupCodecTests.swift` (header offset layout, badMagic,
   tooShort, unsupportedVersion); green in `./gradlew testFossDebugUnitTest`
   deps: none
-  evidence: 2026-08-25 — BackupCodecTest → 10 tests, 0 failures. Added:
-  `header layout…` (exact size 8+16+12+plain+16 on a known payload, salt
-  differs at [8,24), iv differs at [24,36), magic stable at [0,8)),
-  `corrupted magic → bad magic`, `magic-only → too short` (the existing
-  garbage-input test at 50 bytes actually exercised tooShort too —
-  previously unpinned), `version=99 → Unsupported backup version` (blob
-  built by hand with PBKDF2-HMAC-SHA256 600k/256-bit, which also pins the
-  KDF parameters implicitly; iOS's separate PBKDF2 RFC-7914 vector test
-  is N/A here — Android uses the JDK's PBKDF2, not a hand-rolled one).
+  evidence: 2026-08-25 — BackupCodecTest → 10/0 (exact-size layout pin,
+  salt/iv randomness at offsets, badMagic, tooShort, version=99 rejected —
+  hand-built blob also pins PBKDF2-HMAC-SHA256 600k/256. iOS's RFC-7914
+  vector test N/A: Android uses the JDK's PBKDF2, not a hand-rolled one).
+.
 
 - [x] F4: BackupCodec export/restore merge semantics + export-includes-secrets
   acceptance: `BackupCodecTest` gains a restore-merge test (existing host id
@@ -258,19 +246,12 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   secrets assertion (Keychain/EncryptedPrefs content present in decrypted
   blob); green in `./gradlew testFossDebugUnitTest`
   deps: F3
-  evidence: 2026-08-25 — merge DECISIONS extracted into BackupManager
-  companion pure fns (mergeHosts/mergeSnippets/keyIdsToImport/
-  mergeKnownHostsLines; restore() rewritten on top, behavior-equivalent);
-  new `BackupManagerMergeTest` 5/0 green (existing id kept verbatim + new
-  append, no-op merge, key-import skips known ids + pem-less keys,
-  known_hosts dedup union + growth flag). Full suite 286/0. RESCOPE: the
-  SecretsStore side of restore and collect()'s secret gathering are
-  Android-bound (AndroidKeyStore) — no Robolectric in this repo, so the
-  "export includes secrets" half is covered at the codec level
-  (BackupCodecTest roundtrip asserts hostSecrets/keySecrets survive
-  encrypt→decrypt); store wiring stays manual-QA.
-
-### Phase F-P1 — feature exists in main, zero tests (silent breakage risk)
+  evidence: 2026-08-25 — merge decisions extracted to BackupManager
+  companion pure fns (hosts/snippets/keyIdsToImport/knownHosts union);
+  BackupManagerMergeTest 5/0; suite 286/0. RESCOPE: SecretsStore/collect()
+  are Android-bound (no Robolectric) — export-includes-secrets covered at
+  codec level (BackupCodecTest roundtrip); store wiring = manual-QA.
+)
 
 - [x] F5: SnippetStoreTest — crud roundtrip, load empty/corrupt no crash,
       JSON field names match iOS, delete by id
@@ -278,11 +259,10 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   `./gradlew testFossDebugUnitTest`; covers the 4 iOS `SnippetStoreTests.swift`
   cases
   deps: none
-  evidence: 2026-08-25 — SnippetStore gained a File-seam primary
-  constructor (Android ctor delegates); new `SnippetStoreTest` 5/0 green
-  (cross-instance roundtrip, empty dir → [], corrupt → [] no crash,
-  persisted field set == {id,label,command}, delete-by-id pattern from
-  SnippetsActivity). Full suite 286/0.
+  evidence: 2026-08-25 — SnippetStore File-seam ctor; SnippetStoreTest 5/0
+  (cross-instance roundtrip, corrupt→[], field set {id,label,command},
+  delete-by-id); suite 286/0.
+.
 
 - [x] F6: AppLockTest — grace window inside/outside, disabled by default,
       toggle flips state
