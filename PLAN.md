@@ -329,14 +329,22 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   current contracts; count semantics stay on SshSession.tunnelCount
   (interaction-tested).
 
-- [ ] F9: ConnectionHealthDeriveTest — derive(connected=false)=dead,
-      connected+no beats=live, recent beat=beating, stale falls back to
-      live, -19s edge still beating
-  acceptance: new `ConnectionHealthDeriveTest.kt` green in
-  `./gradlew testFossDebugUnitTest`; covers the 5 iOS
-  `TmuxDefaultAndHealthTests.swift` health-derive cases (HostCardStatus.kt
-  has the derive logic but only 0/1/N live count is tested today)
+- [x] F9: ConnectionHealthDeriveTest — N/A for the health-derive half;
+      tmux-default half already/now pinned
+  acceptance: health-derive documented N/A with audit note (PLAN B3
+  precedent); tmux-default pins green in `./gradlew testFossDebugUnitTest`
   deps: none
+  evidence: 2026-08-25 — N/A AUDIT: iOS ConnectionHealth (dead/live/
+  beating, 20s beat window over KeepAliveLoop.lastBeatDate) has NO Android
+  counterpart — sshj's keep-alive is transport-internal (no exposed beat
+  timestamps; only a cosmetic heartbeat animation keyed on keepAlive), and
+  ConnState (CONNECTING/CONNECTED/RECONNECTING/STOPPED) carries no derive
+  logic. A health model arrives only if a future banner-parity task adds
+  one; its tests come with it. TMUX-DEFAULT HALF (same iOS file): already
+  pinned in HostStoreJsonTest (`new hosts default to tmux auto attach`,
+  missing-field → false — the deliberate pre-feature-backup divergence
+  from iOS's true); added `explicit tmux off survives a json round-trip`
+  (iOS testExplicitFalseSurvivesDecoding parity). HostStoreJsonTest 5/0.
 
 ### Phase F-P2 — logic trapped in Activity, refactor-first to testable pure fn
 
