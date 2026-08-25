@@ -126,12 +126,8 @@ Spike conclusions (from verified H1):
   H1); full `./gradlew testFossDebugUnitTest` green (254); existing
   SessionReconnectorInteractionTest + SshShellPtyInteractionTest stay green
   deps: H1 (verified)
-  evidence: 2026-08-22 — `SshSession.exec()/sftpClient()/isConnected` added
-  (client + session now @Volatile); `SessionReconnector` delegates
-  exec/sftpClient/isConnected to current. `./gradlew testFossDebugUnitTest
-  --rerun-tasks` → BUILD SUCCESSFUL, 254 tests, 0 failures, 0 errors.
-  Named: SharedConnectionMultiplexTest + SessionReconnectorInteractionTest
-  + SshShellPtyInteractionTest = 8 tests, 0 failures.
+  evidence: 2026-08-22 — SshSession.exec()/sftpClient()/isConnected added
+  (@Volatile client+session), SessionReconnector delegates; full suite 254/0.
 
 - [x] E2: Extract Monitor + Docker + SFTP screens as Compose composables
       that take a shared SshSession (reusing existing parsers/command
@@ -140,13 +136,8 @@ Spike conclusions (from verified H1):
   session in a host-less preview/test; parsers unchanged (existing
   MonitorDockerParserTest + DockerParserTest + SftpInteractionTest green)
   deps: E1
-  evidence: 2026-08-22 — `SessionTabs.kt` adds `MonitorTab`/`DockerTab`/
-  `SftpTab`(@Composable) taking `SessionReconnector`; reuse
-  `MonitorParser`/`DockerParser`/`SftpEntry` + the exact PROBE &
-  `docker ps` command strings verbatim; async via `rememberCoroutineScope`.
-  `compileFossDebugKotlin` BUILD SUCCESSFUL. `testFossDebugUnitTest
-  --rerun-tasks` → 254 tests, 0 failures. Parser tests green:
-  MonitorParserTest 3/0, DockerParserTest 3/0, SftpInteractionTest 13/0.
+  evidence: 2026-08-22 — SessionTabs.kt MonitorTab/DockerTab/SftpTab reuse
+  parsers + command strings verbatim; compile + 254/0, parser tests green.
 
 - [x] E3: In-session TabRow (Terminal / Monitor / Docker / Files) in
       TerminalActivity — terminal AndroidView stays mounted (visibility
@@ -155,19 +146,9 @@ Spike conclusions (from verified H1):
   the same TerminalView + emulator instance (identity preserved); full
   `./gradlew testFossDebugUnitTest` green
   deps: E2
-  evidence: 2026-08-22 — TerminalActivity content is now a Box: the
-  terminal `AndroidView` (+ ExtraKeysRow) stays in composition at all
-  times, toggled via `Modifier.alpha(0f)` when off-tab (NEVER removed, so
-  the factory runs once and the TerminalView/emulator instance survives
-  every tab switch — the Android analogue of iOS's ZStack opacity). Non-
-  terminal tabs render `MonitorTab`/`DockerTab`/`SftpTab` on top. A
-  Material3 `NavigationBar` hosts the 4 tabs; the topBar's SFTP/Monitor/
-  Docker IconButtons are removed (replaced by tabs). `compileFossDebugKotlin`
-  BUILD SUCCESSFUL; `testFossDebugUnitTest --rerun-tasks` → 254 tests,
-  0 failures. Identity preservation across tab switches is a structural
-  guarantee (AndroidView not conditionally removed); a Compose UI
-  instrumented test asserting instance identity is the only residual gap
-  (no emulator in this env — manual QA, same shape as iOS T26).
+  evidence: 2026-08-22 — terminal AndroidView never removed (alpha swap,
+  iOS ZStack-opacity analogue), NavigationBar hosts 4 tabs; 254/0.
+  Identity preservation structural; instrumented-UI assert = manual QA.
 
 - [x] E4: Command Palette — ModalBottomSheet searching history + snippets
       (prefix > substring rank, snippets win ties), tap-to-run; Snippets &
@@ -177,13 +158,8 @@ Spike conclusions (from verified H1):
   from iOS) green; build green; overflow menu's Snippets/History items
   replaced by the palette
   deps: E1
-  evidence: 2026-08-22 — `CommandPaletteModel.kt` (pure rank: prefix=0 >
-  substring=1, snippets win ties, empty→recent history newest-first, limit
-  cap) + `CommandPaletteSheet.kt` (ModalBottomSheet + debounced search +
-  tap-to-run via sendRaw). TerminalActivity overflow menu adds "Command
-  palette" entry; Snippets/History management sheets open from the palette.
-  `CommandPaletteModelTest` 7/0 green. `testFossDebugUnitTest` → 261 tests,
-  0 failures.
+  evidence: 2026-08-22 — CommandPaletteModel.kt (pure rank) +
+  CommandPaletteSheet.kt wired into overflow menu; model test 7/0, 261/0.
 
 - [x] E5: Tunnel capsule on the session screen — `AssistChip` showing
       `⇅ N` when tunnels are live, tap → confirmation to stop all tunnels
@@ -191,51 +167,32 @@ Spike conclusions (from verified H1):
   stop-all tears down forwarder sockets (existing PortForwardInteractionTest
   green)
   deps: E1
-  evidence: 2026-08-22 — `SshSession.stopTunnels()` + `tunnelCount` added
-  (closes forwarderSockets + interrupts forwarderThreads WITHOUT closing
-  shell/transport); `SessionReconnector` delegates. TerminalActivity topBar
-  shows an `AssistChip "⇅ N"` (green, SyncAlt icon) when liveTunnelCount>0,
-  tap → AlertDialog "Stop N tunnel(s)?" → stopTunnels + count=0. Count
-  initialised in onSessionConnected. `testFossDebugUnitTest` → 261 tests,
-  0 failures; PortForwardInteractionTest stays green.
+  evidence: 2026-08-22 — SshSession.stopTunnels()/tunnelCount + AssistChip
+  w/ confirm dialog; 261/0, PortForwardInteractionTest green.
 
 - [x] E6: Sessions switcher — ModalBottomSheet listing live sessions
       (host name + relative start time), tap to switch, swipe to disconnect
   acceptance: build green; switcher lists every active TerminalActivity
   session; swipe-disconnect tears down that session only
   deps: E1
-  evidence: 2026-08-22 — `LiveSessions.kt` (process-level ConcurrentHashMap
-  registry: register/unregister/all/countForHost/disconnectAll, thread-safe,
-  holds only display metadata + a disconnectFn — never the SSH client).
-  TerminalActivity registers on onSessionConnected (sessionId UUID),
-  unregisters on onDestroy. `SessionsSheet.kt` = ModalBottomSheet +
-  SwipeToDismissBox (EndToStart → disconnectFn + refresh list). MainActivity
-  menu shows "Sessions (N)" iff LiveSessions non-empty. Tap row →
-  startActivity TerminalActivity with REORDER_TO_FRONT. `testFossDebugUnitTest`
-  → 261 tests, 0 failures. Registry is pure singleton (no IO) — the sheet's
-  swipe/tap behavior is the manual-QA gap (no emulator in env).
+  evidence: 2026-08-22 — LiveSessions registry (pure singleton) +
+  SessionsSheet (SwipeToDismissBox) + MainActivity "Sessions (N)";
+  261/0; sheet swipe/tap = manual QA (no emulator in env).
 
 - [x] E7: Host card live badge on MainActivity host list — green dot +
       `live` / `N live` text when a host has live sessions
   acceptance: build green; badge derives from a live-session registry
-  (HostCardStatus parity with iOS); unit test for the badge derivation green
+      (HostCardStatus parity with iOS); unit test for the badge derivation green
   deps: E6
-  evidence: 2026-08-22 — `HostCardStatus.kt` (pure: liveSessionCount →
-  isLive/badgeText/showsDot, "live"/"N live") + `HostCardStatusTest` 3/0
-  green. MainActivity `HostCard` now shows a green dot + badge text via
-  `LiveSessions.countForHost(host.id)`; badge refreshes on onResume (host
-  list reload). `testFossDebugUnitTest` → 264 tests, 0 failures.
+  evidence: 2026-08-22 — HostCardStatus.kt pure derivation + test 3/0;
+  HostCard badge via LiveSessions.countForHost, refreshed onResume; 264/0.
 
 - [x] E8: README + CHANGELOG roll-up for the parity arc
   acceptance: README Features list matches shipped behavior; CHANGELOG
   entry covers E1–E7
   deps: E1–E7
-  evidence: 2026-08-22 — README "Tools" section adds in-session tabs,
-  command palette, sessions switcher, tunnel capsule; project layout lists
-  the new files (SessionTabs/CommandPaletteModel/CommandPaletteSheet/
-  SessionsSheet/LiveSessions/HostCardStatus) + updated SshSession/Activity
-  descriptions. CHANGELOG 0.9.1 entry covers E1–E7. `testFossDebugUnitTest
-  --rerun-tasks` → 264 tests, 0 failures.
+  evidence: 2026-08-22 — README tools section + project layout updated,
+  CHANGELOG 0.9.1 covers E1–E7; 264/0.
 
 ### Phase F — test parity with conch-ios (fill coverage gaps)
 
