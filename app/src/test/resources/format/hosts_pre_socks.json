@@ -1,0 +1,1 @@
+[{"id":"h1","alias":"prod","hostname":"prod.example.com","port":2222,"username":"alice","authType":"KEY","keyId":"k1","fontSizeSp":0,"keepAlive":true,"tmuxAutoAttach":false,"tunnels":[{"localPort":8080,"host":"db.internal","port":5432}]}]

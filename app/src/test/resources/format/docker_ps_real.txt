@@ -1,0 +1,4 @@
+{"Command":"/docker-entrypoint.…","CreatedAt":"2026-08-01 10:00:00 +0000 UTC","ID":"a1b2c3d4e5f6","Image":"nginx:alpine","Labels":"","LocalVolumes":"0","Mounts":"","Names":"web-生産","Networks":"bridge","Ports":"0.0.0.0:8080->80/tcp","RunningFor":"2 weeks ago","Size":"0B","State":"running","Status":"Up 2 weeks"}
+docker: permission denied
+{"ID":"f6e5d4c3b2a1","Names":"db","Image":"postgres:16","State":"exited","Status":"Exited (0) 3 days ago"}
+{bad json}

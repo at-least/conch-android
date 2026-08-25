@@ -40,6 +40,12 @@ object SettingsStore {
         val appContext = context.applicationContext
         return store ?: synchronized(this) {
             store ?: PreferenceDataStoreFactory.create(
+                // A corrupt preferences_pb (partial backup restore, full disk
+                // mid-write) must degrade to defaults, never crash-loop the
+                // app at startup. Pinned by SettingsStoreCorruptionRobolectricTest.
+                corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
+                    androidx.datastore.preferences.core.emptyPreferences()
+                },
                 migrations = listOf(
                     androidx.datastore.preferences.SharedPreferencesMigration(
                         appContext, "conchapp_settings"
