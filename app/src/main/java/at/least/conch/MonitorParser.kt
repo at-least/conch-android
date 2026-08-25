@@ -22,6 +22,18 @@ package at.least.conch
  */
 object MonitorParser {
 
+    /**
+     * Wire contract: the probe command whose output [parse] consumes. The
+     * shape (sections, `sleep 1` dual cpu samples, `df -B1 /`) is shared
+     * with the iOS parser — drift here breaks the parser, not the build.
+     * Pinned by InteractionStringContractTest.
+     */
+    const val PROBE = "echo ---CPU; grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat; " +
+        "echo ---MEM; free -b | grep -E '^Mem:|^Swap:'; " +
+        "echo ---DISK; df -B1 / | tail -1; " +
+        "echo ---LOAD; cat /proc/loadavg; " +
+        "echo ---UP; cat /proc/uptime"
+
     data class Snapshot(
         val cpuPercent: Double,
         val memTotalBytes: Long,

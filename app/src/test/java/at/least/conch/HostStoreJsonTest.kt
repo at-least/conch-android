@@ -48,6 +48,15 @@ class HostStoreJsonTest {
     }
 
     @Test
+    fun `explicit tmux off survives a json round-trip`() {
+        // iOS testExplicitFalseSurvivesDecoding parity: opt-out is honored
+        val host = Host(id = "x", hostname = "h", username = "u")
+        host.tmuxAutoAttach = false
+        val back = HostStore.hostFromJson(HostStore.hostToJson(host))
+        assertFalse(back.tmuxAutoAttach)
+    }
+
+    @Test
     fun `missing fields fall back to defaults`() {
         val o = JSONObject().put("id", "x").put("hostname", "h").put("username", "u")
         val host = HostStore.hostFromJson(o)

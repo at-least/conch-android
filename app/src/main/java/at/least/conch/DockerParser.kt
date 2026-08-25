@@ -8,6 +8,14 @@ import org.json.JSONObject
  */
 object DockerParser {
 
+    /**
+     * Wire contract: the container-list command every Docker UI runs.
+     * iOS prefixes `export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH;`
+     * (C33: non-login SSH PATH omits brew/local bins) — Android does not
+     * yet; pending a product decision. Pinned by InteractionStringContractTest.
+     */
+    const val LIST_COMMAND = "docker ps -a --format '{{json .}}'"
+
     data class Container(
         val id: String,
         val names: String,

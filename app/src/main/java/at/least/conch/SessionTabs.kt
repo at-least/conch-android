@@ -20,9 +20,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -75,14 +78,61 @@ import java.util.Locale
  */
 
 // =====================================================================
+// In-session tabs + tunnel capsule labels
+// =====================================================================
+
+/**
+ * In-session tabs (C52 redesign): Terminal / Monitor / Docker / Files —
+ * exactly four, each with a title and icon (iOS SessionTab parity). Lives
+ * here (not inside TerminalActivity) so the model is JVM-testable.
+ */
+internal enum class SessionTab(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    TERMINAL("Terminal", Icons.Filled.Code),
+    MONITOR("Monitor", Icons.Filled.Monitor),
+    DOCKER("Docker", Icons.Filled.Storage),
+    FILES("Files", Icons.Filled.Folder),
+}
+
+/**
+ * Pure label derivations for the tunnel capsule (iOS TunnelStatus
+ * analogue — count semantics live on SshSession.tunnelCount). Extracted
+ * from TerminalActivity so the user-facing strings are pinned.
+ */
+object TunnelCapsule {
+    /** Capsule shows only when at least one tunnel is live. */
+    fun visible(count: Int): Boolean = count > 0
+
+    fun chipText(count: Int): String = "⇅ $count"
+
+    fun stopDialogTitle(count: Int): String = "Stop $count tunnel(s)?"
+}
+
+// =====================================================================
 // Monitor
 // =====================================================================
 
-private const val MONITOR_PROBE = "echo ---CPU; grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat; " +
-    "echo ---MEM; free -b | grep -E '^Mem:|^Swap:'; " +
-    "echo ---DISK; df -B1 / | tail -1; " +
-    "echo ---LOAD; cat /proc/loadavg; " +
-    "echo ---UP; cat /proc/uptime"
+/**
+ * Pure decision kernel of the MonitorTab poll loop (iOS
+ * LogAndContinueTests "parse failure leaves prior snapshot usable"
+ * parity): a good parse refreshes; a failed parse or dead exec NEVER
+ * overwrites a good prior snapshot — errors surface only when there is
+ * nothing better to show. Extracted from the Composable so the policy is
+ * JVM-testable.
+ */
+object MonitorPoll {
+    data class State(val snapshot: MonitorParser.Snapshot?, val error: String?)
+
+    fun reduce(state: State, out: String?): State {
+        if (out != null) {
+            val parsed = MonitorParser.parse(out)
+            if (parsed != null) return State(parsed, null)
+            if (state.snapshot == null) return State(null, "Failed to read metrics")
+            return state
+        }
+        if (state.snapshot == null) return State(null, "Failed to read metrics")
+        return state
+    }
+}
 
 @Composable
 fun MonitorTab(session: SessionReconnector) {
@@ -140,18 +190,10 @@ fun MonitorTab(session: SessionReconnector) {
     LaunchedEffect(autoRefresh) {
         if (!autoRefresh) return@LaunchedEffect
         while (true) {
-            val out = withContext(Dispatchers.IO) { session.exec(MONITOR_PROBE) }
-            if (out != null) {
-                val parsed = MonitorParser.parse(out)
-                if (parsed != null) {
-                    snapshot = parsed
-                    error = null
-                } else if (snapshot == null) {
-                    error = "Failed to read metrics"
-                }
-            } else if (snapshot == null) {
-                error = "Failed to read metrics"
-            }
+            val out = withContext(Dispatchers.IO) { session.exec(MonitorParser.PROBE) }
+            val next = MonitorPoll.reduce(MonitorPoll.State(snapshot, error), out)
+            snapshot = next.snapshot
+            error = next.error
             delay(5_000)
         }
     }
@@ -208,7 +250,7 @@ fun DockerTab(session: SessionReconnector) {
         busy = true
         scope.launch {
             val out = withContext(Dispatchers.IO) {
-                session.exec("docker ps -a --format '{{json .}}'")
+                session.exec(DockerParser.LIST_COMMAND)
             } ?: ""
             containers.clear()
             containers.addAll(DockerParser.parse(out))

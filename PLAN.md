@@ -53,8 +53,13 @@ actually runs in THIS repo.
 
 - [ ] H4: The Ctrl latch bug iOS fixed in C42 exists here too — a latched CTRL that is only cleared by single letters mangles later keystrokes
   verify: unit test on the latch state machine (ARM → any non-letter key → released); grep-audit `TerminalView.ctrlArmed` clear sites first
-  verdict:
-  evidence:
+  verdict: CONFIRMED 2026-08-25 — audit during F10: ctrlArmed is cleared
+  ONLY in sendText's letter path and pasteText(); non-letter input keeps
+  the latch armed, so a later letter fires as Ctrl-letter (stuck-latch).
+  Pinned as-is by CtrlLatchTest `non-letter passes through … STAYS armed`;
+  fix = B3, must flip that pin.
+  evidence: KeyInput.applyCtrlLatch extracted (F10) preserves the exact
+  sendText behavior; CtrlLatchTest 7/0 green against it.
 
 - [ ] H5: TILDBAK1 backups round-trip cross-platform (export on Android → import on iOS and vice versa)
   verify: same passphrase fixture backup file imported by both repos' codec tests (add the fixture to both test suites; assert host/key/snippet merge counts match)
@@ -82,7 +87,9 @@ actually runs in THIS repo.
 - [ ] B2: Harden the tmux attach line — `command -v` guard + `printf` wipe + wait-for-first-output before sending
   acceptance: H3 verify green (tmux-less silent fallback; truecolor
   attach; reconnect-into-existing-session with zero residue); no behavior
-  change when tmuxAutoAttach is off
+  change when tmuxAutoAttach is off; update the F1
+  InteractionStringContractTest tmux pin to the hardened line in the same
+  change
   deps: none
 
 - [ ] B3: Ctrl latch audit — release on ANY keystroke (iOS C42 shape)
@@ -124,12 +131,8 @@ Spike conclusions (from verified H1):
   H1); full `./gradlew testFossDebugUnitTest` green (254); existing
   SessionReconnectorInteractionTest + SshShellPtyInteractionTest stay green
   deps: H1 (verified)
-  evidence: 2026-08-22 — `SshSession.exec()/sftpClient()/isConnected` added
-  (client + session now @Volatile); `SessionReconnector` delegates
-  exec/sftpClient/isConnected to current. `./gradlew testFossDebugUnitTest
-  --rerun-tasks` → BUILD SUCCESSFUL, 254 tests, 0 failures, 0 errors.
-  Named: SharedConnectionMultiplexTest + SessionReconnectorInteractionTest
-  + SshShellPtyInteractionTest = 8 tests, 0 failures.
+  evidence: 2026-08-22 — SshSession.exec()/sftpClient()/isConnected added
+  (@Volatile client+session), SessionReconnector delegates; full suite 254/0.
 
 - [x] E2: Extract Monitor + Docker + SFTP screens as Compose composables
       that take a shared SshSession (reusing existing parsers/command
@@ -138,13 +141,8 @@ Spike conclusions (from verified H1):
   session in a host-less preview/test; parsers unchanged (existing
   MonitorDockerParserTest + DockerParserTest + SftpInteractionTest green)
   deps: E1
-  evidence: 2026-08-22 — `SessionTabs.kt` adds `MonitorTab`/`DockerTab`/
-  `SftpTab`(@Composable) taking `SessionReconnector`; reuse
-  `MonitorParser`/`DockerParser`/`SftpEntry` + the exact PROBE &
-  `docker ps` command strings verbatim; async via `rememberCoroutineScope`.
-  `compileFossDebugKotlin` BUILD SUCCESSFUL. `testFossDebugUnitTest
-  --rerun-tasks` → 254 tests, 0 failures. Parser tests green:
-  MonitorParserTest 3/0, DockerParserTest 3/0, SftpInteractionTest 13/0.
+  evidence: 2026-08-22 — SessionTabs.kt MonitorTab/DockerTab/SftpTab reuse
+  parsers + command strings verbatim; compile + 254/0, parser tests green.
 
 - [x] E3: In-session TabRow (Terminal / Monitor / Docker / Files) in
       TerminalActivity — terminal AndroidView stays mounted (visibility
@@ -153,19 +151,9 @@ Spike conclusions (from verified H1):
   the same TerminalView + emulator instance (identity preserved); full
   `./gradlew testFossDebugUnitTest` green
   deps: E2
-  evidence: 2026-08-22 — TerminalActivity content is now a Box: the
-  terminal `AndroidView` (+ ExtraKeysRow) stays in composition at all
-  times, toggled via `Modifier.alpha(0f)` when off-tab (NEVER removed, so
-  the factory runs once and the TerminalView/emulator instance survives
-  every tab switch — the Android analogue of iOS's ZStack opacity). Non-
-  terminal tabs render `MonitorTab`/`DockerTab`/`SftpTab` on top. A
-  Material3 `NavigationBar` hosts the 4 tabs; the topBar's SFTP/Monitor/
-  Docker IconButtons are removed (replaced by tabs). `compileFossDebugKotlin`
-  BUILD SUCCESSFUL; `testFossDebugUnitTest --rerun-tasks` → 254 tests,
-  0 failures. Identity preservation across tab switches is a structural
-  guarantee (AndroidView not conditionally removed); a Compose UI
-  instrumented test asserting instance identity is the only residual gap
-  (no emulator in this env — manual QA, same shape as iOS T26).
+  evidence: 2026-08-22 — terminal AndroidView never removed (alpha swap,
+  iOS ZStack-opacity analogue), NavigationBar hosts 4 tabs; 254/0.
+  Identity preservation structural; instrumented-UI assert = manual QA.
 
 - [x] E4: Command Palette — ModalBottomSheet searching history + snippets
       (prefix > substring rank, snippets win ties), tap-to-run; Snippets &
@@ -175,13 +163,8 @@ Spike conclusions (from verified H1):
   from iOS) green; build green; overflow menu's Snippets/History items
   replaced by the palette
   deps: E1
-  evidence: 2026-08-22 — `CommandPaletteModel.kt` (pure rank: prefix=0 >
-  substring=1, snippets win ties, empty→recent history newest-first, limit
-  cap) + `CommandPaletteSheet.kt` (ModalBottomSheet + debounced search +
-  tap-to-run via sendRaw). TerminalActivity overflow menu adds "Command
-  palette" entry; Snippets/History management sheets open from the palette.
-  `CommandPaletteModelTest` 7/0 green. `testFossDebugUnitTest` → 261 tests,
-  0 failures.
+  evidence: 2026-08-22 — CommandPaletteModel.kt (pure rank) +
+  CommandPaletteSheet.kt wired into overflow menu; model test 7/0, 261/0.
 
 - [x] E5: Tunnel capsule on the session screen — `AssistChip` showing
       `⇅ N` when tunnels are live, tap → confirmation to stop all tunnels
@@ -189,67 +172,209 @@ Spike conclusions (from verified H1):
   stop-all tears down forwarder sockets (existing PortForwardInteractionTest
   green)
   deps: E1
-  evidence: 2026-08-22 — `SshSession.stopTunnels()` + `tunnelCount` added
-  (closes forwarderSockets + interrupts forwarderThreads WITHOUT closing
-  shell/transport); `SessionReconnector` delegates. TerminalActivity topBar
-  shows an `AssistChip "⇅ N"` (green, SyncAlt icon) when liveTunnelCount>0,
-  tap → AlertDialog "Stop N tunnel(s)?" → stopTunnels + count=0. Count
-  initialised in onSessionConnected. `testFossDebugUnitTest` → 261 tests,
-  0 failures; PortForwardInteractionTest stays green.
+  evidence: 2026-08-22 — SshSession.stopTunnels()/tunnelCount + AssistChip
+  w/ confirm dialog; 261/0, PortForwardInteractionTest green.
 
 - [x] E6: Sessions switcher — ModalBottomSheet listing live sessions
       (host name + relative start time), tap to switch, swipe to disconnect
   acceptance: build green; switcher lists every active TerminalActivity
   session; swipe-disconnect tears down that session only
   deps: E1
-  evidence: 2026-08-22 — `LiveSessions.kt` (process-level ConcurrentHashMap
-  registry: register/unregister/all/countForHost/disconnectAll, thread-safe,
-  holds only display metadata + a disconnectFn — never the SSH client).
-  TerminalActivity registers on onSessionConnected (sessionId UUID),
-  unregisters on onDestroy. `SessionsSheet.kt` = ModalBottomSheet +
-  SwipeToDismissBox (EndToStart → disconnectFn + refresh list). MainActivity
-  menu shows "Sessions (N)" iff LiveSessions non-empty. Tap row →
-  startActivity TerminalActivity with REORDER_TO_FRONT. `testFossDebugUnitTest`
-  → 261 tests, 0 failures. Registry is pure singleton (no IO) — the sheet's
-  swipe/tap behavior is the manual-QA gap (no emulator in env).
+  evidence: 2026-08-22 — LiveSessions registry (pure singleton) +
+  SessionsSheet (SwipeToDismissBox) + MainActivity "Sessions (N)";
+  261/0; sheet swipe/tap = manual QA (no emulator in env).
 
 - [x] E7: Host card live badge on MainActivity host list — green dot +
       `live` / `N live` text when a host has live sessions
   acceptance: build green; badge derives from a live-session registry
-  (HostCardStatus parity with iOS); unit test for the badge derivation green
+      (HostCardStatus parity with iOS); unit test for the badge derivation green
   deps: E6
-  evidence: 2026-08-22 — `HostCardStatus.kt` (pure: liveSessionCount →
-  isLive/badgeText/showsDot, "live"/"N live") + `HostCardStatusTest` 3/0
-  green. MainActivity `HostCard` now shows a green dot + badge text via
-  `LiveSessions.countForHost(host.id)`; badge refreshes on onResume (host
-  list reload). `testFossDebugUnitTest` → 264 tests, 0 failures.
+  evidence: 2026-08-22 — HostCardStatus.kt pure derivation + test 3/0;
+  HostCard badge via LiveSessions.countForHost, refreshed onResume; 264/0.
 
 - [x] E8: README + CHANGELOG roll-up for the parity arc
   acceptance: README Features list matches shipped behavior; CHANGELOG
   entry covers E1–E7
   deps: E1–E7
-  evidence: 2026-08-22 — README "Tools" section adds in-session tabs,
-  command palette, sessions switcher, tunnel capsule; project layout lists
-  the new files (SessionTabs/CommandPaletteModel/CommandPaletteSheet/
-  SessionsSheet/LiveSessions/HostCardStatus) + updated SshSession/Activity
-  descriptions. CHANGELOG 0.9.1 entry covers E1–E7. `testFossDebugUnitTest
-  --rerun-tasks` → 264 tests, 0 failures.
+  evidence: 2026-08-22 — README tools section + project layout updated,
+  CHANGELOG 0.9.1 covers E1–E7; 264/0.
 
-## Android-specific considerations
+### Phase F — test parity with conch-ios (fill coverage gaps)
 
-1. Foreground service + persistent notifications keep sessions alive —
-   the reconnect arc complements this (network loss ≠ process death).
-2. Own TerminalEmulator is a differentiating asset (no WebView) — port
-   fixes from SwiftTerm findings selectively; the emulator test suite is
-   the safety net.
-3. Interaction tests run against an in-process Apache MINA sshd on the
-   JVM — fast and CI-friendly; live-device QA stays a manual layer.
+Audit on 2026-08-22 compared every conch-ios test (ConchTests +
+ConchIntegrationTests + ConchUITests, ~140 unit + ~30 integration/UI
+methods across 26+ feature areas) against conch-android's 35 test files
+(~160 @Test methods). Below are the gaps, prioritized by
+invariant-broken severity × current-zero-coverage. Acceptance for every
+task is the named test file green inside `./gradlew testFossDebugUnitTest`.
 
-## Notes
+### Phase F-P0 — cross-platform byte contracts (parity risk highest)
 
-- 0.9.1 WIP (reconnect arc) is IN TREE but unreleased/uncommitted — its
-  hypothesis lives above (H1); do not re-plan around it.
-- Cross-platform principle declared in iOS C48 (extra-keys pool should
-  hold terminal-special/combo keys only, printable symbols belong to the
-  system keyboard) is a DESIGN CANDIDATE here, not a hypothesis — needs a
-  user decision before planning (Android ships SLASH/PIPE/TILDE/DOLLAR…).
+- [x] F1: InteractionStringContractTest — pin tmux attach line, keep-alive
+      interval, docker list command, monitor probe byte contracts
+  acceptance: new `InteractionStringContractTest.kt` green in
+  `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — constants extracted & deduped (SshSession.TMUX_ATTACH_LINE,
+  SshConnectionFactory.KEEP_ALIVE_INTERVAL_SECONDS=15, MonitorParser.PROBE
+  — was copy-pasted in MonitorActivity + SessionTabs, DockerParser.
+  LIST_COMMAND); InteractionStringContractTest 5/0 pins them; full suite
+  269/0. iOS DIVERGENCES documented in test KDoc (tmux guard/wipe = B2;
+  keep-alive mechanism; docker PATH prefix; palette CR vs LF).
+
+- [x] F2: MonitorParser probe command exact bytes + cpu clamp edge cases
+  acceptance: `MonitorParserTest` (was 3 tests) gains probe-command
+  exact-string assertion + zero-delta clamp + full-idle + full-busy cases;
+  green in `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — MonitorParserTest → 6/0 (full-idle 0%, full-busy
+  100%, probe shape mirroring iOS testProbeCommandExact). Zero-delta clamp
+  was already covered; full-string pin lives in F1's contract test.
+
+- [x] F3: BackupCodec header layout / bad magic / too short / unsupported
+      version
+  acceptance: `BackupCodecTest` gains 4 structural-rejection assertions
+  matching iOS `BackupCodecTests.swift` (header offset layout, badMagic,
+  tooShort, unsupportedVersion); green in `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — BackupCodecTest → 10/0 (exact-size layout pin,
+  salt/iv randomness at offsets, badMagic, tooShort, version=99 rejected —
+  hand-built blob also pins PBKDF2-HMAC-SHA256 600k/256. iOS's RFC-7914
+  vector test N/A: Android uses the JDK's PBKDF2, not a hand-rolled one).
+
+- [x] F4: BackupCodec export/restore merge semantics + export-includes-secrets
+  acceptance: `BackupCodecTest` gains a restore-merge test (existing host id
+  NOT overwritten, new id added, known_hosts union) + an export-includes-
+  secrets assertion (Keychain/EncryptedPrefs content present in decrypted
+  blob); green in `./gradlew testFossDebugUnitTest`
+  deps: F3
+  evidence: 2026-08-25 — merge decisions extracted to BackupManager
+  companion pure fns (hosts/snippets/keyIdsToImport/knownHosts union);
+  BackupManagerMergeTest 5/0; suite 286/0. RESCOPE: SecretsStore/collect()
+  are Android-bound (no Robolectric) — export-includes-secrets covered at
+  codec level (BackupCodecTest roundtrip); store wiring = manual-QA.
+)
+
+- [x] F5: SnippetStoreTest — crud roundtrip, load empty/corrupt no crash,
+      JSON field names match iOS, delete by id
+  acceptance: new `SnippetStoreTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 4 iOS `SnippetStoreTests.swift`
+  cases
+  deps: none
+  evidence: 2026-08-25 — SnippetStore File-seam ctor; SnippetStoreTest 5/0
+  (cross-instance roundtrip, corrupt→[], field set {id,label,command},
+  delete-by-id); suite 286/0.
+
+- [x] F6: AppLockTest — grace window inside/outside, disabled by default,
+      toggle flips state
+  acceptance: new `AppLockTest.kt` green in `./gradlew testFossDebugUnitTest`;
+  covers the 2 iOS `AppLockTests.swift` cases (grace window + default-off)
+  deps: none
+  evidence: 2026-08-25 — AppLock pure withinGrace() + DEFAULT_ENABLED/
+  GRACE_MS consts (lockIfNeeded rewired, identical); AppLockTest 4/0
+  (within/beyond 30s, relock-at-0, defaults pin). Suite 290/0. Prefs
+  toggle + BiometricPrompt = instrumented-QA (no Robolectric).
+
+
+- [x] F7: ExtraKeysConfigTest — default row, save/load roundtrip, unknown id
+      dropped, legacy symbol ids filtered, pool emits no plain printable,
+      empty falls back to default, arrow escape bytes, CTRL is toggle (null
+      bytes)
+  acceptance: new `ExtraKeysConfigTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers the 8 iOS
+  `ExtraKeysAndThemeTests.swift` ExtraKeysConfig cases
+  deps: none
+  evidence: 2026-08-25 — ExtraKeysConfig pure parse()/serialize();
+  ExtraKeysConfigTest 8/0 (default-row pin, round-trip, unknown-id drop,
+  fallbacks, xterm byte pins, CTRL==null, symbols, labelFor). Suite 298/0.
+  ADAPTED: iOS's no-printable-pool invariant is FALSE here (C48 design
+  candidate, PLAN Notes) — current behavior pinned + divergence documented.
+
+
+- [x] F8: SessionTabsTest + TunnelCapsuleTest — SessionTab enum exactly 4
+      with title+icon non-empty; tunnel capsule visibility + pinned labels
+  acceptance: new `SessionTabsTest.kt` (+ TunnelCapsuleTest) green in
+  `./gradlew testFossDebugUnitTest`; covers the 5 iOS `TunnelStatusTests.swift`
+  cases (SessionTabs.kt is 699 lines with 0 tests today)
+  deps: none
+  evidence: 2026-08-25 — SessionTab enum moved to SessionTabs.kt (internal)
+  + TunnelCapsule pure labels wired into TerminalActivity (identical
+  strings). SessionTabsTest 3/0 + TunnelCapsuleTest 3/0; suite 304/0.
+
+
+- [x] F9: ConnectionHealthDeriveTest — N/A for the health-derive half;
+      tmux-default half already/now pinned
+  acceptance: health-derive documented N/A with audit note (PLAN B3
+  precedent); tmux-default pins green in `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — health-derive N/A (no Android model: sshj
+  keep-alive is transport-internal, ConnState carries no derive logic;
+  tests land with any future health model). Tmux-default half completed:
+  added `explicit tmux off survives a json round-trip`; HostStoreJsonTest
+  5/0 (missing→false divergence from iOS's true is deliberate:
+  pre-feature backups).
+
+
+- [x] F10: Extract Ctrl latch transform from TerminalView into a pure
+      function (KeyInput), then add CtrlLatchTest + CtrlComboTest
+  acceptance: new `CtrlLatchTest.kt` + `CtrlComboTest.kt` green in
+  `./gradlew testFossDebugUnitTest`; covers iOS `CtrlKeyTransformTests.swift`
+  + `CtrlLatchLifecycleTests.swift` + `CtrlComboTests.swift` (adapted)
+  deps: none (refactor is part of this task)
+  evidence: 2026-08-25 — KeyInput.kt (applyCtrlLatch + keyBytes) extracted
+  from TerminalView.sendText/sendKey (byte-identical, rewired);
+  CtrlLatchTest 7/0 + CtrlComboTest 4/0. Suite 316/0. H4 verdict CONFIRMED
+  (latch survives non-letter — pinned as-is, B3 flips). iOS CSI-rewrite-
+  under-latch N/A: ctrl+arrows come from the hardware-keyboard path.
+
+
+- [x] F11: NavAndAltTest — N/A (Android has no nav-gesture/alt features)
+  acceptance: documented N/A with audit note (PLAN B3 precedent)
+  deps: none
+  evidence: 2026-08-25 — N/A AUDIT: (a) iOS gestures EMIT keys; Android
+  gestures scroll LOCAL scrollback (different product behavior);
+  (b) no ALT/meta latch exists anywhere; (c) no drawer. Tests land with
+  any ported feature; pinning non-existent code = dead test-only code.
+
+
+- [x] F12: KeepAliveLoopTest — N/A (no loop on Android; contract already pinned)
+  acceptance: documented N/A with audit note
+  deps: none
+  evidence: 2026-08-25 — N/A AUDIT: no KeepAliveLoop class; keep-alive is
+  sshj transport-level setKeepAliveInterval(15) + cosmetic animation.
+  Contract already pinned: interval tests in SshConnectAuthInteractionTest
+  + constant via F1. Shell-beat loop tests land if that design is ported.
+
+
+- [x] F13: CrashReportingLifecycleTest — default-off gate matrix + SDK
+      privacy options pinned
+  acceptance: new `CrashReportingLifecycleTest.kt` green in
+  `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — pure shouldReport(available, enabled) gate +
+  applyPrivacyOptions(SentryOptions) extracted (initSdk rewired);
+  CrashReportingLifecycleTest 5/0 (default-off, no-DSN, no-opt-in, both-on,
+  options: no PII/sessions/tracing/threads). Suite 321/0. Marker lifecycle
+  = Sentry-internal on Android; no-host-data also covered by existing
+  CrashReportingScrubberTest (6).
+
+
+- [x] F14: TerminalReplay fresh-attach fixture — residue pinned as-is (B2 flips)
+  acceptance: replay-shaped TerminalEmulator tests green in
+  `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — TerminalReplayTest 3/0 (in MonitorPollTest.kt):
+  fresh-attach renders via alt screen; attach-echo RESIDUE pinned as
+  current behavior (B2/H3 must flip with its fix); reconnect shows
+  persisted+fresh markers. ADAPTED: synthetic PTY streams (no .bin
+  fixtures; emulator feed API); live residue QA stays with H3.
+
+
+- [x] F15: MonitorPollTest — parse-failure/dead-exec preserve prior snapshot
+  acceptance: pure poll-loop policy pinned green in
+  `./gradlew testFossDebugUnitTest`
+  deps: none
+  evidence: 2026-08-25 — poll-loop decisions extracted to pure
+  MonitorPoll.reduce (MonitorTab rewired, identical); MonitorPollTest 5/0
+  (good→refresh, parse-fail/dead-exec preserve prior snapshot, errors only
+  when nothing to show). Suite 329/0. KeepAlive half N/A per F12.
