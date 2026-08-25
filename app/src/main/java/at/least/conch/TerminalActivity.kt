@@ -355,10 +355,10 @@ class TerminalActivity : FragmentActivity() {
                         }
                     },
                     actions = {
-                        if (liveTunnelCount.value > 0) {
+                        if (TunnelCapsule.visible(liveTunnelCount.value)) {
                             AssistChip(
                                 onClick = { tunnelConfirmVisible.value = true },
-                                label = { Text("⇅ ${liveTunnelCount.value}", fontSize = 12.sp) },
+                                label = { Text(TunnelCapsule.chipText(liveTunnelCount.value), fontSize = 12.sp) },
                                 leadingIcon = { Icon(Icons.Filled.SyncAlt, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = Color(0xFF1B5E20),
@@ -570,7 +570,7 @@ class TerminalActivity : FragmentActivity() {
         if (tunnelConfirmVisible.value) {
             AlertDialog(
                 onDismissRequest = { tunnelConfirmVisible.value = false },
-                title = { Text("Stop ${liveTunnelCount.value} tunnel(s)?") },
+                title = { Text(TunnelCapsule.stopDialogTitle(liveTunnelCount.value)) },
                 text = { Text("This tears down all local port forwards. The SSH session stays connected.") },
                 confirmButton = {
                     TextButton(onClick = {
@@ -922,13 +922,7 @@ class TerminalActivity : FragmentActivity() {
         finish()
     }
 
-    /** In-session tabs (C52 redesign): Terminal / Monitor / Docker / Files. */
-    private enum class SessionTab(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-        TERMINAL("Terminal", Icons.Filled.Code),
-        MONITOR("Monitor", Icons.Filled.Monitor),
-        DOCKER("Docker", Icons.Filled.Storage),
-        FILES("Files", Icons.Filled.Folder),
-    }
+    /** In-session tabs moved to SessionTabs.kt (SessionTab) so they are unit-testable. */
 
     @Composable
     private fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -> Unit) {

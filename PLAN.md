@@ -314,13 +314,20 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   test pins current behavior + documents the divergence instead. iOS's
   "legacy symbol ids filtered" is N/A (Android is the symbol source).
 
-- [ ] F8: SessionTabsTest + TunnelStatusTest — SessionTab enum exactly 4
-      with title+icon non-empty; TunnelStatus count (forward + socks),
-      label singular/plural, isEmpty
-  acceptance: new `SessionTabsTest.kt` + `TunnelStatusTest.kt` green in
+- [x] F8: SessionTabsTest + TunnelCapsuleTest — SessionTab enum exactly 4
+      with title+icon non-empty; tunnel capsule visibility + pinned labels
+  acceptance: new `SessionTabsTest.kt` (+ TunnelCapsuleTest) green in
   `./gradlew testFossDebugUnitTest`; covers the 5 iOS `TunnelStatusTests.swift`
   cases (SessionTabs.kt is 699 lines with 0 tests today)
   deps: none
+  evidence: 2026-08-25 — SessionTab enum moved from private-in-Activity to
+  SessionTabs.kt (internal; Compose ImageVector refs are JVM-safe);
+  TunnelCapsule pure labels extracted (visible/chipText/stopDialogTitle)
+  and wired into TerminalActivity (byte-identical strings). SessionTabsTest
+  3/0 + TunnelCapsuleTest 3/0; full suite 304/0. ADAPTED: iOS label
+  "1 tunnel"/"N tunnels" doesn't exist on Android (chip is "⇅ N") — pinned
+  current contracts; count semantics stay on SshSession.tunnelCount
+  (interaction-tested).
 
 - [ ] F9: ConnectionHealthDeriveTest — derive(connected=false)=dead,
       connected+no beats=live, recent beat=beating, stale falls back to
