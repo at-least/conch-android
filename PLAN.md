@@ -53,8 +53,13 @@ actually runs in THIS repo.
 
 - [ ] H4: The Ctrl latch bug iOS fixed in C42 exists here too — a latched CTRL that is only cleared by single letters mangles later keystrokes
   verify: unit test on the latch state machine (ARM → any non-letter key → released); grep-audit `TerminalView.ctrlArmed` clear sites first
-  verdict:
-  evidence:
+  verdict: CONFIRMED 2026-08-25 — audit during F10: ctrlArmed is cleared
+  ONLY in sendText's letter path and pasteText(); non-letter input keeps
+  the latch armed, so a later letter fires as Ctrl-letter (stuck-latch).
+  Pinned as-is by CtrlLatchTest `non-letter passes through … STAYS armed`;
+  fix = B3, must flip that pin.
+  evidence: KeyInput.applyCtrlLatch extracted (F10) preserves the exact
+  sendText behavior; CtrlLatchTest 7/0 green against it.
 
 - [ ] H5: TILDBAK1 backups round-trip cross-platform (export on Android → import on iOS and vice versa)
   verify: same passphrase fixture backup file imported by both repos' codec tests (add the fixture to both test suites; assert host/key/snippet merge counts match)
@@ -324,14 +329,21 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
 
 ### Phase F-P2 — logic trapped in Activity, refactor-first to testable pure fn
 
-- [ ] F10: Extract Ctrl latch transform from TerminalActivity into a pure
-      function, then add CtrlLatchTest + CtrlComboTest
+- [x] F10: Extract Ctrl latch transform from TerminalView into a pure
+      function (KeyInput), then add CtrlLatchTest + CtrlComboTest
   acceptance: new `CtrlLatchTest.kt` + `CtrlComboTest.kt` green in
   `./gradlew testFossDebugUnitTest`; covers iOS `CtrlKeyTransformTests.swift`
-  + `CtrlLatchLifecycleTests.swift` + `CtrlComboTests.swift` (~20 cases:
-  letter→C0, non-letter releases latch, Ctrl+arrow→`ESC[1;5A`, Ctrl+S→XOFF,
-  Ctrl+Q→XON, ESC-then-letter→Meta, latch consumes exactly once)
+  + `CtrlLatchLifecycleTests.swift` + `CtrlComboTests.swift` (adapted)
   deps: none (refactor is part of this task)
+  evidence: 2026-08-25 — new `KeyInput.kt` (applyCtrlLatch + keyBytes)
+  extracted from TerminalView.sendText/sendKey (byte-identical, wired
+  back); CtrlLatchTest 7/0 (full a–z C0 map, case-insensitive, ETX/EOT/
+  SUB/XOFF/XON, disarmed passthrough, multi-letter) + CtrlComboTest 4/0
+  (ctrl-arrows 1;5, plain keys, F-keys SS3/CSI, unknown→null). Suite
+  316/0. PINNED DIVERGENCE: non-letter/multi-byte input keeps the latch
+  armed (iOS C42 fix absent) — H4 verdict CONFIRMED; B3 must flip the pin.
+  iOS CSI-rewrite-under-latch tests N/A: Android ctrl+arrows come from the
+  hardware-keyboard path (isCtrlPressed → CTRL_ARROW_*), not the latch.
 
 - [ ] F11: Extract nav-gesture + alt/meta modifier logic from
       TerminalActivity into pure functions, then add NavAndAltTest

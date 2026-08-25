@@ -386,49 +386,14 @@ class TerminalView @JvmOverloads constructor(
     fun sendText(text: String) {
         if (text.isEmpty()) return
         resetScrollOnInput()
-        if (ctrlArmed) {
-            val lower = text.lowercase()
-            if (lower.length == 1 && lower[0] in 'a'..'z') {
-                ctrlArmed = false
-                onData?.invoke(byteArrayOf((lower[0].code - 'a'.code + 1).toByte()))
-                return
-            }
-        }
-        onData?.invoke(text.toByteArray(Charsets.UTF_8))
+        val (bytes, stillArmed) = KeyInput.applyCtrlLatch(ctrlArmed, text)
+        ctrlArmed = stillArmed
+        onData?.invoke(bytes)
     }
 
     fun sendKey(code: Int) {
         resetScrollOnInput()
-        when (code) {
-            KEY_ESCAPE -> onData?.invoke(byteArrayOf(0x1B))
-            KEY_TAB -> onData?.invoke(byteArrayOf(0x09))
-            KEY_ARROW_UP -> onData?.invoke("\u001b[A".toByteArray())
-            KEY_ARROW_DOWN -> onData?.invoke("\u001b[B".toByteArray())
-            KEY_ARROW_RIGHT -> onData?.invoke("\u001b[C".toByteArray())
-            KEY_ARROW_LEFT -> onData?.invoke("\u001b[D".toByteArray())
-            CTRL_ARROW_UP -> onData?.invoke("\u001b[1;5A".toByteArray())
-            CTRL_ARROW_DOWN -> onData?.invoke("\u001b[1;5B".toByteArray())
-            CTRL_ARROW_RIGHT -> onData?.invoke("\u001b[1;5C".toByteArray())
-            CTRL_ARROW_LEFT -> onData?.invoke("\u001b[1;5D".toByteArray())
-            KEY_PAGE_UP -> onData?.invoke("\u001b[5~".toByteArray())
-            KEY_PAGE_DOWN -> onData?.invoke("\u001b[6~".toByteArray())
-            KEY_HOME -> onData?.invoke("\u001b[H".toByteArray())
-            KEY_END -> onData?.invoke("\u001b[F".toByteArray())
-            KEY_DELETE -> onData?.invoke("\u001b[3~".toByteArray())
-            KEY_F1 -> onData?.invoke("\u001bOP".toByteArray())
-            KEY_F2 -> onData?.invoke("\u001bOQ".toByteArray())
-            KEY_F3 -> onData?.invoke("\u001bOR".toByteArray())
-            KEY_F4 -> onData?.invoke("\u001bOS".toByteArray())
-            KEY_F5 -> onData?.invoke("\u001b[15~".toByteArray())
-            KEY_F6 -> onData?.invoke("\u001b[17~".toByteArray())
-            KEY_F7 -> onData?.invoke("\u001b[18~".toByteArray())
-            KEY_F8 -> onData?.invoke("\u001b[19~".toByteArray())
-            KEY_F9 -> onData?.invoke("\u001b[20~".toByteArray())
-            KEY_F10 -> onData?.invoke("\u001b[21~".toByteArray())
-            KEY_F11 -> onData?.invoke("\u001b[23~".toByteArray())
-            KEY_F12 -> onData?.invoke("\u001b[24~".toByteArray())
-            else -> {}
-        }
+        KeyInput.keyBytes(code)?.let { onData?.invoke(it) }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
