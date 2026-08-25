@@ -296,7 +296,7 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   OFF + 30_000ms iOS parity). Full suite 290/0. SharedPreferences toggle
   wiring + BiometricPrompt = instrumented-QA (no Robolectric in repo).
 
-- [ ] F7: ExtraKeysConfigTest — default row, save/load roundtrip, unknown id
+- [x] F7: ExtraKeysConfigTest — default row, save/load roundtrip, unknown id
       dropped, legacy symbol ids filtered, pool emits no plain printable,
       empty falls back to default, arrow escape bytes, CTRL is toggle (null
       bytes)
@@ -304,6 +304,15 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   `./gradlew testFossDebugUnitTest`; covers the 8 iOS
   `ExtraKeysAndThemeTests.swift` ExtraKeysConfig cases
   deps: none
+  evidence: 2026-08-25 — ExtraKeysConfig gained pure parse()/serialize()
+  (load/save wrappers keep Context at the edge); ExtraKeysConfigTest 8/0
+  green (default-row pin, round-trip in order, unknown-id drop, fallback
+  on null/corrupt/empty/all-unknown, xterm byte pins for all control keys,
+  CTRL==null toggle, symbol keys, labelFor fallback). Full suite 298/0.
+  ADAPTED from iOS: "pool emits no plain printable" is FALSE on Android
+  today — symbols are a recorded C48 design candidate (PLAN Notes); the
+  test pins current behavior + documents the divergence instead. iOS's
+  "legacy symbol ids filtered" is N/A (Android is the symbol source).
 
 - [ ] F8: SessionTabsTest + TunnelStatusTest — SessionTab enum exactly 4
       with title+icon non-empty; TunnelStatus count (forward + socks),

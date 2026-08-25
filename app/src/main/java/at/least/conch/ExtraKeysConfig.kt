@@ -35,13 +35,17 @@ object ExtraKeysConfig {
         KeyDef("DOLLAR", "$"),
     )
 
-    private val DEFAULT = listOf("CTRL", "ESC", "TAB", "LEFT", "UP", "DOWN", "RIGHT", "SLASH", "PIPE", "DASH")
+    internal val DEFAULT = listOf("CTRL", "ESC", "TAB", "LEFT", "UP", "DOWN", "RIGHT", "SLASH", "PIPE", "DASH")
     private const val PREFS = "conchapp_settings"
     private const val KEY = "extraKeys"
 
-    fun load(context: Context): List<String> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
-            ?: return DEFAULT
+    fun load(context: Context): List<String> = parse(
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
+    )
+
+    /** Pure: raw persisted JSON -> ids. Unknown ids dropped; null/corrupt/empty -> default. */
+    fun parse(raw: String?): List<String> {
+        if (raw == null) return DEFAULT
         val ids = runCatching {
             JSONArray(raw).let { arr -> (0 until arr.length()).map { arr.getString(it) } }
         }.getOrDefault(emptyList())
@@ -51,11 +55,13 @@ object ExtraKeysConfig {
     }
 
     fun save(context: Context, ids: List<String>) {
-        val arr = JSONArray()
-        ids.forEach { arr.put(it) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY, arr.toString()).apply()
+            .edit().putString(KEY, serialize(ids)).apply()
     }
+
+    /** Pure: ids -> persisted JSON array string. */
+    fun serialize(ids: List<String>): String =
+        JSONArray().apply { ids.forEach { put(it) } }.toString()
 
     fun labelFor(id: String): String = ALL.firstOrNull { it.id == id }?.label ?: id
 
