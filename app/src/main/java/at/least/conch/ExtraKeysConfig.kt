@@ -1,7 +1,8 @@
 package at.least.conch
 
 import android.content.Context
-import org.json.JSONArray
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * User-configurable extra-keys row. Persisted as a JSON array of key ids in
@@ -36,18 +37,14 @@ object ExtraKeysConfig {
     )
 
     internal val DEFAULT = listOf("CTRL", "ESC", "TAB", "LEFT", "UP", "DOWN", "RIGHT", "SLASH", "PIPE", "DASH")
-    private const val PREFS = "conchapp_settings"
-    private const val KEY = "extraKeys"
 
-    fun load(context: Context): List<String> = parse(
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
-    )
+    fun load(context: Context): List<String> = parse(SettingsStore.extraKeysJson(context))
 
     /** Pure: raw persisted JSON -> ids. Unknown ids dropped; null/corrupt/empty -> default. */
     fun parse(raw: String?): List<String> {
         if (raw == null) return DEFAULT
         val ids = runCatching {
-            JSONArray(raw).let { arr -> (0 until arr.length()).map { arr.getString(it) } }
+            ConchJson.decodeFromString(ListSerializer(String.serializer()), raw)
         }.getOrDefault(emptyList())
         // drop unknown ids, keep order
         val valid = ids.filter { id -> ALL.any { it.id == id } }
@@ -55,13 +52,12 @@ object ExtraKeysConfig {
     }
 
     fun save(context: Context, ids: List<String>) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY, serialize(ids)).apply()
+        SettingsStore.setExtraKeysJson(context, serialize(ids))
     }
 
     /** Pure: ids -> persisted JSON array string. */
     fun serialize(ids: List<String>): String =
-        JSONArray().apply { ids.forEach { put(it) } }.toString()
+        ConchJson.encodeToString(ListSerializer(String.serializer()), ids)
 
     fun labelFor(id: String): String = ALL.firstOrNull { it.id == id }?.label ?: id
 

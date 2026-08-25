@@ -1,0 +1,34 @@
+# Conch detekt config — buildUponDefaultConfig: true, so only deltas live here.
+# Existing findings are locked in detekt-baseline.xml; only NEW code is held
+# to these rules (baseline mode, adopted 2026-08-26).
+build:
+  maxIssues: 0
+
+complexity:
+  LongParameterList:
+    # Host/Tunnel DTO mapping functions legitimately take one field per param
+    active: false
+  LongMethod:
+    threshold: 80
+
+style:
+  MaxLineLength:
+    maxLineLength: 120
+    # Golden-format tests and sshj interaction strings embed long literals
+    excludePackageStatements: true
+  MagicNumber:
+    # Terminal/SSH protocol code is inherently byte/CSI-constant heavy
+    active: false
+  ReturnCount:
+    # Early-return dispatch tables (terminal parser, key handling) read best flat
+    active: false
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Test']
+
+exceptions:
+  TooGenericExceptionCaught:
+    # Store loaders deliberately swallow ALL corruption (degrade-to-empty is
+    # the pinned behavior, see corrupt-file tests)
+    active: false
+  SwallowedException:
+    active: false

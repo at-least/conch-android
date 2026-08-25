@@ -94,8 +94,6 @@ data class TerminalTheme(
 
         val ALL: List<TerminalTheme> = listOf(DEFAULT, DRACULA, SOLARIZED_DARK, NORD, GRUVBOX_DARK)
 
-        const val PREF_KEY = "terminalTheme"
-
         /** Looks a preset up by name; unknown names fall back to [DEFAULT]. */
         fun byName(name: String?): TerminalTheme =
             ALL.firstOrNull { it.name == name } ?: DEFAULT

@@ -1,8 +1,8 @@
 package at.least.conch
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
 import java.util.UUID
 
@@ -11,6 +11,24 @@ data class Snippet(
     var label: String = "",
     var command: String = "",
 )
+
+/** Wire shape shared by snippets.json and the TILDBAK1 backup payload. */
+@Serializable
+data class SnippetWire(
+    val id: String? = null,
+    val label: String = "",
+    val command: String = "",
+) {
+    fun toSnippet(): Snippet = Snippet(
+        id = id ?: UUID.randomUUID().toString(),
+        label = label,
+        command = command,
+    )
+
+    companion object {
+        fun from(s: Snippet): SnippetWire = SnippetWire(s.id, s.label, s.command)
+    }
+}
 
 /**
  * Snippet persistence. Primary constructor takes the backing [file] so the
@@ -24,17 +42,8 @@ class SnippetStore(private val file: File) {
         val list = mutableListOf<Snippet>()
         try {
             if (file.exists()) {
-                val arr = JSONArray(file.readText())
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    list.add(
-                        Snippet(
-                            id = o.optString("id", UUID.randomUUID().toString()),
-                            label = o.optString("label"),
-                            command = o.optString("command"),
-                        )
-                    )
-                }
+                val wires = ConchJson.decodeFromString(ListSerializer(SnippetWire.serializer()), file.readText())
+                list.addAll(wires.map { it.toSnippet() })
             }
         } catch (_: Exception) {
         }
@@ -42,10 +51,7 @@ class SnippetStore(private val file: File) {
     }
 
     fun save(snippets: List<Snippet>) {
-        val arr = JSONArray()
-        for (s in snippets) {
-            arr.put(JSONObject().put("id", s.id).put("label", s.label).put("command", s.command))
-        }
-        file.writeText(arr.toString())
+        val arr = snippets.map { SnippetWire.from(it) }
+        file.writeText(ConchJson.encodeToString(ListSerializer(SnippetWire.serializer()), arr))
     }
 }

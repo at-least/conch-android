@@ -12,9 +12,6 @@ import androidx.fragment.app.FragmentActivity
  */
 object AppLock {
 
-    private const val PREFS = "conchapp_settings"
-    private const val KEY = "appLockEnabled"
-
     /** iOS parity: app lock ships OFF; users opt in from Settings. */
     const val DEFAULT_ENABLED = false
 
@@ -28,12 +25,10 @@ object AppLock {
     fun withinGrace(unlockedSinceMs: Long, nowMs: Long): Boolean =
         unlockedSinceMs > 0 && nowMs - unlockedSinceMs < GRACE_MS
 
-    fun isEnabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, DEFAULT_ENABLED)
+    fun isEnabled(context: Context): Boolean = SettingsStore.appLockEnabled(context)
 
     fun setEnabled(context: Context, on: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY, on).apply()
+        SettingsStore.setAppLockEnabled(context, on)
     }
 
     /** Whether this device can authenticate (biometrics or lock-screen credential). */

@@ -1,7 +1,6 @@
 package at.least.conch
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -26,19 +25,21 @@ object BackupCodec {
     private const val PBKDF2_ITERATIONS = 600_000
     private const val KEY_BITS = 256
 
+    @Serializable
     data class BackupPayload(
-        val hosts: List<JSONObject>,               // host entries, no secrets inside
-        val hostSecrets: Map<String, String>,      // host id -> plaintext password
-        val keys: List<JSONObject>,                // SshKeyInfo entries
-        val keySecrets: Map<String, String>,       // key id -> PEM private key
-        val snippets: List<JSONObject>,
-        val knownHosts: String,
+        val version: Int = 1,
+        val hosts: List<HostWire> = emptyList(),
+        val hostSecrets: Map<String, String> = emptyMap(),
+        val keys: List<KeyWire> = emptyList(),
+        val keySecrets: Map<String, String> = emptyMap(),
+        val snippets: List<SnippetWire> = emptyList(),
+        val knownHosts: String = "",
     )
 
     // ------------------------------------------------------------- encrypt
 
     fun encrypt(payload: BackupPayload, passphrase: CharArray, random: SecureRandom = SecureRandom()): ByteArray {
-        val plain = payloadToJson(payload).toString().toByteArray(Charsets.UTF_8)
+        val plain = payloadToJson(payload).toByteArray(Charsets.UTF_8)
 
         val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
         val iv = ByteArray(IV_LEN).also { random.nextBytes(it) }
@@ -65,7 +66,7 @@ object BackupCodec {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
         val plain = cipher.doFinal(ct)   // AEADBadTagException on wrong passphrase
-        return payloadFromJson(JSONObject(String(plain, Charsets.UTF_8)))
+        return payloadFromJson(String(plain, Charsets.UTF_8))
     }
 
     private fun deriveKey(passphrase: CharArray, salt: ByteArray): SecretKeySpec {
@@ -76,34 +77,11 @@ object BackupCodec {
 
     // --------------------------------------------------------------- json
 
-    fun payloadToJson(p: BackupPayload): JSONObject = JSONObject()
-        .put("version", 1)
-        .put("hosts", JSONArray(p.hosts))
-        .put(
-            "hostSecrets",
-            JSONObject(p.hostSecrets)
-        )
-        .put("keys", JSONArray(p.keys))
-        .put("keySecrets", JSONObject(p.keySecrets))
-        .put("snippets", JSONArray(p.snippets))
-        .put("knownHosts", p.knownHosts)
+    fun payloadToJson(p: BackupPayload): String = ConchJson.encodeToString(BackupPayload.serializer(), p)
 
-    private fun payloadFromJson(o: JSONObject): BackupPayload {
-        require(o.optInt("version", 0) == 1) { "Unsupported backup version" }
-        return BackupPayload(
-            hosts = o.optJSONArray("hosts")?.let { arr -> (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList(),
-            hostSecrets = jsonObjectToStringMap(o.optJSONObject("hostSecrets")),
-            keys = o.optJSONArray("keys")?.let { arr -> (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList(),
-            keySecrets = jsonObjectToStringMap(o.optJSONObject("keySecrets")),
-            snippets = o.optJSONArray("snippets")?.let { arr -> (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList(),
-            knownHosts = o.optString("knownHosts", ""),
-        )
-    }
-
-    private fun jsonObjectToStringMap(o: JSONObject?): Map<String, String> {
-        if (o == null) return emptyMap()
-        val out = mutableMapOf<String, String>()
-        for (k in o.keys()) out[k] = o.optString(k)
-        return out
+    private fun payloadFromJson(json: String): BackupPayload {
+        val payload = ConchJson.decodeFromString(BackupPayload.serializer(), json)
+        require(payload.version == 1) { "Unsupported backup version" }
+        return payload
     }
 }

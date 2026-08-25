@@ -1,7 +1,7 @@
 package at.least.conch
 
 import android.content.Context
-import org.json.JSONObject
+import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
 
 /**
@@ -51,10 +51,10 @@ class BackupManager(private val context: Context) {
         /** Keys import: skip ids already known; a key without its private half is useless. */
         fun keyIdsToImport(
             existingIds: Set<String>,
-            incoming: List<JSONObject>,
+            incoming: List<KeyWire>,
             keySecrets: Map<String, String>,
         ): List<String> =
-            incoming.map { it.optString("id") }
+            incoming.map { it.id }
                 .filter { it.isNotEmpty() && it !in existingIds && !keySecrets[it].isNullOrEmpty() }
 
         /** known_hosts merge: dedup union of non-blank lines, first-seen order, + grew flag. */
@@ -68,40 +68,27 @@ class BackupManager(private val context: Context) {
 
     fun collect(): BackupCodec.BackupPayload {
         val hosts = HostStore(context).load()
-        val hostJsons = hosts.map { HostStore.hostToJson(it) }
         val hostSecrets = hosts.associate {
             it.id to (SecretsStore.get("host-pw:${it.id}") ?: "")
         }
 
         val keys = KeyManager(context).list()
-        val keyJsons = keys.map {
-            JSONObject()
-                .put("id", it.id)
-                .put("name", it.name)
-                .put("algorithm", it.algorithm)
-                .put("createdAt", it.createdAt)
-                .put("publicLine", it.publicLine)
-                .put("fingerprint", it.fingerprint)
-        }
         val keySecrets = keys.associate {
             it.id to (SecretsStore.get("key-priv:${it.id}") ?: "")
         }
 
         val snippets = SnippetStore(context).load()
-        val snippetJsons = snippets.map {
-            JSONObject().put("id", it.id).put("label", it.label).put("command", it.command)
-        }
 
         val knownHosts = runCatching {
             File(context.filesDir, "known_hosts").takeIf { it.exists() }?.readText() ?: ""
         }.getOrDefault("")
 
         return BackupCodec.BackupPayload(
-            hosts = hostJsons,
+            hosts = hosts.map { HostWire.from(it) },
             hostSecrets = hostSecrets,
-            keys = keyJsons,
+            keys = keys.map { KeyWire.from(it) },
             keySecrets = keySecrets,
-            snippets = snippetJsons,
+            snippets = snippets.map { SnippetWire.from(it) },
             knownHosts = knownHosts,
         )
     }
@@ -109,7 +96,7 @@ class BackupManager(private val context: Context) {
     fun restore(payload: BackupCodec.BackupPayload): RestoreResult {
         // hosts
         val hostStore = HostStore(context)
-        val incomingHosts = payload.hosts.map { HostStore.hostFromJson(it) }
+        val incomingHosts = payload.hosts.map { it.toHost() }
         val (mergedHosts, addedHostIds) = mergeHosts(hostStore.load(), incomingHosts)
         for (id in addedHostIds) {
             val pw = payload.hostSecrets[id]
@@ -127,25 +114,17 @@ class BackupManager(private val context: Context) {
             val importIds = keyIdsToImport(existingKeys.map { it.id }.toSet(), payload.keys, payload.keySecrets)
             keysAdded = importIds.size
             if (keysAdded > 0) {
-                val metaFile = File(context.filesDir, "keys").apply { mkdirs() }
-                val arr = org.json.JSONArray()
-                val byId = payload.keys.associateBy { it.optString("id") }
+                val merged = mutableListOf<KeyWire>()
+                val byId = payload.keys.associateBy { it.id }
                 for (id in importIds) {
                     SecretsStore.put("key-priv:$id", payload.keySecrets[id]!!)
-                    arr.put(byId[id])
+                    merged.add(byId.getValue(id))
                 }
-                for (existing in existingKeys) {
-                    arr.put(
-                        JSONObject()
-                            .put("id", existing.id)
-                            .put("name", existing.name)
-                            .put("algorithm", existing.algorithm)
-                            .put("createdAt", existing.createdAt)
-                            .put("publicLine", existing.publicLine)
-                            .put("fingerprint", existing.fingerprint)
-                    )
-                }
-                File(metaFile, "keys.json").writeText(arr.toString())
+                existingKeys.forEach { merged.add(KeyWire.from(it)) }
+                val metaFile = File(context.filesDir, "keys").apply { mkdirs() }
+                File(metaFile, "keys.json").writeText(
+                    ConchJson.encodeToString(ListSerializer(KeyWire.serializer()), merged)
+                )
             }
         }
 
@@ -153,9 +132,7 @@ class BackupManager(private val context: Context) {
         var snippetsAdded = 0
         if (payload.snippets.isNotEmpty()) {
             val ss = SnippetStore(context)
-            val incomingSnippets = payload.snippets.map {
-                Snippet(id = it.optString("id"), label = it.optString("label"), command = it.optString("command"))
-            }
+            val incomingSnippets = payload.snippets.map { it.toSnippet() }
             val (mergedSnippets, addedSnippetIds) = mergeSnippets(ss.load(), incomingSnippets)
             snippetsAdded = addedSnippetIds.size
             if (snippetsAdded > 0) ss.save(mergedSnippets)

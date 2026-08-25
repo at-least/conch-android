@@ -1,8 +1,10 @@
 package at.least.conch
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.EncodeDefault.Mode
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
 import java.util.UUID
 
@@ -10,17 +12,76 @@ data class Tunnel(
     val localPort: Int,
     val host: String,
     val port: Int,
+)
+
+@Serializable
+data class TunnelWire(
+    val localPort: Int = 0,
+    val host: String = "",
+    val port: Int = 0,
 ) {
-    fun toJSON(): JSONObject = JSONObject()
-        .put("localPort", localPort)
-        .put("host", host)
-        .put("port", port)
+    fun toTunnel() = Tunnel(localPort, host, port)
 
     companion object {
-        fun fromJSON(o: JSONObject): Tunnel = Tunnel(
-            localPort = o.optInt("localPort"),
-            host = o.optString("host"),
-            port = o.optInt("port"),
+        fun from(t: Tunnel) = TunnelWire(t.localPort, t.host, t.port)
+    }
+}
+
+/**
+ * Wire shape of a host entry in hosts.json and the TILDBAK1 backup payload.
+ * Decode defaults mirror the original org.json opt* fallbacks — in
+ * particular tmuxAutoAttach decodes to FALSE (pre-feature backups stay off)
+ * while the in-memory [Host] defaults new hosts to true. keyId null is
+ * written as an explicit JSON null (org.json JSONObject.NULL semantics).
+ */
+@Serializable
+data class HostWire(
+    val id: String? = null,
+    val alias: String = "",
+    val hostname: String = "",
+    val port: Int = 22,
+    val username: String = "",
+    val authType: String = Host.AUTH_PASSWORD,
+    val keyId: String? = null,
+    val fontSizeSp: Double = 0.0,
+    val keepAlive: Boolean = true,
+    val tmuxAutoAttach: Boolean = false,
+    val socksPort: Int = 0,
+    val tunnels: List<TunnelWire> = emptyList(),
+    @EncodeDefault(Mode.NEVER) val password: String? = null,
+) {
+    fun toHost(): Host {
+        val host = Host(
+            id = id ?: UUID.randomUUID().toString(),
+            alias = alias,
+            hostname = hostname,
+            port = port,
+            username = username,
+            authType = if (authType == Host.AUTH_KEY) Host.AUTH_KEY else Host.AUTH_PASSWORD,
+            keyId = keyId,
+            fontSizeSp = fontSizeSp.toFloat(),
+            keepAlive = keepAlive,
+            tmuxAutoAttach = tmuxAutoAttach,
+            socksPort = socksPort,
+        )
+        host.tunnels.addAll(tunnels.map { it.toTunnel() })
+        return host
+    }
+
+    companion object {
+        fun from(h: Host) = HostWire(
+            id = h.id,
+            alias = h.alias,
+            hostname = h.hostname,
+            port = h.port,
+            username = h.username,
+            authType = h.authType,
+            keyId = h.keyId,
+            fontSizeSp = h.fontSizeSp.toDouble(),
+            keepAlive = h.keepAlive,
+            tmuxAutoAttach = h.tmuxAutoAttach,
+            socksPort = h.socksPort,
+            tunnels = h.tunnels.map { TunnelWire.from(it) },
         )
     }
 }
@@ -36,7 +97,7 @@ data class Host(
     var fontSizeSp: Float = 0f,             // 0 = app default
     var keepAlive: Boolean = true,
     // Default ON for newly created hosts (mobile networks drop; tmux keeps
-    // the session alive server-side). hostFromJson keeps its own fallback of
+    // the session alive server-side). HostWire decodes its own fallback of
     // false so pre-feature backups and saved hosts stay exactly as they were.
     var tmuxAutoAttach: Boolean = true,
     var socksPort: Int = 0,                 // local SOCKS5 proxy (0 = off)
@@ -61,14 +122,12 @@ class HostStore(context: Context) {
         var migrated = false
         try {
             if (file.exists()) {
-                val arr = JSONArray(file.readText())
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    val host = hostFromJson(o)
-                    val legacyPw = o.optString("password", "")
-                    if (legacyPw.isNotEmpty()) {
+                val wires = ConchJson.decodeFromString(ListSerializer(HostWire.serializer()), file.readText())
+                for (w in wires) {
+                    val host = w.toHost()
+                    if (!w.password.isNullOrEmpty()) {
                         if (SecretsStore.get("host-pw:${host.id}") == null) {
-                            SecretsStore.put("host-pw:${host.id}", legacyPw)
+                            SecretsStore.put("host-pw:${host.id}", w.password)
                         }
                         migrated = true
                     }
@@ -84,51 +143,11 @@ class HostStore(context: Context) {
     }
 
     fun save(hosts: List<Host>) {
-        val arr = JSONArray()
-        for (h in hosts) arr.put(hostToJson(h))
-        file.writeText(arr.toString())
+        val arr = hosts.map { HostWire.from(it) }
+        file.writeText(ConchJson.encodeToString(ListSerializer(HostWire.serializer()), arr))
     }
 
     fun deleteSecrets(hostId: String) {
         SecretsStore.delete("host-pw:$hostId")
-    }
-
-    companion object {
-        fun hostFromJson(o: JSONObject): Host {
-            val host = Host(
-                id = o.optString("id", UUID.randomUUID().toString()),
-                alias = o.optString("alias"),
-                hostname = o.optString("hostname"),
-                port = o.optInt("port", 22),
-                username = o.optString("username"),
-                authType = if (o.optString("authType") == Host.AUTH_KEY) Host.AUTH_KEY else Host.AUTH_PASSWORD,
-                keyId = if (o.has("keyId") && !o.isNull("keyId")) o.optString("keyId") else null,
-                fontSizeSp = o.optDouble("fontSizeSp", 0.0).toFloat(),
-                keepAlive = o.optBoolean("keepAlive", true),
-                tmuxAutoAttach = o.optBoolean("tmuxAutoAttach", false),
-                socksPort = o.optInt("socksPort", 0),
-            )
-            val tunnels = o.optJSONArray("tunnels")
-            if (tunnels != null) {
-                for (t in 0 until tunnels.length()) {
-                    host.tunnels.add(Tunnel.fromJSON(tunnels.getJSONObject(t)))
-                }
-            }
-            return host
-        }
-
-        fun hostToJson(h: Host): JSONObject = JSONObject()
-            .put("id", h.id)
-            .put("alias", h.alias)
-            .put("hostname", h.hostname)
-            .put("port", h.port)
-            .put("username", h.username)
-            .put("authType", h.authType)
-            .put("keyId", h.keyId ?: JSONObject.NULL)
-            .put("fontSizeSp", h.fontSizeSp.toDouble())
-            .put("keepAlive", h.keepAlive)
-            .put("tmuxAutoAttach", h.tmuxAutoAttach)
-            .put("socksPort", h.socksPort)
-            .put("tunnels", JSONArray().apply { h.tunnels.forEach { put(it.toJSON()) } })
     }
 }

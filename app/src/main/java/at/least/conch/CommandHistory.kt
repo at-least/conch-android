@@ -1,8 +1,8 @@
 package at.least.conch
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -15,6 +15,18 @@ data class HistoryEntry(
     val text: String,
     val ts: Long,
 )
+
+/** Wire shape of one history entry inside command_history.bin. */
+@Serializable
+private data class HistoryWire(
+    val hostId: String = "",
+    val text: String = "",
+    val ts: Long = 0L,
+) {
+    companion object {
+        fun from(e: HistoryEntry) = HistoryWire(e.hostId, e.text, e.ts)
+    }
+}
 
 /**
  * AES-256-GCM envelope for the command-history file. The 32-byte key never
@@ -123,25 +135,19 @@ class CommandHistoryStore(
                 .asReversed()
         }
 
-        fun historyToJson(entries: List<HistoryEntry>): String {
-            val arr = JSONArray()
-            for (e in entries) {
-                arr.put(JSONObject().put("hostId", e.hostId).put("text", e.text).put("ts", e.ts))
-            }
-            return arr.toString()
-        }
+        fun historyToJson(entries: List<HistoryEntry>): String =
+            ConchJson.encodeToString(
+                ListSerializer(HistoryWire.serializer()),
+                entries.map { HistoryWire.from(it) },
+            )
 
         fun historyFromJson(json: String): List<HistoryEntry> {
-            val list = mutableListOf<HistoryEntry>()
-            try {
-                val arr = JSONArray(json)
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    list.add(HistoryEntry(o.optString("hostId"), o.optString("text"), o.optLong("ts")))
-                }
+            return try {
+                ConchJson.decodeFromString(ListSerializer(HistoryWire.serializer()), json)
+                    .map { HistoryEntry(it.hostId, it.text, it.ts) }
             } catch (_: Exception) {
+                emptyList()
             }
-            return list
         }
 
         private fun loadOrCreateKey(context: Context): ByteArray {

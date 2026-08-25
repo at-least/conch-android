@@ -2,6 +2,21 @@
 
 ## 0.9.1 (unreleased)
 
+- Internal: serialization/persistence tooling upgrade, no user-visible format
+  changes (wire formats are pinned byte-equivalent by a new golden-format
+  test suite):
+  - org.json → kotlinx.serialization for all stores and the TILDBAK1 backup
+    payload (typed wire DTOs: HostWire/KeyWire/SnippetWire; corrupt files
+    still degrade to empty; legacy plaintext-password migration covered by
+    new tests via a mocked SecretsStore)
+  - `conchapp_settings` SharedPreferences → Preferences DataStore with
+    verbatim automatic migration on first launch (SecretsStore stays on
+    Keystore-backed prefs by design)
+  - detekt (baseline mode) wired into the build — existing findings locked,
+    new code held to the rule set
+  - test infra: Robolectric for real SharedPreferences/filesDir paths
+    (LEGACY graphics/sqlite mode to coexist with the real-sshd test
+    classpath), MockK for the Keystore-bound seam, golden wire-format pins
 - Terminal engine swap: the in-house VT100/xterm parser is replaced by the
   battle-tested Termux terminal-emulator (vendored, pinned upstream commit;
   GPL-compatible — see app/src/main/java/com/termux/terminal/VENDOR.md).

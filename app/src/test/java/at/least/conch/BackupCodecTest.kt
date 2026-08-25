@@ -12,27 +12,28 @@ class BackupCodecTest {
 
     private fun samplePayload() = BackupCodec.BackupPayload(
         hosts = listOf(
-            JSONObject()
-                .put("id", "h1")
-                .put("alias", "prod")
-                .put("hostname", "prod.example.com")
-                .put("port", 22)
-                .put("username", "alice")
-                .put("authType", "PASSWORD")
+            HostWire(
+                id = "h1",
+                alias = "prod",
+                hostname = "prod.example.com",
+                port = 22,
+                username = "alice",
+                authType = Host.AUTH_PASSWORD,
+            )
         ),
         hostSecrets = mapOf("h1" to "s3cret-password"),
         keys = listOf(
-            JSONObject()
-                .put("id", "k1")
-                .put("name", "my-phone")
-                .put("algorithm", "ssh-ed25519")
-                .put("publicLine", "ssh-ed25519 AAAA... my-phone")
-                .put("fingerprint", "SHA256:xxx")
+            KeyWire(
+                id = "k1",
+                name = "my-phone",
+                algorithm = "ssh-ed25519",
+                createdAt = 0L,
+                publicLine = "ssh-ed25519 AAAA... my-phone",
+                fingerprint = "SHA256:xxx",
+            )
         ),
         keySecrets = mapOf("k1" to "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n"),
-        snippets = listOf(
-            JSONObject().put("id", "s1").put("label", "disk").put("command", "df -h")
-        ),
+        snippets = listOf(SnippetWire("s1", "disk", "df -h")),
         knownHosts = "[prod.example.com]:2222 ssh-ed25519 AAAA\n",
     )
 
@@ -42,13 +43,13 @@ class BackupCodecTest {
         val out = BackupCodec.decrypt(blob, "correct horse".toCharArray())
 
         assertEquals(1, out.hosts.size)
-        assertEquals("prod", out.hosts[0].getString("alias"))
+        assertEquals("prod", out.hosts[0].alias)
         assertEquals("s3cret-password", out.hostSecrets["h1"])
         assertEquals(1, out.keys.size)
-        assertEquals("ssh-ed25519", out.keys[0].getString("algorithm"))
+        assertEquals("ssh-ed25519", out.keys[0].algorithm)
         assertTrue(out.keySecrets["k1"]!!.contains("BEGIN OPENSSH PRIVATE KEY"))
         assertEquals(1, out.snippets.size)
-        assertEquals("df -h", out.snippets[0].getString("command"))
+        assertEquals("df -h", out.snippets[0].command)
         assertTrue(out.knownHosts.contains("prod.example.com"))
     }
 
@@ -106,7 +107,7 @@ class BackupCodecTest {
             hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(),
             keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "",
         )
-        val plain = BackupCodec.payloadToJson(tiny).toString().toByteArray(Charsets.UTF_8)
+        val plain = BackupCodec.payloadToJson(tiny).toByteArray(Charsets.UTF_8)
         val blob = BackupCodec.encrypt(tiny, "pw".toCharArray())
         assertEquals(8 + 16 + 12 + plain.size + 16, blob.size)
 
@@ -153,7 +154,7 @@ class BackupCodecTest {
             hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(),
             keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "",
         )
-        val json = BackupCodec.payloadToJson(tiny).put("version", 99)
+        val json = JSONObject(BackupCodec.payloadToJson(tiny)).put("version", 99)
         val passphrase = "pw".toCharArray()
         val salt = ByteArray(16)
         val iv = ByteArray(12)

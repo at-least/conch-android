@@ -1,12 +1,12 @@
 package at.least.conch
 
 import android.content.Context
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.common.KeyType
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
@@ -22,6 +22,28 @@ data class SshKeyInfo(
 )
 
 /**
+ * Wire shape of keys.json. Every field is REQUIRED on decode — an entry
+ * missing a field (hand-edited or foreign file) fails the whole list load,
+ * degrading to empty, matching the org.json getString behavior this format
+ * shipped with.
+ */
+@Serializable
+data class KeyWire(
+    val id: String,
+    val name: String,
+    val algorithm: String,
+    val createdAt: Long,
+    val publicLine: String,
+    val fingerprint: String,
+) {
+    fun toInfo(): SshKeyInfo = SshKeyInfo(id, name, algorithm, createdAt, publicLine, fingerprint)
+
+    companion object {
+        fun from(k: SshKeyInfo) = KeyWire(k.id, k.name, k.algorithm, k.createdAt, k.publicLine, k.fingerprint)
+    }
+}
+
+/**
  * Manages SSH keypairs. Private halves are stored as PKCS#8 PEM, encrypted by
  * [SecretsStore] (Android Keystore); metadata lives in files/keys/keys.json.
  */
@@ -34,20 +56,8 @@ class KeyManager(private val context: Context) {
         val out = mutableListOf<SshKeyInfo>()
         try {
             if (metaFile.exists()) {
-                val arr = JSONArray(metaFile.readText())
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    out.add(
-                        SshKeyInfo(
-                            id = o.getString("id"),
-                            name = o.getString("name"),
-                            algorithm = o.getString("algorithm"),
-                            createdAt = o.getLong("createdAt"),
-                            publicLine = o.getString("publicLine"),
-                            fingerprint = o.getString("fingerprint"),
-                        )
-                    )
-                }
+                val wires = ConchJson.decodeFromString(ListSerializer(KeyWire.serializer()), metaFile.readText())
+                out.addAll(wires.map { it.toInfo() })
             }
         } catch (_: Exception) {
         }
@@ -55,19 +65,8 @@ class KeyManager(private val context: Context) {
     }
 
     private fun save(keys: List<SshKeyInfo>) {
-        val arr = JSONArray()
-        for (k in keys) {
-            arr.put(
-                JSONObject()
-                    .put("id", k.id)
-                    .put("name", k.name)
-                    .put("algorithm", k.algorithm)
-                    .put("createdAt", k.createdAt)
-                    .put("publicLine", k.publicLine)
-                    .put("fingerprint", k.fingerprint)
-            )
-        }
-        metaFile.writeText(arr.toString())
+        val arr = keys.map { KeyWire.from(it) }
+        metaFile.writeText(ConchJson.encodeToString(ListSerializer(KeyWire.serializer()), arr))
     }
 
     /** Generates a new Ed25519 keypair and stores it encrypted. */

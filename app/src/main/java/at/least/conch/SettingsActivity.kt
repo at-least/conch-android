@@ -74,10 +74,8 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         crashEnabled.value = CrashReporting.isEnabled()
-        keepScreenOn.value = getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-            .getBoolean("keepScreenOn", false)
-        commandHistory.value = getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-            .getBoolean("commandHistory", true)
+        keepScreenOn.value = SettingsStore.keepScreenOn(this)
+        commandHistory.value = SettingsStore.commandHistory(this)
         appLock.value = AppLock.isEnabled(this) && AppLock.canAuthenticate(this)
         setContent {
             SettingsScreen(
@@ -253,8 +251,7 @@ class SettingsActivity : ComponentActivity() {
                                 checked = keepScreenOn.value,
                                 onCheckedChange = { on ->
                                     keepScreenOn.value = on
-                                    getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-                                        .edit().putBoolean("keepScreenOn", on).apply()
+                                    SettingsStore.setKeepScreenOn(this@SettingsActivity, on)
                                 }
                             )
                         }
@@ -277,8 +274,7 @@ class SettingsActivity : ComponentActivity() {
                                 checked = commandHistory.value,
                                 onCheckedChange = { on ->
                                     commandHistory.value = on
-                                    getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-                                        .edit().putBoolean("commandHistory", on).apply()
+                                    SettingsStore.setCommandHistory(this@SettingsActivity, on)
                                 }
                             )
                         }
@@ -405,10 +401,7 @@ class SettingsActivity : ComponentActivity() {
     private fun TerminalThemePicker() {
         var selected by remember {
             mutableStateOf(
-                TerminalTheme.byName(
-                    getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-                        .getString(TerminalTheme.PREF_KEY, null)
-                ).name
+                TerminalTheme.byName(SettingsStore.terminalTheme(this@SettingsActivity)).name
             )
         }
         androidx.compose.foundation.layout.FlowRow(
@@ -420,8 +413,7 @@ class SettingsActivity : ComponentActivity() {
                     selected = theme.name == selected,
                     onClick = {
                         selected = theme.name
-                        getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-                            .edit().putString(TerminalTheme.PREF_KEY, theme.name).apply()
+                        SettingsStore.setTerminalTheme(this@SettingsActivity, theme.name)
                     },
                     label = { Text(theme.name) }
                 )

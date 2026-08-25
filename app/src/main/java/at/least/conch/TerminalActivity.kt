@@ -138,7 +138,7 @@ class TerminalActivity : FragmentActivity() {
         this.host = host
         subtitle.value = "${host.username}@${host.hostname}:${host.port}"
 
-        if (getSharedPreferences("conchapp_settings", MODE_PRIVATE).getBoolean("commandHistory", true)) {
+        if (SettingsStore.commandHistory(this)) {
             historyAssembler = InputLineAssembler { line ->
                 historyExecutor.execute { historyStore.record(hostId, line) }
             }
@@ -165,7 +165,7 @@ class TerminalActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (getSharedPreferences("conchapp_settings", MODE_PRIVATE).getBoolean("keepScreenOn", false)) {
+        if (SettingsStore.keepScreenOn(this)) {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -493,10 +493,7 @@ class TerminalActivity : FragmentActivity() {
                                     if (host?.fontSizeSp ?: 0f > 0f) {
                                         fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
                                     }
-                                    theme = TerminalTheme.byName(
-                                        getSharedPreferences("conchapp_settings", MODE_PRIVATE)
-                                            .getString(TerminalTheme.PREF_KEY, null)
-                                    )
+                                    theme = TerminalTheme.byName(SettingsStore.terminalTheme(this@TerminalActivity))
                                     setOnClickListener { showSoftKeyboard() }
                                     post { requestFocus() }
                                 }

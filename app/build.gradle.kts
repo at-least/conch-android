@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("io.gitlab.arturbosch.detekt")
 }
 
 apply(from = "sentry.gradle")
@@ -73,7 +75,16 @@ android {
         // Vendored com.termux.terminal unit tests touch android.util.Log/Base64
         // on non-fatal paths; mirror upstream's build config so JVM tests run.
         unitTests.isReturnDefaultValues = true
+        // Robolectric tests read android resources / assets
+        unitTests.isIncludeAndroidResources = true
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    baseline = file("$rootDir/detekt-baseline.xml")
+    parallel = true
 }
 
 dependencies {
@@ -92,6 +103,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     implementation("com.hierynomus:sshj:0.38.0")
     implementation("org.slf4j:slf4j-android:1.7.36")
@@ -102,9 +114,18 @@ dependencies {
 
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    // Robolectric: exercises real SharedPreferences / filesDir paths that
+    // isReturnDefaultValues stubbing cannot reach (ExtraKeysConfig, AppLock,
+    // HostStore/KeyManager on-disk formats).
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    // MockK: object mocking (SecretsStore) for Android-bound paths that
+    // Robolectric cannot back (Android Keystore).
+    testImplementation("io.mockk:mockk:1.13.13")
 
     // In-process SSH server for JVM tests against real SSH interaction.
     testImplementation("org.apache.sshd:sshd-core:2.13.2")

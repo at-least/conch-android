@@ -1,7 +1,6 @@
 package at.least.conch
 
 import android.content.Context
-import android.content.SharedPreferences
 import io.sentry.Sentry
 import io.sentry.android.core.SentryAndroid
 import io.sentry.SentryOptions
@@ -18,16 +17,10 @@ import io.sentry.SentryOptions
  */
 object CrashReporting {
 
-    private const val PREFS = "conchapp_settings"
-    private const val KEY_ENABLED = "crashReportsEnabled"
-
-    private lateinit var prefs: SharedPreferences
-
     private lateinit var appContext: Context
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (isAvailable() && isEnabled()) initSdk()
     }
 
@@ -63,10 +56,10 @@ object CrashReporting {
     /** True when a DSN was compiled into this build. */
     fun isAvailable(): Boolean = BuildConfig.SENTRY_DSN.isNotBlank()
 
-    fun isEnabled(): Boolean = isAvailable() && prefs.getBoolean(KEY_ENABLED, false)
+    fun isEnabled(): Boolean = isAvailable() && SettingsStore.crashReportsEnabled(appContext)
 
     fun setEnabled(on: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, on).apply()
+        SettingsStore.setCrashReportsEnabled(appContext, on)
         if (isAvailable()) {
             if (on) {
                 initSdk()

@@ -1,0 +1,157 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:MonitorParser.kt$MonitorParser$cpu == null || mem == null || disk == null || load == null || up == null</ID>
+    <ID>ComplexCondition:TerminalView.kt$TerminalView$cols &gt; 0 &amp;&amp; rows &gt; 0 &amp;&amp; (cols != lastSentCols || rows != lastSentRows)</ID>
+    <ID>CyclomaticComplexMethod:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
+    <ID>CyclomaticComplexMethod:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:ExtraKeysConfig.kt$ExtraKeysConfig$fun bytesFor(id: String): ByteArray?</ID>
+    <ID>CyclomaticComplexMethod:KeyInput.kt$KeyInput$fun keyBytes(code: Int): ByteArray?</ID>
+    <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
+    <ID>CyclomaticComplexMethod:MonitorParser.kt$MonitorParser$fun parse(output: String): Snapshot?</ID>
+    <ID>CyclomaticComplexMethod:OpenSshConfigParser.kt$OpenSshConfigParser$fun parse(text: String): List&lt;ParsedHost&gt;</ID>
+    <ID>CyclomaticComplexMethod:SessionTabs.kt$@Composable fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/")</ID>
+    <ID>CyclomaticComplexMethod:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
+    <ID>CyclomaticComplexMethod:TerminalView.kt$TerminalView$override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean</ID>
+    <ID>EmptyElseBlock:CommandHistory.kt$InputLineAssembler$if (!pendingCr) appendPrintableChar('\n')</ID>
+    <ID>EmptyFunctionBlock:TerminalEmulator.kt$TerminalEmulator.&lt;no name provided&gt;${}</ID>
+    <ID>EmptyFunctionBlock:TerminalEmulator.kt$TerminalEmulator.HostOutput${}</ID>
+    <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.ExecCommand${}</ID>
+    <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.RecordedShell${}</ID>
+    <ID>FunctionNaming:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:DockerActivity.kt$DockerActivity$@Composable private fun ContainerRow(c: DockerParser.Container)</ID>
+    <ID>FunctionNaming:DockerActivity.kt$DockerActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun DockerScreen()</ID>
+    <ID>FunctionNaming:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
+    <ID>FunctionNaming:KeysActivity.kt$KeysActivity$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable private fun KeysScreen()</ID>
+    <ID>FunctionNaming:MainActivity.kt$MainActivity$@OptIn(ExperimentalFoundationApi::class) @Composable private fun HostCard(host: Host, onClick: () -&gt; Unit, onEdit: () -&gt; Unit, onDelete: () -&gt; Unit)</ID>
+    <ID>FunctionNaming:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
+    <ID>FunctionNaming:MonitorActivity.kt$MonitorActivity$@Composable private fun MetricCard(title: String, value: String, progress: Double?, footnote: String)</ID>
+    <ID>FunctionNaming:MonitorActivity.kt$MonitorActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun MonitorScreen()</ID>
+    <ID>FunctionNaming:SessionTabs.kt$@Composable fun DockerTab(session: SessionReconnector)</ID>
+    <ID>FunctionNaming:SessionTabs.kt$@Composable fun MonitorTab(session: SessionReconnector)</ID>
+    <ID>FunctionNaming:SessionTabs.kt$@Composable fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/")</ID>
+    <ID>FunctionNaming:SessionTabs.kt$@Composable private fun MetricCard(title: String, value: String, progress: Double?, footnote: String)</ID>
+    <ID>FunctionNaming:SessionTabs.kt$@OptIn(ExperimentalFoundationApi::class) @Composable private fun ContainerRow( c: DockerParser.Container, onTap: () -&gt; Unit, onStop: () -&gt; Unit, onStart: () -&gt; Unit, onRestart: () -&gt; Unit, onLogs: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:SessionTabs.kt$@OptIn(ExperimentalFoundationApi::class) @Composable private fun EntryRow(entry: SftpEntry, onClick: () -&gt; Unit, onLongClick: () -&gt; Unit)</ID>
+    <ID>FunctionNaming:SessionsSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SessionsSheet( onOpen: (LiveSessions.Live) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:SettingsActivity.kt$SettingsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsScreen( exportLauncher: androidx.activity.result.contract.ActivityResultContracts.CreateDocument, importLauncher: androidx.activity.result.contract.ActivityResultContracts.OpenDocument, )</ID>
+    <ID>FunctionNaming:SettingsActivity.kt$SettingsActivity$@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable private fun TerminalThemePicker()</ID>
+    <ID>FunctionNaming:SftpActivity.kt$SftpActivity$@OptIn(ExperimentalFoundationApi::class) @Composable private fun EntryRow(entry: SftpEntry)</ID>
+    <ID>FunctionNaming:SftpActivity.kt$SftpActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SftpScreen()</ID>
+    <ID>FunctionNaming:SnippetsActivity.kt$SnippetsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SnippetsScreen()</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun ExtraKeysRow()</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun KeyButton(label: String, armed: Boolean = false, onClick: () -&gt; Unit)</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun LoadingTab(label: String)</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -&gt; Unit)</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun StatusDot(state: ConnState, keepAlive: Boolean)</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HistorySheet()</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
+    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable private fun ExtraKeysEditor(current: List&lt;String&gt;, onSave: (List&lt;String&gt;) -&gt; Unit, onCancel: () -&gt; Unit)</ID>
+    <ID>ImplicitDefaultLocale:SocksProxy.kt$SocksProxy$String.format("%x", ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF))</ID>
+    <ID>InstanceOfCheckForException:KnownHosts.kt$TofuHostKeyVerifier$e is ThreadDeath</ID>
+    <ID>InstanceOfCheckForException:KnownHosts.kt$TofuHostKeyVerifier$e is VirtualMachineError</ID>
+    <ID>InstanceOfCheckForException:SettingsActivity.kt$SettingsActivity$e is javax.crypto.AEADBadTagException</ID>
+    <ID>LargeClass:TerminalActivity.kt$TerminalActivity : FragmentActivity</ID>
+    <ID>LongMethod:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, )</ID>
+    <ID>LongMethod:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
+    <ID>LongMethod:KeysActivity.kt$KeysActivity$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable private fun KeysScreen()</ID>
+    <ID>LongMethod:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
+    <ID>LongMethod:SessionTabs.kt$@Composable fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/")</ID>
+    <ID>LongMethod:SettingsActivity.kt$SettingsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsScreen( exportLauncher: androidx.activity.result.contract.ActivityResultContracts.CreateDocument, importLauncher: androidx.activity.result.contract.ActivityResultContracts.OpenDocument, )</ID>
+    <ID>LongMethod:SftpActivity.kt$SftpActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SftpScreen()</ID>
+    <ID>LongMethod:SnippetsActivity.kt$SnippetsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SnippetsScreen()</ID>
+    <ID>LongMethod:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
+    <ID>LongMethod:TerminalView.kt$TerminalView$override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean</ID>
+    <ID>LoopWithTooManyJumpStatements:DockerParser.kt$DockerParser$for</ID>
+    <ID>LoopWithTooManyJumpStatements:KnownHosts.kt$KnownHostsStore$for</ID>
+    <ID>LoopWithTooManyJumpStatements:MonitorActivity.kt$MonitorActivity$while</ID>
+    <ID>LoopWithTooManyJumpStatements:OpenSshConfigParser.kt$OpenSshConfigParser$for</ID>
+    <ID>MaxLineLength:BackupCodec.kt$BackupCodec$hosts = o.optJSONArray("hosts")?.let { arr -&gt; (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList()</ID>
+    <ID>MaxLineLength:BackupCodec.kt$BackupCodec$keys = o.optJSONArray("keys")?.let { arr -&gt; (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList()</ID>
+    <ID>MaxLineLength:BackupCodec.kt$BackupCodec$snippets = o.optJSONArray("snippets")?.let { arr -&gt; (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList()</ID>
+    <ID>MaxLineLength:CommandHistory.kt$InputLineAssembler$0x03 -&gt; if (inPaste) appendPrintableChar(b.toChar()) else { buf.clear(); dropPending = false }</ID>
+    <ID>MaxLineLength:CommandHistory.kt$InputLineAssembler$0x09 -&gt; if (inPaste) appendPrintableChar(b.toChar()) else dropPending = true</ID>
+    <ID>MaxLineLength:CommandHistoryTest.kt$CommandHistoryTest$assertNull(HistoryCrypto.decrypt(key, blob.clone().also { it[blob.size - 1] = (it.last().toInt() xor 1).toByte() }))</ID>
+    <ID>MaxLineLength:Ed25519Codec.kt$Ed25519Codec$ByteArray(hex.length / 2) { i -&gt; ((Character.digit(hex[i * 2], 16) shl 4) + Character.digit(hex[i * 2 + 1], 16)).toByte() }</ID>
+    <ID>MaxLineLength:EditHostActivity.kt$label = { Text(if (isEdit &amp;&amp; SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password") }</ID>
+    <ID>MaxLineLength:EditHostActivity.kt$value = keys.firstOrNull { it.id == selectedKeyId }?.let { "${it.name} (${it.fingerprint.takeLast(12)})" } ?: "Select key"</ID>
+    <ID>MaxLineLength:EditHostActivity.kt$var fontSizeText by remember { mutableStateOf(if ((initial?.fontSizeSp ?: 0f) &gt; 0f) initial!!.fontSizeSp.toInt().toString() else "") }</ID>
+    <ID>MaxLineLength:EditHostActivity.kt$var portText by remember { mutableStateOf(if (initial != null &amp;&amp; initial.port != 22) initial.port.toString() else "") }</ID>
+    <ID>MaxLineLength:EditHostActivity.kt$var socksPortText by remember { mutableStateOf(if ((initial?.socksPort ?: 0) &gt; 0) initial!!.socksPort.toString() else "") }</ID>
+    <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""[{"command":"df -h","id":"s1","label":"磁碟"},{"command":"echo 'multi\nline'","id":"s2","label":"q\"uote"}]"""</ID>
+    <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""[{"hostId":"h1","text":"uptime","ts":1000},{"hostId":"h2","text":"echo 'multi\nline'","ts":2000},{"hostId":"h1","text":"中文コマンド","ts":3000}]"""</ID>
+    <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""{"alias":"","authType":"PASSWORD","fontSizeSp":0,"hostname":"h","id":"golden-2","keepAlive":true,"keyId":null,"port":22,"socksPort":0,"tmuxAutoAttach":true,"tunnels":[],"username":"u"}"""</ID>
+    <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""{"alias":"生產機 \"prod\"","authType":"KEY","fontSizeSp":18,"hostname":"prod.example.com","id":"golden-1","keepAlive":false,"keyId":"key-a","port":2222,"socksPort":1080,"tmuxAutoAttach":true,"tunnels":[{"host":"db.internal","localPort":8080,"port":5432},{"host":"","localPort":1,"port":0}],"username":"alice"}"""</ID>
+    <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""{"hostSecrets":{"h1":"s3cret-パスワード🔑","h2":""},"hosts":[{"alias":"prod","authType":"KEY","fontSizeSp":14.5,"hostname":"prod.example.com","id":"h1","keepAlive":false,"keyId":"k1","port":2222,"socksPort":0,"tmuxAutoAttach":false,"tunnels":[{"host":"db.internal","localPort":8080,"port":5432}],"username":"alice"}],"keySecrets":{"k1":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n"},"keys":[{"algorithm":"ssh-ed25519","createdAt":1735689600123,"fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","publicLine":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":"[prod.example.com]:2222 ssh-ed25519 AAAA\n","snippets":[{"command":"df -h","id":"s1","label":"disk"}],"version":1}"""</ID>
+    <ID>MaxLineLength:InteractionStringContractTest.kt$InteractionStringContractTest$"inner command (minus the CR terminator) stays byte-identical to iOS — the part iOS guards with command -v + printf wipe"</ID>
+    <ID>MaxLineLength:KeysActivity.kt$KeysActivity$"No keys yet. Generate an ed25519 key, then add the public key to ~/.ssh/authorized_keys on your server."</ID>
+    <ID>MaxLineLength:LocalSshdAuthTest.kt$LocalSshdAuthTest$"mkdir -p /tmp/opencode/localtest &amp;&amp; cp ${tmpPub.absolutePath} /tmp/opencode/localtest/pub &amp;&amp; cat /tmp/opencode/localtest/pub &gt;&gt; /home/sshtest/.ssh/authorized_keys &amp;&amp; grep -c '${pubLine.split(" ")[1].take(20)}' /home/sshtest/.ssh/authorized_keys"</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$text = { Text("Android SSH client — free &amp; open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux") }</ID>
+    <ID>MaxLineLength:MonitorPollTest.kt$TerminalReplayTest$"bare attach leaves echo residue in the normal buffer — B2's printf wipe must clear it (then flip this pin)"</ID>
+    <ID>MaxLineLength:SessionTabs.kt$LinearProgressIndicator(progress = { it.toFloat() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))</ID>
+    <ID>MaxLineLength:SessionTabs.kt$Text(footnote, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))</ID>
+    <ID>MaxLineLength:SessionTabs.kt$TextButton(onClick = { actionEntry = null; renameText = entry.name; showRename = entry }) { Text("Rename") }</ID>
+    <ID>MaxLineLength:SessionTabs.kt$androidx.compose.material3.DropdownMenuItem(text = { Text("Restart") }, onClick = { menuOpen = false; onRestart() })</ID>
+    <ID>MaxLineLength:SessionTabs.kt$androidx.compose.material3.DropdownMenuItem(text = { Text("Start") }, onClick = { menuOpen = false; onStart() })</ID>
+    <ID>MaxLineLength:SessionTabs.kt$androidx.compose.material3.DropdownMenuItem(text = { Text("Stop") }, onClick = { menuOpen = false; onStop() })</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Choose a passphrase to encrypt the backup (min 6 characters). You will need it to restore."</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Export hosts (with passwords), keys, snippets and known hosts into a single encrypted file. The file is protected by your passphrase — it can be imported on another device."</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Imported: ${result.hostsAdded} hosts, ${result.keysAdded} keys, ${result.snippetsAdded} snippets"</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Remember the commands you run, per host, encrypted on this device. Search and re-run them from the terminal menu, or save them as snippets."</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Send anonymous crash reports to the developer's self-hosted server. Host addresses, usernames and credentials are never included. Off by default."</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$Icon(Icons.Filled.FileDownload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$Icon(Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))</ID>
+    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$Toast.makeText(this@SettingsActivity, "Command history cleared", Toast.LENGTH_SHORT).show()</ID>
+    <ID>MaxLineLength:SftpActivity.kt$SftpActivity$tint = if (entry.isDir) androidx.compose.ui.graphics.Color(0xFF3B8EEA) else MaterialTheme.colorScheme.onSurfaceVariant</ID>
+    <ID>MaxLineLength:SocksProxy.kt$SocksProxy$append(String.format("%x", ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF)))</ID>
+    <ID>MaxLineLength:SshConnectionFactory.kt$SshConnectionFactory$else -&gt; "${e.message ?: "Error"} (${e.javaClass.simpleName})${e.cause?.let { " cause: ${it.message} (${it.javaClass.simpleName})" } ?: ""}"</ID>
+    <ID>MaxLineLength:SshErrorMappingInteractionTest.kt$SshErrorMappingInteractionTest$assertTrue("unexpected mapping: $msg (from ${e.javaClass.simpleName}: ${e.message})", msg.startsWith("Connection refused"))</ID>
+    <ID>MaxLineLength:TerminalActivity.kt$TerminalActivity$"The key reported by ${request.endpoint} differs from the recorded one. The server may have been reinstalled — or someone is intercepting the connection."</ID>
+    <ID>MaxLineLength:TerminalActivity.kt$TerminalActivity$if</ID>
+    <ID>MaxLineLength:TerminalActivity.kt$TerminalActivity$leadingIcon = { Icon(Icons.Filled.SyncAlt, contentDescription = null, modifier = Modifier.size(16.dp)) }</ID>
+    <ID>MaxLineLength:TerminalActivity.kt$TerminalActivity$onClick = { menuOpen = false; terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) + 2f }</ID>
+    <ID>MaxLineLength:TerminalActivity.kt$TerminalActivity$onClick = { menuOpen = false; terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) - 2f }</ID>
+    <ID>MaxLineLength:TerminalThemeTest.kt$TerminalThemeTest$assertEquals(listOf("Default", "Dracula", "Solarized Dark", "Nord", "Gruvbox Dark"), TerminalTheme.ALL.map { it.name })</ID>
+    <ID>MaxLineLength:TerminalView.kt$TerminalView$field = value.coerceIn(6f * resources.displayMetrics.scaledDensity, 40f * resources.displayMetrics.scaledDensity)</ID>
+    <ID>MaxLineLength:TerminalView.kt$TerminalView$fun desiredColumns(widthPx: Int): Int</ID>
+    <ID>MaxLineLength:TerminalView.kt$TerminalView$fun desiredRows(heightPx: Int): Int</ID>
+    <ID>MaxLineLength:TestSshd.kt$TestSshd.RecordedShell$windowSizes.add((env.env[Environment.ENV_COLUMNS] ?: "?") to (env.env[Environment.ENV_LINES] ?: "?"))</ID>
+    <ID>MaxLineLength:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$assertEquals("only the original entry should remain", 1, File(dir, "known_hosts").readLines().count { it.isNotBlank() })</ID>
+    <ID>NestedBlockDepth:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
+    <ID>NestedBlockDepth:HostStore.kt$HostStore$fun load(): MutableList&lt;Host&gt;</ID>
+    <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy bridges ipv4 connect to echo server`()</ID>
+    <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy resolves domain atyp targets`()</ID>
+    <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy works with the jdk socks client`()</ID>
+    <ID>NestedBlockDepth:SftpInteractionTest.kt$SftpInteractionTest$@Test(timeout = 60_000) fun `odd-offset odd-length reads return unscrambled bytes`()</ID>
+    <ID>NestedBlockDepth:SshConnectAuthInteractionTest.kt$SshConnectAuthInteractionTest$@Test(timeout = 30_000) fun `ed25519 key not in authorized_keys is rejected`()</ID>
+    <ID>SpreadOperator:TerminalActivity.kt$TerminalActivity$(*current.toTypedArray())</ID>
+    <ID>TooGenericExceptionThrown:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$throw RuntimeException("UI blew up")</ID>
+    <ID>TooManyFunctions:Ed25519Codec.kt$Ed25519Codec</ID>
+    <ID>TooManyFunctions:SessionReconnector.kt$SessionReconnector : Callbacks</ID>
+    <ID>TooManyFunctions:SessionTabs.kt$at.least.conch.SessionTabs.kt</ID>
+    <ID>TooManyFunctions:SftpActivity.kt$SftpActivity : ComponentActivity</ID>
+    <ID>TooManyFunctions:TerminalActivity.kt$TerminalActivity : FragmentActivity</ID>
+    <ID>TooManyFunctions:TerminalEmulator.kt$TerminalEmulator</ID>
+    <ID>TooManyFunctions:TerminalEmulator.kt$TerminalEmulator$&lt;no name provided&gt; : TerminalSessionClient</ID>
+    <ID>TooManyFunctions:TerminalView.kt$TerminalView : View</ID>
+    <ID>UnusedParameter:CommandHistory.kt$CommandHistoryStore.Companion$context: Context</ID>
+    <ID>UnusedParameter:SessionTabs.kt$onTap: () -&gt; Unit</ID>
+    <ID>UnusedParameter:TerminalActivity.kt$TerminalActivity$label: String</ID>
+    <ID>UnusedParameter:TerminalView.kt$TerminalView$defaultColor: Int</ID>
+    <ID>UnusedPrivateMember:TerminalActivity.kt$TerminalActivity$private fun openMonitor()</ID>
+    <ID>UnusedPrivateMember:TerminalActivity.kt$TerminalActivity$private fun openSftp()</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$var menuHost by remember { mutableStateOf&lt;Host?&gt;(null) }</ID>
+    <ID>UnusedPrivateProperty:TerminalView.kt$TerminalView$private val urlRegex = java.util.regex.Pattern.compile( "(https?://|www\\.)[\\w.-]+(:\\d+)?(/[^\\s]*)?", java.util.regex.Pattern.CASE_INSENSITIVE )</ID>
+    <ID>UseCheckOrError:KeyManager.kt$KeyManager$throw IllegalStateException("Key data not found")</ID>
+    <ID>UseCheckOrError:KeysActivity.kt$KeysActivity$throw IllegalStateException("Cannot read file")</ID>
+    <ID>UseCheckOrError:MainActivity.kt$MainActivity$throw IllegalStateException("Cannot read file")</ID>
+    <ID>UseCheckOrError:SessionTabs.kt$throw IllegalStateException("Cannot read file")</ID>
+    <ID>UseCheckOrError:SettingsActivity.kt$SettingsActivity$throw IllegalStateException("Cannot read file")</ID>
+    <ID>UseCheckOrError:SettingsActivity.kt$SettingsActivity$throw IllegalStateException("Cannot write file")</ID>
+    <ID>UseCheckOrError:SftpActivity.kt$SftpActivity$throw IllegalStateException("Cannot read file")</ID>
+    <ID>UseCheckOrError:SshConnectionFactory.kt$SshConnectionFactory$throw IllegalStateException("Host is set to key auth but no key is selected")</ID>
+    <ID>UseCheckOrError:SshConnectionFactory.kt$SshConnectionFactory$throw IllegalStateException("No stored password — edit this host and save a password")</ID>
+    <ID>UseCheckOrError:SshSession.kt$SshSession$throw IllegalStateException("context required for default connector")</ID>
+  </CurrentIssues>
+</SmellBaseline>

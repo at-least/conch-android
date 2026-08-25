@@ -1,6 +1,5 @@
 package at.least.conch
 
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -52,10 +51,10 @@ class BackupManagerMergeTest {
     @Test
     fun `key import skips known ids and keys without their private half`() {
         val incoming = listOf(
-            JSONObject().put("id", "k1"),   // already known
-            JSONObject().put("id", "k2"),   // no pem — useless
-            JSONObject().put("id", ""),     // no id
-            JSONObject().put("id", "k3"),   // good
+            KeyWire("k1", "n", "ssh-ed25519", 0L, "pub", "fp"),   // already known
+            KeyWire("k2", "n", "ssh-ed25519", 0L, "pub", "fp"),   // no pem — useless
+            KeyWire("", "n", "ssh-ed25519", 0L, "pub", "fp"),     // no id
+            KeyWire("k3", "n", "ssh-ed25519", 0L, "pub", "fp"),   // good
         )
         val secrets = mapOf("k1" to "PEM", "k3" to "PEM")
         val imported = BackupManager.keyIdsToImport(setOf("k1"), incoming, secrets)

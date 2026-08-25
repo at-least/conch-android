@@ -1,6 +1,5 @@
 package at.least.conch
 
-import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,8 +23,7 @@ class HostStoreJsonTest {
         )
         host.tunnels.add(Tunnel(8080, "db.internal", 5432))
 
-        val json = HostStore.hostToJson(host)
-        val back = HostStore.hostFromJson(json)
+        val back = HostWire.from(host).toHost()
 
         assertEquals(host.id, back.id)
         assertEquals("prod", back.alias)
@@ -52,14 +50,14 @@ class HostStoreJsonTest {
         // iOS testExplicitFalseSurvivesDecoding parity: opt-out is honored
         val host = Host(id = "x", hostname = "h", username = "u")
         host.tmuxAutoAttach = false
-        val back = HostStore.hostFromJson(HostStore.hostToJson(host))
+        val back = HostWire.from(host).toHost()
         assertFalse(back.tmuxAutoAttach)
     }
 
     @Test
     fun `missing fields fall back to defaults`() {
-        val o = JSONObject().put("id", "x").put("hostname", "h").put("username", "u")
-        val host = HostStore.hostFromJson(o)
+        val o = JSONObject("""{"id":"x","hostname":"h","username":"u"}""")
+        val host = ConchJson.decodeFromString(HostWire.serializer(), o.toString()).toHost()
         assertEquals(22, host.port)
         assertEquals(Host.AUTH_PASSWORD, host.authType)
         assertEquals(null, host.keyId)
@@ -73,15 +71,30 @@ class HostStoreJsonTest {
 
     @Test
     fun `legacy entry with plaintext password still parses`() {
-        val arr = JSONArray()
-            .put(JSONObject()
-                .put("id", "old")
-                .put("hostname", "h")
-                .put("username", "u")
-                .put("password", "secret"))
-        val host = HostStore.hostFromJson(arr.getJSONObject(0))
+        val host = ConchJson.decodeFromString(
+            HostWire.serializer(),
+            """{"id":"old","hostname":"h","username":"u","password":"secret"}"""
+        ).toHost()
         assertEquals("old", host.id)
         // parsing itself must not throw and must not carry the password on the Host
         assertEquals(Host.AUTH_PASSWORD, host.authType)
+    }
+
+    @Test
+    fun `garbage authType value decodes as password`() {
+        val host = ConchJson.decodeFromString(
+            HostWire.serializer(),
+            """{"id":"x","hostname":"h","username":"u","authType":"GARBAGE"}"""
+        ).toHost()
+        assertEquals(Host.AUTH_PASSWORD, host.authType)
+    }
+
+    @Test
+    fun `null keyId literal decodes to null`() {
+        val host = ConchJson.decodeFromString(
+            HostWire.serializer(),
+            """{"id":"x","hostname":"h","username":"u","keyId":null}"""
+        ).toHost()
+        assertEquals(null, host.keyId)
     }
 }
