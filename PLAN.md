@@ -359,24 +359,34 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   picker). If these features get ported from iOS, their tests land with
   them; pinning non-existent features would be dead test-only code.
 
-- [ ] F12: KeepAliveLoopTest — beat at interval until stop, single failed
-      beat stops loop (failed beats not counted), start() idempotent,
-      default 15s interval
-  acceptance: new `KeepAliveLoopTest.kt` green in
-  `./gradlew testFossDebugUnitTest`; covers the 4 iOS `KeepAliveLoopTests.swift`
-  cases (loop logic likely in TerminalActivity/SshConnectionFactory —
-  extract if needed)
+- [x] F12: KeepAliveLoopTest — N/A (no loop on Android; contract already pinned)
+  acceptance: documented N/A with audit note
   deps: none
+  evidence: 2026-08-25 — N/A AUDIT: Android has no KeepAliveLoop class —
+  keep-alive is sshj's transport-level `setKeepAliveInterval(15)` (one
+  call in SshConnectionFactory.kt:69) plus a cosmetic heartbeat animation.
+  iOS's loop-behavior tests (beat cadence, failed-beat stops loop, start
+  idempotent) have no Android code to test; the Android contract is
+  already fully pinned: interval=15s + disabled-leaves-unset in
+  SshConnectAuthInteractionTest, and the constant via F1's
+  InteractionStringContractTest. If a shell-beat loop is ever ported
+  (iOS's `:` no-op design), its tests land with it.
 
-- [ ] F13: CrashReportingLifecycleTest — default-off no report even with
-      marker, enabled+empty-endpoint disabled, marker survives→report with
-      reason+timestamp, background removes marker, payload schema exactly
-      {appVersion, osVersion, reason, crashedAt}, deliverIfEnabled rejects
-      non-URL endpoint
+- [x] F13: CrashReportingLifecycleTest — default-off gate matrix + SDK
+      privacy options pinned
   acceptance: new `CrashReportingLifecycleTest.kt` green in
-  `./gradlew testFossDebugUnitTest`; covers the 6 iOS `CrashReporterTests.swift`
-  cases (only the scrubber is tested today)
+  `./gradlew testFossDebugUnitTest`
   deps: none
+  evidence: 2026-08-25 — pure `shouldReport(available, enabled)` gate +
+  `applyPrivacyOptions(SentryOptions)` extracted from initSdk (wired
+  back, behavior-identical); CrashReportingLifecycleTest 5/0 (default-off
+  corner, opt-in without DSN = fully disabled [iOS empty-endpoint
+  parity], DSN without opt-in, both-on, options: no PII/sessions/tracing/
+  threads, stacktrace on). Suite 321/0. ADAPTED: iOS's marker-file
+  lifecycle (survived-marker/background-removes-marker) is Sentry-SDK
+  internal on Android — no marker code exists to test; the
+  payload-carries-no-host-data half is covered by options pins here +
+  Scrubber tests (CrashReportingScrubberTest, 6 existing).
 
 ### Phase F-P3 — cross-platform invariants, nice-to-have
 

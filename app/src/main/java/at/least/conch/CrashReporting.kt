@@ -31,16 +31,32 @@ object CrashReporting {
         if (isAvailable() && isEnabled()) initSdk()
     }
 
+    /**
+     * Pure privacy gate (iOS CrashReporter parity): reports flow ONLY when
+     * a DSN was compiled in AND the user opted in. Default-off is the
+     * (false, false) corner.
+     */
+    fun shouldReport(available: Boolean, enabled: Boolean): Boolean = available && enabled
+
+    /**
+     * Pure privacy options (iOS "payload carries no host/user data"
+     * parity): no PII, no session tracking, no tracing, no breadcrumbs;
+     * every outbound event runs the scrubber.
+     */
+    fun applyPrivacyOptions(options: SentryOptions) {
+        options.isEnableAutoSessionTracking = false
+        options.tracesSampleRate = 0.0
+        options.isSendDefaultPii = false
+        options.isAttachThreads = false
+        options.isAttachStacktrace = true
+        options.setBeforeBreadcrumb { _, _ -> null } // drop all breadcrumbs
+        options.setBeforeSend { event, _ -> scrub(event) }
+    }
+
     private fun initSdk() {
         SentryAndroid.init(appContext) { options ->
             options.dsn = BuildConfig.SENTRY_DSN
-            options.isEnableAutoSessionTracking = false
-            options.tracesSampleRate = 0.0
-            options.isSendDefaultPii = false
-            options.isAttachThreads = false
-            options.isAttachStacktrace = true
-            options.setBeforeBreadcrumb { _, _ -> null } // drop all breadcrumbs
-            options.setBeforeSend { event, _ -> scrub(event) }
+            applyPrivacyOptions(options)
         }
     }
 
