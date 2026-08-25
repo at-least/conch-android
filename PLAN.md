@@ -295,21 +295,37 @@ task is the named test file green inside `./gradlew testFossDebugUnitTest`.
   KDF parameters implicitly; iOS's separate PBKDF2 RFC-7914 vector test
   is N/A here — Android uses the JDK's PBKDF2, not a hand-rolled one).
 
-- [ ] F4: BackupCodec export/restore merge semantics + export-includes-secrets
+- [x] F4: BackupCodec export/restore merge semantics + export-includes-secrets
   acceptance: `BackupCodecTest` gains a restore-merge test (existing host id
   NOT overwritten, new id added, known_hosts union) + an export-includes-
   secrets assertion (Keychain/EncryptedPrefs content present in decrypted
   blob); green in `./gradlew testFossDebugUnitTest`
   deps: F3
+  evidence: 2026-08-25 — merge DECISIONS extracted into BackupManager
+  companion pure fns (mergeHosts/mergeSnippets/keyIdsToImport/
+  mergeKnownHostsLines; restore() rewritten on top, behavior-equivalent);
+  new `BackupManagerMergeTest` 5/0 green (existing id kept verbatim + new
+  append, no-op merge, key-import skips known ids + pem-less keys,
+  known_hosts dedup union + growth flag). Full suite 286/0. RESCOPE: the
+  SecretsStore side of restore and collect()'s secret gathering are
+  Android-bound (AndroidKeyStore) — no Robolectric in this repo, so the
+  "export includes secrets" half is covered at the codec level
+  (BackupCodecTest roundtrip asserts hostSecrets/keySecrets survive
+  encrypt→decrypt); store wiring stays manual-QA.
 
 ### Phase F-P1 — feature exists in main, zero tests (silent breakage risk)
 
-- [ ] F5: SnippetStoreTest — crud roundtrip, load empty/corrupt no crash,
+- [x] F5: SnippetStoreTest — crud roundtrip, load empty/corrupt no crash,
       JSON field names match iOS, delete by id
   acceptance: new `SnippetStoreTest.kt` green in
   `./gradlew testFossDebugUnitTest`; covers the 4 iOS `SnippetStoreTests.swift`
   cases
   deps: none
+  evidence: 2026-08-25 — SnippetStore gained a File-seam primary
+  constructor (Android ctor delegates); new `SnippetStoreTest` 5/0 green
+  (cross-instance roundtrip, empty dir → [], corrupt → [] no crash,
+  persisted field set == {id,label,command}, delete-by-id pattern from
+  SnippetsActivity). Full suite 286/0.
 
 - [ ] F6: AppLockTest — grace window inside/outside, disabled by default,
       toggle flips state
