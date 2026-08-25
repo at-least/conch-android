@@ -111,6 +111,29 @@ object TunnelCapsule {
 // Monitor
 // =====================================================================
 
+/**
+ * Pure decision kernel of the MonitorTab poll loop (iOS
+ * LogAndContinueTests "parse failure leaves prior snapshot usable"
+ * parity): a good parse refreshes; a failed parse or dead exec NEVER
+ * overwrites a good prior snapshot — errors surface only when there is
+ * nothing better to show. Extracted from the Composable so the policy is
+ * JVM-testable.
+ */
+object MonitorPoll {
+    data class State(val snapshot: MonitorParser.Snapshot?, val error: String?)
+
+    fun reduce(state: State, out: String?): State {
+        if (out != null) {
+            val parsed = MonitorParser.parse(out)
+            if (parsed != null) return State(parsed, null)
+            if (state.snapshot == null) return State(null, "Failed to read metrics")
+            return state
+        }
+        if (state.snapshot == null) return State(null, "Failed to read metrics")
+        return state
+    }
+}
+
 @Composable
 fun MonitorTab(session: SessionReconnector) {
     var snapshot by remember { mutableStateOf<MonitorParser.Snapshot?>(null) }
@@ -168,17 +191,9 @@ fun MonitorTab(session: SessionReconnector) {
         if (!autoRefresh) return@LaunchedEffect
         while (true) {
             val out = withContext(Dispatchers.IO) { session.exec(MonitorParser.PROBE) }
-            if (out != null) {
-                val parsed = MonitorParser.parse(out)
-                if (parsed != null) {
-                    snapshot = parsed
-                    error = null
-                } else if (snapshot == null) {
-                    error = "Failed to read metrics"
-                }
-            } else if (snapshot == null) {
-                error = "Failed to read metrics"
-            }
+            val next = MonitorPoll.reduce(MonitorPoll.State(snapshot, error), out)
+            snapshot = next.snapshot
+            error = next.error
             delay(5_000)
         }
     }
