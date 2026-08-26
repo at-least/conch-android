@@ -30,11 +30,6 @@ class TerminalView @JvmOverloads constructor(
     defStyleAttr: Int = 0,
 ) : View(context, attrs, defStyleAttr) {
 
-    private val urlRegex = java.util.regex.Pattern.compile(
-        "(https?://|www\\.)[\\w.-]+(:\\d+)?(/[^\\s]*)?",
-        java.util.regex.Pattern.CASE_INSENSITIVE
-    )
-
     /** Bytes typed by the user (to be written to the SSH channel). */
     var onData: ((ByteArray) -> Unit)? = null
 
@@ -278,8 +273,12 @@ class TerminalView @JvmOverloads constructor(
         }
     }
 
-    fun desiredColumns(widthPx: Int): Int = ((widthPx - paddingLeft - paddingRight) / cellWidth).toInt().coerceAtLeast(8)
-    fun desiredRows(heightPx: Int): Int = ((heightPx - paddingTop - paddingBottom) / cellHeight).toInt().coerceAtLeast(4)
+    fun desiredColumns(widthPx: Int): Int = ((widthPx - paddingLeft - paddingRight) / cellWidth).toInt().coerceAtLeast(
+        8
+    )
+    fun desiredRows(heightPx: Int): Int = ((heightPx - paddingTop - paddingBottom) / cellHeight).toInt().coerceAtLeast(
+        4
+    )
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -288,7 +287,7 @@ class TerminalView @JvmOverloads constructor(
     }
 
     private fun recomputeGrid() {
-        val emu = emulator ?: return   // grid applied when an emulator attaches
+        val emu = emulator ?: return // grid applied when an emulator attaches
         val cols = desiredColumns(width)
         val rows = desiredRows(height)
         if (cols != emu.cols || rows != emu.rows) {
@@ -352,10 +351,12 @@ class TerminalView @JvmOverloads constructor(
                 val x = paddingLeft + col * cellWidth
                 val widthCells = if (TerminalEmulator.isWide(cp)) 2 else 1
 
-                var fg = resolveColor(TextStyle.decodeForeColor(style), defaultFgColor)
-                var bg = resolveColor(TextStyle.decodeBackColor(style), bgColor)
+                var fg = resolveColor(TextStyle.decodeForeColor(style))
+                var bg = resolveColor(TextStyle.decodeBackColor(style))
                 if (effect and TextStyle.CHARACTER_ATTRIBUTE_INVERSE != 0) {
-                    val t = fg; fg = bg; bg = t
+                    val t = fg
+                    fg = bg
+                    bg = t
                 }
                 if (bg != bgColor) {
                     bgPaint.color = bg
@@ -396,7 +397,7 @@ class TerminalView @JvmOverloads constructor(
      * palette indices (0..255, plus the 256/257 default slots) map through
      * the themed [palette].
      */
-    private fun resolveColor(decoded: Int, defaultColor: Int): Int =
+    private fun resolveColor(decoded: Int): Int =
         if (decoded and 0xFF000000.toInt() != 0) decoded else palette[decoded]
 
     /** Selection overlay: one translucent rect per visible selected row-span,
@@ -580,59 +581,109 @@ class TerminalView @JvmOverloads constructor(
         resetScrollOnInput()
         when (keyCode) {
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                onData?.invoke(byteArrayOf(0x0D)); return true
+                onData?.invoke(byteArrayOf(0x0D))
+                return true
             }
             KeyEvent.KEYCODE_DEL -> {
-                onData?.invoke(byteArrayOf(0x08)); return true
+                onData?.invoke(byteArrayOf(0x08))
+                return true
             }
             KeyEvent.KEYCODE_FORWARD_DEL -> {
-                onData?.invoke("\u001b[3~".toByteArray()); return true
+                onData?.invoke("\u001b[3~".toByteArray())
+                return true
             }
             KeyEvent.KEYCODE_ESCAPE -> {
-                onData?.invoke(byteArrayOf(0x1B)); return true
+                onData?.invoke(byteArrayOf(0x1B))
+                return true
             }
             KeyEvent.KEYCODE_TAB -> {
-                onData?.invoke(byteArrayOf(0x09)); return true
+                onData?.invoke(byteArrayOf(0x09))
+                return true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
-                sendKey(if (event.isCtrlPressed) CTRL_ARROW_UP else KEY_ARROW_UP); return true
+                sendKey(if (event.isCtrlPressed) CTRL_ARROW_UP else KEY_ARROW_UP)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                sendKey(if (event.isCtrlPressed) CTRL_ARROW_DOWN else KEY_ARROW_DOWN); return true
+                sendKey(if (event.isCtrlPressed) CTRL_ARROW_DOWN else KEY_ARROW_DOWN)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                sendKey(if (event.isCtrlPressed) CTRL_ARROW_LEFT else KEY_ARROW_LEFT); return true
+                sendKey(if (event.isCtrlPressed) CTRL_ARROW_LEFT else KEY_ARROW_LEFT)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                sendKey(if (event.isCtrlPressed) CTRL_ARROW_RIGHT else KEY_ARROW_RIGHT); return true
+                sendKey(if (event.isCtrlPressed) CTRL_ARROW_RIGHT else KEY_ARROW_RIGHT)
+                return true
             }
             KeyEvent.KEYCODE_PAGE_UP -> {
-                sendKey(KEY_PAGE_UP); return true
+                sendKey(KEY_PAGE_UP)
+                return true
             }
             KeyEvent.KEYCODE_PAGE_DOWN -> {
-                sendKey(KEY_PAGE_DOWN); return true
+                sendKey(KEY_PAGE_DOWN)
+                return true
             }
             KeyEvent.KEYCODE_MOVE_HOME -> {
-                sendKey(KEY_HOME); return true
+                sendKey(KEY_HOME)
+                return true
             }
             KeyEvent.KEYCODE_MOVE_END -> {
-                sendKey(KEY_END); return true
+                sendKey(KEY_END)
+                return true
             }
-            KeyEvent.KEYCODE_F1 -> { sendKey(KEY_F1); return true }
-            KeyEvent.KEYCODE_F2 -> { sendKey(KEY_F2); return true }
-            KeyEvent.KEYCODE_F3 -> { sendKey(KEY_F3); return true }
-            KeyEvent.KEYCODE_F4 -> { sendKey(KEY_F4); return true }
-            KeyEvent.KEYCODE_F5 -> { sendKey(KEY_F5); return true }
-            KeyEvent.KEYCODE_F6 -> { sendKey(KEY_F6); return true }
-            KeyEvent.KEYCODE_F7 -> { sendKey(KEY_F7); return true }
-            KeyEvent.KEYCODE_F8 -> { sendKey(KEY_F8); return true }
-            KeyEvent.KEYCODE_F9 -> { sendKey(KEY_F9); return true }
-            KeyEvent.KEYCODE_F10 -> { sendKey(KEY_F10); return true }
-            KeyEvent.KEYCODE_F11 -> { sendKey(KEY_F11); return true }
-            KeyEvent.KEYCODE_F12 -> { sendKey(KEY_F12); return true }
+            KeyEvent.KEYCODE_F1 -> {
+                sendKey(KEY_F1)
+                return true
+            }
+            KeyEvent.KEYCODE_F2 -> {
+                sendKey(KEY_F2)
+                return true
+            }
+            KeyEvent.KEYCODE_F3 -> {
+                sendKey(KEY_F3)
+                return true
+            }
+            KeyEvent.KEYCODE_F4 -> {
+                sendKey(KEY_F4)
+                return true
+            }
+            KeyEvent.KEYCODE_F5 -> {
+                sendKey(KEY_F5)
+                return true
+            }
+            KeyEvent.KEYCODE_F6 -> {
+                sendKey(KEY_F6)
+                return true
+            }
+            KeyEvent.KEYCODE_F7 -> {
+                sendKey(KEY_F7)
+                return true
+            }
+            KeyEvent.KEYCODE_F8 -> {
+                sendKey(KEY_F8)
+                return true
+            }
+            KeyEvent.KEYCODE_F9 -> {
+                sendKey(KEY_F9)
+                return true
+            }
+            KeyEvent.KEYCODE_F10 -> {
+                sendKey(KEY_F10)
+                return true
+            }
+            KeyEvent.KEYCODE_F11 -> {
+                sendKey(KEY_F11)
+                return true
+            }
+            KeyEvent.KEYCODE_F12 -> {
+                sendKey(KEY_F12)
+                return true
+            }
             KeyEvent.KEYCODE_SPACE ->
                 if (event.isCtrlPressed) {
-                    onData?.invoke(byteArrayOf(0)); return true
+                    onData?.invoke(byteArrayOf(0))
+                    return true
                 }
         }
         if (event.isCtrlPressed) {
@@ -680,8 +731,11 @@ class TerminalView @JvmOverloads constructor(
             // Multi-line IME payloads (clipboard paste gestures) go through the
             // bracketed-paste path; single-line commits are normal typing.
             if (text.isNotEmpty()) {
-                if (BracketedPaste.looksLikePaste(text.toString())) view.pasteText(text.toString())
-                else view.sendText(text.toString())
+                if (BracketedPaste.looksLikePaste(text.toString())) {
+                    view.pasteText(text.toString())
+                } else {
+                    view.sendText(text.toString())
+                }
             }
             return true
         }

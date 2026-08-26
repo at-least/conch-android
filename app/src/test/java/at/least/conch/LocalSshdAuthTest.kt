@@ -27,8 +27,12 @@ class LocalSshdAuthTest {
         val tmpPub = File.createTempFile("localtest", ".pub")
         tmpPub.writeText(pubLine)
         val add = ProcessBuilder(
-            "sudo", "bash", "-c",
-            "mkdir -p /tmp/opencode/localtest && cp ${tmpPub.absolutePath} /tmp/opencode/localtest/pub && cat /tmp/opencode/localtest/pub >> /home/sshtest/.ssh/authorized_keys && grep -c '${pubLine.split(" ")[1].take(20)}' /home/sshtest/.ssh/authorized_keys"
+            "sudo",
+            "bash",
+            "-c",
+            "mkdir -p /tmp/opencode/localtest && cp ${tmpPub.absolutePath} /tmp/opencode/localtest/pub && cat /tmp/opencode/localtest/pub >> /home/sshtest/.ssh/authorized_keys && grep -c '${pubLine.split(
+                " "
+            )[1].take(20)}' /home/sshtest/.ssh/authorized_keys"
         ).redirectErrorStream(true).start()
         val added = add.inputStream.readBytes().decodeToString().trim()
         add.waitFor()
@@ -61,7 +65,9 @@ class LocalSshdAuthTest {
             // remove the test key from authorized_keys (unique tail: comment + last 20 chars)
             val uniqueTail = pubLine.split(" ")[1].takeLast(20)
             ProcessBuilder(
-                "sudo", "bash", "-c",
+                "sudo",
+                "bash",
+                "-c",
                 "sed -i '/$uniqueTail/d' /home/sshtest/.ssh/authorized_keys"
             ).start().waitFor()
         }

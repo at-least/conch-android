@@ -1,12 +1,10 @@
 package at.least.conch
 
 import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.util.Base64
 
 /**
  * Round-trip: generate a key with Ed25519Codec, persist it exactly like

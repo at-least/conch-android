@@ -3,7 +3,6 @@ package at.least.conch
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
-import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,8 +19,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
@@ -41,7 +40,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -183,12 +181,33 @@ class SftpActivity : ComponentActivity() {
     private fun cycleSort() {
         // cycles: name asc -> name desc -> size asc -> size desc -> time asc -> time desc
         val next = when {
-            sortMode.value == 0 && !sortDescending.value -> { sortDescending.value = true; "Name ↓" }
-            sortMode.value == 0 -> { sortMode.value = 1; sortDescending.value = false; "Size ↑" }
-            sortMode.value == 1 && !sortDescending.value -> { sortDescending.value = true; "Size ↓" }
-            sortMode.value == 1 -> { sortMode.value = 2; sortDescending.value = false; "Time ↑" }
-            sortMode.value == 2 && !sortDescending.value -> { sortDescending.value = true; "Time ↓" }
-            else -> { sortMode.value = 0; sortDescending.value = false; "Name ↑" }
+            sortMode.value == 0 && !sortDescending.value -> {
+                sortDescending.value = true
+                "Name ↓"
+            }
+            sortMode.value == 0 -> {
+                sortMode.value = 1
+                sortDescending.value = false
+                "Size ↑"
+            }
+            sortMode.value == 1 && !sortDescending.value -> {
+                sortDescending.value = true
+                "Size ↓"
+            }
+            sortMode.value == 1 -> {
+                sortMode.value = 2
+                sortDescending.value = false
+                "Time ↑"
+            }
+            sortMode.value == 2 && !sortDescending.value -> {
+                sortDescending.value = true
+                "Time ↓"
+            }
+            else -> {
+                sortMode.value = 0
+                sortDescending.value = false
+                "Name ↑"
+            }
         }
         sortLabel.value = next
         refresh()
@@ -239,7 +258,7 @@ class SftpActivity : ComponentActivity() {
                 tmp = File.createTempFile("up", null, cacheDir).also { t ->
                     contentResolver.openInputStream(uri)?.use { input ->
                         t.outputStream().use { input.copyTo(it) }
-                    } ?: throw IllegalStateException("Cannot read file")
+                    } ?: error("Cannot read file")
                 }
                 val remote = path.value.trimEnd('/') + "/" + name
                 sftp!!.getFileTransfer().upload(tmp.absolutePath, remote)
@@ -539,7 +558,13 @@ class SftpActivity : ComponentActivity() {
                 Icon(
                     if (entry.isDir) Icons.Filled.Folder else Icons.Filled.Description,
                     contentDescription = null,
-                    tint = if (entry.isDir) androidx.compose.ui.graphics.Color(0xFF3B8EEA) else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = if (entry.isDir) {
+                        androidx.compose.ui.graphics.Color(
+                            0xFF3B8EEA
+                        )
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
                 Column(Modifier.padding(start = 10.dp)) {
                     Text(entry.name, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -65,7 +65,7 @@ object BackupCodec {
         val key = deriveKey(passphrase, salt)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-        val plain = cipher.doFinal(ct)   // AEADBadTagException on wrong passphrase
+        val plain = cipher.doFinal(ct) // AEADBadTagException on wrong passphrase
         return payloadFromJson(String(plain, Charsets.UTF_8))
     }
 

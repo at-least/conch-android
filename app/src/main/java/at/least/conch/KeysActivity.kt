@@ -78,7 +78,7 @@ class KeysActivity : ComponentActivity() {
             if (uri != null) {
                 try {
                     val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw IllegalStateException("Cannot read file")
+                        ?: error("Cannot read file")
                     val name = uri.lastPathSegment?.substringAfterLast('/') ?: "imported"
                     KeyManager(this).import(name, bytes)
                     keys.clear()
@@ -111,7 +111,10 @@ class KeysActivity : ComponentActivity() {
             },
             floatingActionButton = {
                 ExtendedFloatingActionButton(
-                    onClick = { genName = ""; showGenerate = true },
+                    onClick = {
+                        genName = ""
+                        showGenerate = true
+                    },
                     icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                     text = { Text("Generate key") }
                 )
@@ -125,7 +128,8 @@ class KeysActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        Icons.Filled.Key, contentDescription = null,
+                        Icons.Filled.Key,
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(

@@ -22,7 +22,7 @@ class UrlDetectTest {
         assertEquals("https://example.com/some/path", TerminalView.urlInRow(emu, 0, start))
         assertEquals("https://example.com/some/path", TerminalView.urlInRow(emu, 0, (start + end) / 2))
         assertEquals("https://example.com/some/path", TerminalView.urlInRow(emu, 0, end))
-        assertNull(TerminalView.urlInRow(emu, 0, 0))   // 's' of "see" is no url
+        assertNull(TerminalView.urlInRow(emu, 0, 0)) // 's' of "see" is no url
     }
 
     @Test

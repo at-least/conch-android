@@ -14,7 +14,10 @@ class TerminalThemeTest {
             assertEquals("theme ${theme.name}", 16, theme.base16.size)
         }
         assertEquals(5, TerminalTheme.ALL.size)
-        assertEquals(listOf("Default", "Dracula", "Solarized Dark", "Nord", "Gruvbox Dark"), TerminalTheme.ALL.map { it.name })
+        assertEquals(
+            listOf("Default", "Dracula", "Solarized Dark", "Nord", "Gruvbox Dark"),
+            TerminalTheme.ALL.map { it.name }
+        )
     }
 
     @Test

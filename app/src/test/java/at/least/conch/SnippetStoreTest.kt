@@ -66,7 +66,7 @@ class SnippetStoreTest {
             Snippet(id = "s1", label = "keep", command = "a"),
             Snippet(id = "s2", label = "drop", command = "b"),
         )
-        snippets.removeAll { it.id == "s2" }   // SnippetsActivity delete pattern
+        snippets.removeAll { it.id == "s2" } // SnippetsActivity delete pattern
         store.save(snippets)
         val reloaded = SnippetStore(file).load()
         assertEquals(listOf("s1"), reloaded.map { it.id })

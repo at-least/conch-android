@@ -63,7 +63,7 @@ object ExtraKeysConfig {
 
     /** Emits the key: returns bytes to send, or null for CTRL (state toggle). */
     fun bytesFor(id: String): ByteArray? = when (id) {
-        "CTRL" -> null   // handled as a toggle by the terminal
+        "CTRL" -> null // handled as a toggle by the terminal
         "ESC" -> byteArrayOf(0x1B)
         "TAB" -> byteArrayOf(0x09)
         "UP" -> "\u001b[A".toByteArray()

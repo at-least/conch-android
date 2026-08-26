@@ -10,7 +10,6 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -66,7 +65,7 @@ class SshSessionLifecycleInteractionTest {
         }
 
         fun awaitDisconnected(timeoutMs: Long = 10_000): String {
-            awaitTrue("never got onDisconnected (reasons so far: ${reasons})", timeoutMs) {
+            awaitTrue("never got onDisconnected (reasons so far: $reasons)", timeoutMs) {
                 disconnected.get() > 0
             }
             return reasons.first()
@@ -235,7 +234,10 @@ class SshSessionLifecycleInteractionTest {
                 hostname = "127.0.0.1",
                 username = server1.user,
                 authType = Host.AUTH_PASSWORD,
-            ).apply { this.port = port; tmuxAutoAttach = true }
+            ).apply {
+                this.port = port
+                tmuxAutoAttach = true
+            }
 
             // first connection: tmux attach line goes out, session is alive
             val (s1, cb1) = newSession(host)
@@ -260,7 +262,10 @@ class SshSessionLifecycleInteractionTest {
                 hostname = "127.0.0.1",
                 username = server2.user,
                 authType = Host.AUTH_PASSWORD,
-            ).apply { this.port = port; tmuxAutoAttach = true }
+            ).apply {
+                this.port = port
+                tmuxAutoAttach = true
+            }
 
             val (s2, cb2) = newSession(host)
             s2.connect()

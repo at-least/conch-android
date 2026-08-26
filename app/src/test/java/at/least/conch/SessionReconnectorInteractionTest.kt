@@ -122,7 +122,10 @@ class SessionReconnectorInteractionTest {
         val server1 = TestSshd(fixedPort = port).start()
         store.add("127.0.0.1", port, server1.hostPublicKey)
         val host = Host(hostname = "127.0.0.1", username = server1.user, authType = Host.AUTH_PASSWORD)
-            .apply { this.port = port; tmuxAutoAttach = true }
+            .apply {
+                this.port = port
+                tmuxAutoAttach = true
+            }
 
         val listener = RecordingListener()
         val (reconnector, _) = newReconnector(host, listener)
@@ -179,7 +182,10 @@ class SessionReconnectorInteractionTest {
         try {
             store.add("127.0.0.1", server.port, server.hostPublicKey)
             val host = Host(hostname = "127.0.0.1", username = server.user, authType = Host.AUTH_PASSWORD)
-                .apply { this.port = server.port; tmuxAutoAttach = false }
+                .apply {
+                    this.port = server.port
+                    tmuxAutoAttach = false
+                }
 
             val listener = RecordingListener()
             val (reconnector, _) = newReconnector(host, listener, slowConnectMs = 400)

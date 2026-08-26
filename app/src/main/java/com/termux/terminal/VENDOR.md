@@ -9,7 +9,11 @@ Origin: https://github.com/termux/termux-app — module `terminal-emulator`
   exceptions section. Conch Android is GPL-3.0, so both readings are
   compatible. Upstream copyright headers are preserved in every file.
 - Files NOT vendored (local-PTY machinery conch does not use):
-  `JNI.java`, `TerminalSession.java`.
+  `JNI.java`. `TerminalSession.java` is replaced by a compile-only stub
+  (private constructor, never instantiated) so `TerminalSessionClient`'s
+  signatures — which take `TerminalSession` parameters — build without
+  upstream's JNI-backed implementation; conch feeds the emulator from an
+  SSH channel instead of a local PTY.
 
 ## Local modifications
 

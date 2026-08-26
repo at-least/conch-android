@@ -104,8 +104,12 @@ class BackupCodecTest {
         // appends the 16-byte tag to the ciphertext, so a blob carrying a
         // 1-byte payload plaintext is exactly 8+16+12+1+16 = 53 bytes.
         val tiny = samplePayload().copy(
-            hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(),
-            keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "",
+            hosts = emptyList(),
+            hostSecrets = emptyMap(),
+            keys = emptyList(),
+            keySecrets = emptyMap(),
+            snippets = emptyList(),
+            knownHosts = "",
         )
         val plain = BackupCodec.payloadToJson(tiny).toByteArray(Charsets.UTF_8)
         val blob = BackupCodec.encrypt(tiny, "pw".toCharArray())
@@ -151,8 +155,12 @@ class BackupCodecTest {
         // thing decrypt can reject is version=99 — this also pins the KDF
         // parameters: PBKDF2-HMAC-SHA256, 600k iterations, 256-bit key.
         val tiny = samplePayload().copy(
-            hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(),
-            keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "",
+            hosts = emptyList(),
+            hostSecrets = emptyMap(),
+            keys = emptyList(),
+            keySecrets = emptyMap(),
+            snippets = emptyList(),
+            knownHosts = "",
         )
         val json = JSONObject(BackupCodec.payloadToJson(tiny)).put("version", 99)
         val passphrase = "pw".toCharArray()

@@ -25,7 +25,7 @@ class CorruptedKeyTest {
         fun u32(): Int =
             ((bytes[pos].toInt() and 0xFF) shl 24) or ((bytes[pos + 1].toInt() and 0xFF) shl 16) or
                 ((bytes[pos + 2].toInt() and 0xFF) shl 8) or (bytes[pos + 3].toInt() and 0xFF)
-                .also { pos += 4 }
+                    .also { pos += 4 }
 
         fun str(): ByteArray {
             val len = u32()

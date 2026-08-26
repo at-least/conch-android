@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -26,8 +25,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,13 +38,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -73,6 +69,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -83,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -295,16 +293,6 @@ class TerminalActivity : FragmentActivity() {
         if (text.isNotEmpty()) terminalView?.pasteText(text)
     }
 
-    private fun openSftp() {
-        val host = this.host ?: return
-        startActivity(android.content.Intent(this, SftpActivity::class.java).putExtra("hostId", host.id))
-    }
-
-    private fun openMonitor() {
-        val host = this.host ?: return
-        startActivity(android.content.Intent(this, MonitorActivity::class.java).putExtra("hostId", host.id))
-    }
-
     // -------------------------------------------------------------- compose UI
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -359,7 +347,13 @@ class TerminalActivity : FragmentActivity() {
                             AssistChip(
                                 onClick = { tunnelConfirmVisible.value = true },
                                 label = { Text(TunnelCapsule.chipText(liveTunnelCount.value), fontSize = 12.sp) },
-                                leadingIcon = { Icon(Icons.Filled.SyncAlt, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.SyncAlt,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = Color(0xFF1B5E20),
                                     labelColor = Color(0xFFA5D6A7),
@@ -375,27 +369,42 @@ class TerminalActivity : FragmentActivity() {
                             DropdownMenuItem(
                                 text = { Text("Command palette") },
                                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                                onClick = { menuOpen = false; paletteSheetVisible.value = true }
+                                onClick = {
+                                    menuOpen = false
+                                    paletteSheetVisible.value = true
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text("Snippets") },
                                 leadingIcon = { Icon(Icons.Filled.Code, contentDescription = null) },
-                                onClick = { menuOpen = false; snippetsSheetVisible.value = true }
+                                onClick = {
+                                    menuOpen = false
+                                    snippetsSheetVisible.value = true
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text("History") },
                                 leadingIcon = { Icon(Icons.Filled.History, contentDescription = null) },
-                                onClick = { menuOpen = false; historySheetVisible.value = true }
+                                onClick = {
+                                    menuOpen = false
+                                    historySheetVisible.value = true
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text("Copy screen") },
                                 leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
-                                onClick = { menuOpen = false; copyScreen() }
+                                onClick = {
+                                    menuOpen = false
+                                    copyScreen()
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text("Paste") },
                                 leadingIcon = { Icon(Icons.Filled.ContentPaste, contentDescription = null) },
-                                onClick = { menuOpen = false; pasteIntoTerminal() }
+                                onClick = {
+                                    menuOpen = false
+                                    pasteIntoTerminal()
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text(if (keyboardRowVisible.value) "Hide extra keys" else "Show extra keys") },
@@ -411,15 +420,24 @@ class TerminalActivity : FragmentActivity() {
                             )
                             DropdownMenuItem(
                                 text = { Text("Font size up") },
-                                onClick = { menuOpen = false; terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) + 2f }
+                                onClick = {
+                                    menuOpen = false
+                                    terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) + 2f
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text("Font size down") },
-                                onClick = { menuOpen = false; terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) - 2f }
+                                onClick = {
+                                    menuOpen = false
+                                    terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) - 2f
+                                }
                             )
                             DropdownMenuItem(
                                 text = { Text("Disconnect") },
-                                onClick = { menuOpen = false; finishRequested.value = true }
+                                onClick = {
+                                    menuOpen = false
+                                    finishRequested.value = true
+                                }
                             )
                         }
                     }
@@ -526,10 +544,11 @@ class TerminalActivity : FragmentActivity() {
                 text = {
                     Column {
                         Text(
-                            if (request.isChange)
+                            if (request.isChange) {
                                 "The key reported by ${request.endpoint} differs from the recorded one. The server may have been reinstalled — or someone is intercepting the connection."
-                            else
+                            } else {
                                 "First connection to ${request.endpoint}. Trust this host?"
+                            }
                         )
                         Text(
                             "Key type: ${request.keyType}\nFingerprint:\n${request.fingerprint}",
@@ -683,8 +702,11 @@ class TerminalActivity : FragmentActivity() {
             )
             if (results.isEmpty()) {
                 Text(
-                    if (query.isBlank()) "No history yet. Commands you run are recorded here (encrypted on this device)."
-                    else "Nothing matches \"$query\".",
+                    if (query.isBlank()) {
+                        "No history yet. Commands you run are recorded here (encrypted on this device)."
+                    } else {
+                        "Nothing matches \"$query\"."
+                    },
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -771,7 +793,7 @@ class TerminalActivity : FragmentActivity() {
     @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     @Composable
     private fun ExtraKeysEditor(current: List<String>, onSave: (List<String>) -> Unit, onCancel: () -> Unit) {
-        val selected = remember { androidx.compose.runtime.mutableStateListOf(*current.toTypedArray()) }
+        val selected = remember { current.toMutableStateList() }
         ModalBottomSheet(onDismissRequest = onCancel) {
             Text(
                 "Extra keys",
@@ -894,8 +916,11 @@ class TerminalActivity : FragmentActivity() {
         val alpha = remember {
             androidx.compose.runtime.derivedStateOf {
                 val p = phase.value
-                if (p < 0.8f) 1f
-                else 0.35f + 0.65f * (1f - ((p - 0.8f) / 1.2f).coerceIn(0f, 1f))
+                if (p < 0.8f) {
+                    1f
+                } else {
+                    0.35f + 0.65f * (1f - ((p - 0.8f) / 1.2f).coerceIn(0f, 1f))
+                }
             }
         }
         return alpha.value
@@ -952,7 +977,7 @@ class TerminalActivity : FragmentActivity() {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 LinearProgressIndicator(Modifier.fillMaxWidth(0.6f))
                 Text(
-                    "Connecting…",
+                    "$label — connecting…",
                     fontSize = 13.sp,
                     color = Color(0xFF9E9E9E),
                     modifier = Modifier.padding(top = 8.dp),

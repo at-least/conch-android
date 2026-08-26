@@ -2,6 +2,13 @@
 
 ## 0.9.1 (unreleased)
 
+- Internal: codebase cleanup — dead code removed (pre-tab-era standalone
+  SFTP/Monitor launchers, a duplicated URL regex, unused state/params),
+  `error()` replaces `throw IllegalStateException`, ktlint formatting
+  applied project-wide, detekt baseline regenerated from 315 stale/legacy
+  entries down to 80 current structural ones; README/VENDOR.md doc drift
+  fixed
+
 - Internal: serialization/persistence tooling upgrade, no user-visible format
   changes (wire formats are pinned byte-equivalent by a new golden-format
   test suite):

@@ -92,15 +92,15 @@ data class Host(
     var hostname: String = "",
     var port: Int = 22,
     var username: String = "",
-    var authType: String = AUTH_PASSWORD,   // AUTH_PASSWORD | AUTH_KEY
+    var authType: String = AUTH_PASSWORD, // AUTH_PASSWORD | AUTH_KEY
     var keyId: String? = null,
-    var fontSizeSp: Float = 0f,             // 0 = app default
+    var fontSizeSp: Float = 0f, // 0 = app default
     var keepAlive: Boolean = true,
     // Default ON for newly created hosts (mobile networks drop; tmux keeps
     // the session alive server-side). HostWire decodes its own fallback of
     // false so pre-feature backups and saved hosts stay exactly as they were.
     var tmuxAutoAttach: Boolean = true,
-    var socksPort: Int = 0,                 // local SOCKS5 proxy (0 = off)
+    var socksPort: Int = 0, // local SOCKS5 proxy (0 = off)
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
     companion object {

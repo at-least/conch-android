@@ -204,7 +204,8 @@ class PortForwardInteractionTest {
 
                 out.write(byteArrayOf(5, 1, 0))
                 out.flush()
-                input.read(); input.read()
+                input.read()
+                input.read()
 
                 val host = "localhost".toByteArray()
                 val p = echo.port
@@ -223,7 +224,7 @@ class PortForwardInteractionTest {
                 var off = 0
                 while (off < got.size) {
                     val n = input.read(got, off, got.size - off)
-                    if (n < 0) fail("echo truncated after ${off} bytes")
+                    if (n < 0) fail("echo truncated after $off bytes")
                     off += n
                 }
                 assertEquals("via domain", String(got))
@@ -245,7 +246,8 @@ class PortForwardInteractionTest {
 
                 out.write(byteArrayOf(5, 1, 0))
                 out.flush()
-                input.read(); input.read()
+                input.read()
+                input.read()
 
                 // BIND (0x02) is not supported
                 out.write(byteArrayOf(5, 2, 0, 1, 127, 0, 0, 1, 0, 80))
@@ -270,7 +272,8 @@ class PortForwardInteractionTest {
 
                 out.write(byteArrayOf(5, 1, 0))
                 out.flush()
-                input.read(); input.read()
+                input.read()
+                input.read()
 
                 // port 1 on loopback: nothing listens there
                 out.write(byteArrayOf(5, 1, 0, 1, 127, 0, 0, 1, 0, 1))
@@ -294,7 +297,10 @@ class PortForwardInteractionTest {
             sock.soTimeout = 10_000
             try {
                 sock.connect(java.net.InetSocketAddress("127.0.0.1", echo.port), 10_000)
-                sock.getOutputStream().apply { write("jdk socks".toByteArray()); flush() }
+                sock.getOutputStream().apply {
+                    write("jdk socks".toByteArray())
+                    flush()
+                }
                 val got = ByteArray("jdk socks".toByteArray().size)
                 var off = 0
                 while (off < got.size) {

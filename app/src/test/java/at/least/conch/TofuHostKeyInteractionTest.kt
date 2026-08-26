@@ -175,7 +175,11 @@ class TofuHostKeyInteractionTest {
             fail("expected transport failure after rejecting changed key")
         } catch (_: Exception) {
         }
-        assertEquals("only the original entry should remain", 1, File(dir, "known_hosts").readLines().count { it.isNotBlank() })
+        assertEquals(
+            "only the original entry should remain",
+            1,
+            File(dir, "known_hosts").readLines().count { it.isNotBlank() }
+        )
     }
 
     @Test(timeout = 30_000)

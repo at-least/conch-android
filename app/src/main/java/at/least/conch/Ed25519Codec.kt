@@ -1,10 +1,10 @@
 package at.least.conch
 
-import java.security.SecureRandom
 import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator
 import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
+import java.security.SecureRandom
 
 /**
  * Pure (JVM-testable) encoding helpers for Ed25519 keys in PKCS#8 / X.509 DER,
@@ -20,7 +20,9 @@ object Ed25519Codec {
     val X509_PREFIX = hexToBytes("302a300506032b6570032100")
 
     fun hexToBytes(hex: String): ByteArray =
-        ByteArray(hex.length / 2) { i -> ((Character.digit(hex[i * 2], 16) shl 4) + Character.digit(hex[i * 2 + 1], 16)).toByte() }
+        ByteArray(
+            hex.length / 2
+        ) { i -> ((Character.digit(hex[i * 2], 16) shl 4) + Character.digit(hex[i * 2 + 1], 16)).toByte() }
 
     fun pkcs8FromSeed(seed: ByteArray): ByteArray {
         require(seed.size == 32) { "seed must be 32 bytes" }
@@ -60,7 +62,10 @@ object Ed25519Codec {
     // ------------------------------------------------- OpenSSH private key PEM
 
     private fun u32(v: Int): ByteArray = byteArrayOf(
-        (v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte()
+        (v ushr 24).toByte(),
+        (v ushr 16).toByte(),
+        (v ushr 8).toByte(),
+        v.toByte()
     )
 
     private fun sshStr(b: ByteArray): ByteArray = u32(b.size) + b

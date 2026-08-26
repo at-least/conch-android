@@ -151,7 +151,9 @@ class CommandHistoryTest {
         assertEquals(32, key.size)
         val blob = HistoryCrypto.encrypt(key, "hello")
         assertEquals("hello", HistoryCrypto.decrypt(key, blob))
-        assertNull(HistoryCrypto.decrypt(key, blob.clone().also { it[blob.size - 1] = (it.last().toInt() xor 1).toByte() }))
+        assertNull(
+            HistoryCrypto.decrypt(key, blob.clone().also { it[blob.size - 1] = (it.last().toInt() xor 1).toByte() })
+        )
         assertNotNull(HistoryCrypto.decrypt(key, blob))
     }
 
@@ -173,7 +175,10 @@ class CommandHistoryTest {
         }
         val clearer = Thread {
             val store = mk()
-            repeat(30) { store.clear(); Thread.sleep(2) }
+            repeat(30) {
+                store.clear()
+                Thread.sleep(2)
+            }
         }
         (writers + clearer).forEach { it.start() }
         (writers + clearer).forEach { it.join() }

@@ -144,8 +144,11 @@ class InputLineAssemblerTest {
     @Test
     fun `flush resets drop flag after one dropped line`() {
         val lines = assemble(
-            b("dropped"), b("\u001b[A"), byteArrayOf(0x0D), // dropped
-            b("kept"), byteArrayOf(0x0D),                   // recorded
+            b("dropped"),
+            b("\u001b[A"),
+            byteArrayOf(0x0D), // dropped
+            b("kept"),
+            byteArrayOf(0x0D), // recorded
         )
         assertEquals(listOf("kept"), lines)
     }
@@ -158,8 +161,11 @@ class InputLineAssemblerTest {
         val lines2 = assemble("😀x".toByteArray(Charsets.UTF_8), byteArrayOf(0x08, 0x08), b("y"), byteArrayOf(0x0D))
         assertEquals(listOf("y"), lines2)
         // recorded entry never contains a lone surrogate
-        for (c in lines[0]) assertFalse("lone surrogate in recorded line", Character.isSurrogate(c) &&
-            !("\uD83D\uDE00".contains(c)))
+        for (c in lines[0]) assertFalse(
+            "lone surrogate in recorded line",
+            Character.isSurrogate(c) &&
+                !("\uD83D\uDE00".contains(c))
+        )
     }
 
     @Test

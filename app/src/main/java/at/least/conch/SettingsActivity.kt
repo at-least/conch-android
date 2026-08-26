@@ -34,9 +34,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -126,7 +126,7 @@ class SettingsActivity : ComponentActivity() {
             try {
                 val blob = BackupCodec.encrypt(BackupManager(this).collect(), pass.toCharArray())
                 contentResolver.openOutputStream(uri, "wt")?.use { it.write(blob) }
-                    ?: throw IllegalStateException("Cannot write file")
+                    ?: error("Cannot write file")
                 runOnUiThread {
                     busy.value = false
                     Toast.makeText(this, "Backup exported (${blob.size} bytes)", Toast.LENGTH_LONG).show()
@@ -146,7 +146,7 @@ class SettingsActivity : ComponentActivity() {
         executor.execute {
             try {
                 val blob = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: throw IllegalStateException("Cannot read file")
+                    ?: error("Cannot read file")
                 val payload = BackupCodec.decrypt(blob, pass.toCharArray())
                 val result = BackupManager(this).restore(payload)
                 runOnUiThread {
@@ -160,12 +160,14 @@ class SettingsActivity : ComponentActivity() {
                 }
             } catch (e: Exception) {
                 val wrongPass = e is javax.crypto.AEADBadTagException || e.cause is javax.crypto.AEADBadTagException
-                if (!wrongPass) CrashReporting.report(e)   // wrong passphrases are user input, not bugs
+                if (!wrongPass) CrashReporting.report(e) // wrong passphrases are user input, not bugs
                 runOnUiThread {
                     busy.value = false
-                    val msg = if (wrongPass)
+                    val msg = if (wrongPass) {
                         "Wrong passphrase or corrupted file"
-                    else "Import failed: ${e.message}"
+                    } else {
+                        "Import failed: ${e.message}"
+                    }
                     Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 }
             }
@@ -214,10 +216,11 @@ class SettingsActivity : ComponentActivity() {
                             Column(Modifier.weight(1f)) {
                                 Text("Crash reports", fontSize = 16.sp)
                                 Text(
-                                    if (CrashReporting.isAvailable())
+                                    if (CrashReporting.isAvailable()) {
                                         "Send anonymous crash reports to the developer's self-hosted server. Host addresses, usernames and credentials are never included. Off by default."
-                                    else
-                                        "Not available in this build (no reporting endpoint compiled in).",
+                                    } else {
+                                        "Not available in this build (no reporting endpoint compiled in)."
+                                    },
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp)
@@ -281,7 +284,11 @@ class SettingsActivity : ComponentActivity() {
                         TextButton(
                             onClick = {
                                 CommandHistoryStore(this@SettingsActivity).clear()
-                                Toast.makeText(this@SettingsActivity, "Command history cleared", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    this@SettingsActivity,
+                                    "Command history cleared",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             },
                             modifier = Modifier.padding(top = 4.dp)
                         ) { Text("Clear history") }
@@ -307,10 +314,11 @@ class SettingsActivity : ComponentActivity() {
                             Column(Modifier.weight(1f)) {
                                 Text("Lock app", fontSize = 16.sp)
                                 Text(
-                                    if (AppLock.canAuthenticate(this@SettingsActivity))
+                                    if (AppLock.canAuthenticate(this@SettingsActivity)) {
                                         "Require fingerprint, face or screen lock to open Conch."
-                                    else
-                                        "No screen lock or biometrics set up on this device.",
+                                    } else {
+                                        "No screen lock or biometrics set up on this device."
+                                    },
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp)
@@ -342,11 +350,19 @@ class SettingsActivity : ComponentActivity() {
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = { exportPicker.launch("conchapp-backup.bin") }) {
-                                    Icon(Icons.Filled.FileDownload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                                    Icon(
+                                        Icons.Filled.FileDownload,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    )
                                     Text("Export")
                                 }
                                 OutlinedButton(onClick = { importPicker.launch(arrayOf("*/*")) }) {
-                                    Icon(Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                                    Icon(
+                                        Icons.Filled.FileUpload,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    )
                                     Text("Import")
                                 }
                             }
@@ -368,10 +384,11 @@ class SettingsActivity : ComponentActivity() {
                 text = {
                     Column {
                         Text(
-                            if (passphraseModeExport)
+                            if (passphraseModeExport) {
                                 "Choose a passphrase to encrypt the backup (min 6 characters). You will need it to restore."
-                            else
+                            } else {
                                 "Enter the passphrase this backup was encrypted with."
+                            }
                         )
                         OutlinedTextField(
                             value = passphraseText.value,
@@ -386,12 +403,14 @@ class SettingsActivity : ComponentActivity() {
                     }
                 },
                 confirmButton = { TextButton(onClick = { confirmPassphrase() }) { Text("OK") } },
-                dismissButton = { TextButton(onClick = {
-                    showPassphrase.value = false
-                    passphraseText.value = ""
-                    pendingExport = null
-                    pendingImport = null
-                }) { Text("Cancel") } }
+                dismissButton = {
+                    TextButton(onClick = {
+                        showPassphrase.value = false
+                        passphraseText.value = ""
+                        pendingExport = null
+                        pendingImport = null
+                    }) { Text("Cancel") }
+                }
             )
         }
     }

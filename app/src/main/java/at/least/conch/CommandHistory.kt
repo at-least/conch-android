@@ -78,7 +78,7 @@ class CommandHistoryStore(
             File(context.filesDir, FILE_NAME).takeIf { it.exists() }?.takeIf { it.length() > 0 }?.readBytes()
         },
         writeFile = { bytes -> File(context.filesDir, FILE_NAME).writeBytes(bytes) },
-        key = loadOrCreateKey(context),
+        key = loadOrCreateKey(),
     )
 
     fun load(): MutableList<HistoryEntry> = synchronized(FILE_LOCK) {
@@ -150,7 +150,7 @@ class CommandHistoryStore(
             }
         }
 
-        private fun loadOrCreateKey(context: Context): ByteArray {
+        private fun loadOrCreateKey(): ByteArray {
             SecretsStore.get(KEY_ALIAS)?.let { stored ->
                 return try {
                     android.util.Base64.decode(stored, android.util.Base64.NO_WRAP)
@@ -218,17 +218,38 @@ class InputLineAssembler(private val onLine: (String) -> Unit) {
         }
         if (b >= 0x80) {
             when {
-                b and 0xE0 == 0xC0 -> { utfAccum = b and 0x1F; utfNeed = 1 }
-                b and 0xF0 == 0xE0 -> { utfAccum = b and 0x0F; utfNeed = 2 }
-                b and 0xF8 == 0xF0 -> { utfAccum = b and 0x07; utfNeed = 3 }
+                b and 0xE0 == 0xC0 -> {
+                    utfAccum = b and 0x1F
+                    utfNeed = 1
+                }
+                b and 0xF0 == 0xE0 -> {
+                    utfAccum = b and 0x0F
+                    utfNeed = 2
+                }
+                b and 0xF8 == 0xF0 -> {
+                    utfAccum = b and 0x07
+                    utfNeed = 3
+                }
                 else -> Unit // invalid lead byte, drop
             }
             return
         }
-        if (csi) { handleCsiByte(b); return }
-        if (esc) { handleEscByte(b); return }
-        if (pasteCsi) { handlePasteCsiByte(b); return }
-        if (pasteEsc) { handlePasteEscByte(b); return }
+        if (csi) {
+            handleCsiByte(b)
+            return
+        }
+        if (esc) {
+            handleEscByte(b)
+            return
+        }
+        if (pasteCsi) {
+            handlePasteCsiByte(b)
+            return
+        }
+        if (pasteEsc) {
+            handlePasteEscByte(b)
+            return
+        }
         when (b) {
             0x1B -> {
                 if (inPaste) pasteEsc = true else esc = true
@@ -236,14 +257,32 @@ class InputLineAssembler(private val onLine: (String) -> Unit) {
             0x0D, 0x0A ->
                 if (inPaste) {
                     // normalize newlines inside a paste blob: CRLF -> one LF
-                    if (b == 0x0D) { appendPrintableChar('\n'); pendingCr = true }
-                    else { if (!pendingCr) appendPrintableChar('\n'); pendingCr = false }
-                } else flush()
+                    if (b == 0x0D) {
+                        appendPrintableChar('\n')
+                        pendingCr = true
+                    } else {
+                        if (!pendingCr) appendPrintableChar('\n')
+                        pendingCr = false
+                    }
+                } else {
+                    flush()
+                }
             0x08, 0x7F ->
                 if (inPaste) appendPrintableChar(b.toChar()) else deleteLast()
             0x15 -> if (inPaste) appendPrintableChar(b.toChar()) else buf.clear() // Ctrl-U: readline kill line
-            0x03 -> if (inPaste) appendPrintableChar(b.toChar()) else { buf.clear(); dropPending = false } // Ctrl-C: abort, start fresh
-            0x09 -> if (inPaste) appendPrintableChar(b.toChar()) else dropPending = true // Tab: completion, record is a prefix
+            0x03 -> if (inPaste) {
+                appendPrintableChar(b.toChar())
+            } else {
+                buf.clear()
+                dropPending = false
+            } // Ctrl-C: abort, start fresh
+            0x09 -> if (inPaste) {
+                appendPrintableChar(
+                    b.toChar()
+                )
+            } else {
+                dropPending = true // Tab: completion, record is a prefix
+            }
             else -> if (b < 0x20) {
                 if (inPaste) appendPrintableChar(b.toChar())
             } else {
@@ -266,7 +305,10 @@ class InputLineAssembler(private val onLine: (String) -> Unit) {
 
     private fun handleCsiByte(b: Int) {
         when {
-            b == 0x1B -> { csi = false; esc = true }
+            b == 0x1B -> {
+                csi = false
+                esc = true
+            }
             b in 0x30..0x3F -> csiBuf.append(b.toChar()) // params + private markers
             b in 0x40..0x7E -> {
                 csi = false
@@ -277,7 +319,10 @@ class InputLineAssembler(private val onLine: (String) -> Unit) {
                     else -> dropPending = true // cursor motion / function key
                 }
             }
-            else -> { csi = false; dropPending = true } // control char mid-sequence
+            else -> {
+                csi = false
+                dropPending = true
+            } // control char mid-sequence
         }
     }
 

@@ -4,7 +4,6 @@ import net.schmizz.sshj.SSHClient
 import org.apache.sshd.common.config.keys.KeyUtils
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory
 import org.apache.sshd.common.keyprovider.KeyPairProvider
-import org.apache.sshd.sftp.server.SftpSubsystemFactory
 import org.apache.sshd.server.Environment
 import org.apache.sshd.server.ExitCallback
 import org.apache.sshd.server.Signal
@@ -17,6 +16,7 @@ import org.apache.sshd.server.command.Command
 import org.apache.sshd.server.command.CommandFactory
 import org.apache.sshd.server.forward.AcceptAllForwardingFilter
 import org.apache.sshd.server.shell.ShellFactory
+import org.apache.sshd.sftp.server.SftpSubsystemFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.junit.Assert.assertTrue
 import java.io.File
@@ -25,7 +25,6 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
-import java.net.Socket
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PublicKey
@@ -227,7 +226,9 @@ class TestSshd(
             ptyModesAtStart = HashMap(env.ptyModes)
             env.addSignalListener(
                 SignalListener { _, _ ->
-                    windowSizes.add((env.env[Environment.ENV_COLUMNS] ?: "?") to (env.env[Environment.ENV_LINES] ?: "?"))
+                    windowSizes.add(
+                        (env.env[Environment.ENV_COLUMNS] ?: "?") to (env.env[Environment.ENV_LINES] ?: "?")
+                    )
                 },
                 Signal.WINCH,
             )

@@ -14,7 +14,7 @@ class ReconnectPolicyTest {
         assertEquals(4_000L, p.delayForAttempt(3))
         assertEquals(8_000L, p.delayForAttempt(4))
         assertEquals(16_000L, p.delayForAttempt(5))
-        assertEquals(30_000L, p.delayForAttempt(6))  // 32s would exceed the cap
+        assertEquals(30_000L, p.delayForAttempt(6)) // 32s would exceed the cap
         assertEquals(30_000L, p.delayForAttempt(7))
         assertEquals(30_000L, p.delayForAttempt(999))
     }

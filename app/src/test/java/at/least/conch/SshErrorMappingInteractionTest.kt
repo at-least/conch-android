@@ -34,7 +34,10 @@ class SshErrorMappingInteractionTest {
             fail("expected connect to fail")
         } catch (e: Exception) {
             val msg = SshConnectionFactory.describeError(e)
-            assertTrue("unexpected mapping: $msg (from ${e.javaClass.simpleName}: ${e.message})", msg.startsWith("Connection refused"))
+            assertTrue(
+                "unexpected mapping: $msg (from ${e.javaClass.simpleName}: ${e.message})",
+                msg.startsWith("Connection refused")
+            )
         }
     }
 

@@ -179,16 +179,20 @@ class MonitorActivity : ComponentActivity() {
 
                 snap?.let { s ->
                     MetricCard(
-                        "CPU", "%.1f%%".format(s.cpuPercent), s.cpuPercent / 100.0,
+                        "CPU",
+                        "%.1f%%".format(s.cpuPercent),
+                        s.cpuPercent / 100.0,
                         "load %.2f %.2f %.2f".format(s.load1, s.load5, s.load15)
                     )
                     MetricCard(
                         "Memory",
                         "${formatBytes(s.memUsedBytes)} / ${formatBytes(s.memTotalBytes)}",
                         ratio(s.memUsedBytes, s.memTotalBytes),
-                        if (s.swapTotalBytes > 0)
+                        if (s.swapTotalBytes > 0) {
                             "swap ${formatBytes(s.swapUsedBytes)} / ${formatBytes(s.swapTotalBytes)}"
-                        else "no swap"
+                        } else {
+                            "no swap"
+                        }
                     )
                     MetricCard(
                         "Disk (/)",

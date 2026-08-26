@@ -197,9 +197,12 @@ class GoldenFormatTest {
             hostSecrets = mapOf("h1" to "s3cret-パスワード🔑", "h2" to ""),
             keys = listOf(
                 KeyWire(
-                    id = "k1", name = "my-phone", algorithm = "ssh-ed25519",
+                    id = "k1",
+                    name = "my-phone",
+                    algorithm = "ssh-ed25519",
                     createdAt = 1735689600123L,
-                    publicLine = "ssh-ed25519 AAAA… my-phone", fingerprint = "SHA256:xxx",
+                    publicLine = "ssh-ed25519 AAAA… my-phone",
+                    fingerprint = "SHA256:xxx",
                 )
             ),
             keySecrets = mapOf("k1" to "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n"),

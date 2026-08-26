@@ -1,6 +1,5 @@
 package at.least.conch
 
-import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
@@ -164,16 +162,20 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
 
         snapshot?.let { s ->
             MetricCard(
-                "CPU", "%.1f%%".format(s.cpuPercent), s.cpuPercent / 100.0,
+                "CPU",
+                "%.1f%%".format(s.cpuPercent),
+                s.cpuPercent / 100.0,
                 "load %.2f %.2f %.2f".format(s.load1, s.load5, s.load15)
             )
             MetricCard(
                 "Memory",
                 "${formatBytes(s.memUsedBytes)} / ${formatBytes(s.memTotalBytes)}",
                 ratio(s.memUsedBytes, s.memTotalBytes),
-                if (s.swapTotalBytes > 0)
+                if (s.swapTotalBytes > 0) {
                     "swap ${formatBytes(s.swapUsedBytes)} / ${formatBytes(s.swapTotalBytes)}"
-                else "no swap"
+                } else {
+                    "no swap"
+                }
             )
             MetricCard(
                 "Disk (/)",
@@ -206,9 +208,17 @@ private fun MetricCard(title: String, value: String, progress: Double?, footnote
             Text(title, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, fontSize = 22.sp, fontFamily = FontFamily.Monospace)
             progress?.let {
-                LinearProgressIndicator(progress = { it.toFloat() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                LinearProgressIndicator(
+                    progress = { it.toFloat() },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
             }
-            Text(footnote, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            Text(
+                footnote,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
     }
 }
@@ -280,15 +290,22 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize()) {
         status?.let {
             Text(
-                it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp,
+                it,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         LazyColumn(Modifier.weight(1f)) {
             items(containers, key = { it.id }) { c ->
-                ContainerRow(c, onTap = { showLogs(c) }, onStop = { action(c, "stop") },
-                    onStart = { action(c, "start") }, onRestart = { action(c, "restart") }, onLogs = { showLogs(c) })
+                ContainerRow(
+                    c,
+                    onStop = { action(c, "stop") },
+                    onStart = { action(c, "start") },
+                    onRestart = { action(c, "restart") },
+                    onLogs = { showLogs(c) }
+                )
             }
         }
     }
@@ -302,8 +319,11 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             title = { Text("logs: ${c.names}") },
             text = {
                 Text(
-                    logsText, fontFamily = FontFamily.Monospace, fontSize = 11.sp,
-                    maxLines = 20, overflow = TextOverflow.Ellipsis,
+                    logsText,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    maxLines = 20,
+                    overflow = TextOverflow.Ellipsis,
                 )
             },
             confirmButton = { TextButton(onClick = { logsFor = null }) { Text("Close") } }
@@ -315,7 +335,6 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
 @Composable
 private fun ContainerRow(
     c: DockerParser.Container,
-    onTap: () -> Unit,
     onStop: () -> Unit,
     onStart: () -> Unit,
     onRestart: () -> Unit,
@@ -339,12 +358,33 @@ private fun ContainerRow(
         }
     }
     androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-        androidx.compose.material3.DropdownMenuItem(text = { Text("Logs") }, onClick = { menuOpen = false; onLogs() })
+        androidx.compose.material3.DropdownMenuItem(text = { Text("Logs") }, onClick = {
+            menuOpen = false
+            onLogs()
+        })
         if (running) {
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Stop") }, onClick = { menuOpen = false; onStop() })
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Restart") }, onClick = { menuOpen = false; onRestart() })
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Stop") },
+                onClick = {
+                    menuOpen = false
+                    onStop()
+                }
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Restart") },
+                onClick = {
+                    menuOpen = false
+                    onRestart()
+                }
+            )
         } else {
-            androidx.compose.material3.DropdownMenuItem(text = { Text("Start") }, onClick = { menuOpen = false; onStart() })
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Start") },
+                onClick = {
+                    menuOpen = false
+                    onStart()
+                }
+            )
         }
     }
 }
@@ -413,8 +453,11 @@ fun SftpTab(
                         .let { raw -> sortEntries(raw, sortMode, sortDescending) }
                         .map {
                             SftpEntry(
-                                name = it.name, path = it.path, isDir = it.isDirectory,
-                                size = it.attributes.size, mtime = it.attributes.mtime * 1000L,
+                                name = it.name,
+                                path = it.path,
+                                isDir = it.isDirectory,
+                                size = it.attributes.size,
+                                mtime = it.attributes.mtime * 1000L,
                             )
                         }
                 } catch (e: Exception) {
@@ -443,19 +486,41 @@ fun SftpTab(
 
     fun cycleSort() {
         val next = when {
-            sortMode == 0 && !sortDescending -> { sortDescending = true; "Name ↓" }
-            sortMode == 0 -> { sortMode = 1; sortDescending = false; "Size ↑" }
-            sortMode == 1 && !sortDescending -> { sortDescending = true; "Size ↓" }
-            sortMode == 1 -> { sortMode = 2; sortDescending = false; "Time ↑" }
-            sortMode == 2 && !sortDescending -> { sortDescending = true; "Time ↓" }
-            else -> { sortMode = 0; sortDescending = false; "Name ↑" }
+            sortMode == 0 && !sortDescending -> {
+                sortDescending = true
+                "Name ↓"
+            }
+            sortMode == 0 -> {
+                sortMode = 1
+                sortDescending = false
+                "Size ↑"
+            }
+            sortMode == 1 && !sortDescending -> {
+                sortDescending = true
+                "Size ↓"
+            }
+            sortMode == 1 -> {
+                sortMode = 2
+                sortDescending = false
+                "Time ↑"
+            }
+            sortMode == 2 && !sortDescending -> {
+                sortDescending = true
+                "Time ↓"
+            }
+            else -> {
+                sortMode = 0
+                sortDescending = false
+                "Name ↑"
+            }
         }
         sortLabel = next
     }
 
     fun download(entry: SftpEntry) {
         val sftp = sftp ?: return
-        busy = true; status = "Downloading ${entry.name}…"
+        busy = true
+        status = "Downloading ${entry.name}…"
         scope.launch {
             val msg = withContext(Dispatchers.IO) {
                 try {
@@ -463,16 +528,19 @@ fun SftpTab(
                     sftp.get(entry.path, local.absolutePath)
                     "Downloaded to: ${local.absolutePath}"
                 } catch (e: Exception) {
-                    CrashReporting.report(e); "Download failed: ${e.message}"
+                    CrashReporting.report(e)
+                    "Download failed: ${e.message}"
                 }
             }
-            busy = false; status = msg
+            busy = false
+            status = msg
         }
     }
 
     fun upload(uri: Uri) {
         val sftp = sftp ?: return
-        busy = true; status = "Uploading…"
+        busy = true
+        status = "Uploading…"
         scope.launch {
             val msg = withContext(Dispatchers.IO) {
                 var tmp: File? = null
@@ -481,18 +549,20 @@ fun SftpTab(
                     tmp = File.createTempFile("up", null, context.cacheDir).also { t ->
                         context.contentResolver.openInputStream(uri)?.use { input ->
                             t.outputStream().use { input.copyTo(it) }
-                        } ?: throw IllegalStateException("Cannot read file")
+                        } ?: error("Cannot read file")
                     }
                     val remote = path.trimEnd('/') + "/" + name
                     sftp.getFileTransfer().upload(tmp.absolutePath, remote)
                     "Uploaded: $name"
                 } catch (e: Exception) {
-                    CrashReporting.report(e); "Upload failed: ${e.message}"
+                    CrashReporting.report(e)
+                    "Upload failed: ${e.message}"
                 } finally {
                     tmp?.delete()
                 }
             }
-            busy = false; status = msg
+            busy = false
+            status = msg
             refresh()
         }
     }
@@ -506,10 +576,12 @@ fun SftpTab(
                     if (entry.isDir) sftp.rmdir(entry.path) else sftp.rm(entry.path)
                     "Deleted ${entry.name}"
                 } catch (e: Exception) {
-                    CrashReporting.report(e); "Delete failed: ${e.message}"
+                    CrashReporting.report(e)
+                    "Delete failed: ${e.message}"
                 }
             }
-            busy = false; status = msg
+            busy = false
+            status = msg
             refresh()
         }
     }
@@ -524,10 +596,12 @@ fun SftpTab(
                     sftp.rename(entry.path, "$parent/$newName")
                     null
                 } catch (e: Exception) {
-                    CrashReporting.report(e); "Rename failed: ${e.message}"
+                    CrashReporting.report(e)
+                    "Rename failed: ${e.message}"
                 }
             }
-            busy = false; status = msg
+            busy = false
+            status = msg
             refresh()
         }
     }
@@ -542,10 +616,12 @@ fun SftpTab(
                     sftp.open(remote, java.util.Collections.singleton(net.schmizz.sshj.sftp.OpenMode.CREAT)).close()
                     null
                 } catch (e: Exception) {
-                    CrashReporting.report(e); "Create failed: ${e.message}"
+                    CrashReporting.report(e)
+                    "Create failed: ${e.message}"
                 }
             }
-            busy = false; status = msg
+            busy = false
+            status = msg
             refresh()
         }
     }
@@ -559,10 +635,12 @@ fun SftpTab(
                     sftp.mkdir(path.trimEnd('/') + "/" + name)
                     null
                 } catch (e: Exception) {
-                    CrashReporting.report(e); "Create failed: ${e.message}"
+                    CrashReporting.report(e)
+                    "Create failed: ${e.message}"
                 }
             }
-            busy = false; status = msg
+            busy = false
+            status = msg
             refresh()
         }
     }
@@ -594,8 +672,11 @@ fun SftpTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                path, fontFamily = FontFamily.Monospace, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                path,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
             TextButton(onClick = { cycleSort() }) { Text(sortLabel, fontSize = 13.sp) }
             androidx.compose.material3.IconButton(onClick = { goUp() }, enabled = path != "/") {
@@ -607,15 +688,23 @@ fun SftpTab(
         }
         status?.let {
             Text(
-                it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                it,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
             )
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         Row(Modifier.padding(horizontal = 12.dp, vertical = 2.dp)) {
             TextButton(onClick = { uploadLauncher.launch(arrayOf("*/*")) }) { Text("Upload file") }
-            TextButton(onClick = { newFileText = ""; showNewFile = true }) { Text("New file") }
-            TextButton(onClick = { mkdirText = ""; showMkdir = true }) { Text("New folder") }
+            TextButton(onClick = {
+                newFileText = ""
+                showNewFile = true
+            }) { Text("New file") }
+            TextButton(onClick = {
+                mkdirText = ""
+                showMkdir = true
+            }) { Text("New folder") }
         }
         LazyColumn(Modifier.weight(1f)) {
             items(entries, key = { it.path }) { entry ->
@@ -644,10 +733,22 @@ fun SftpTab(
             confirmButton = {
                 Row {
                     if (!entry.isDir) {
-                        TextButton(onClick = { actionEntry = null; download(entry) }) { Text("Download") }
+                        TextButton(onClick = {
+                            actionEntry = null
+                            download(entry)
+                        }) { Text("Download") }
                     }
-                    TextButton(onClick = { actionEntry = null; renameText = entry.name; showRename = entry }) { Text("Rename") }
-                    TextButton(onClick = { actionEntry = null; delete(entry) }) {
+                    TextButton(
+                        onClick = {
+                            actionEntry = null
+                            renameText = entry.name
+                            showRename = entry
+                        }
+                    ) { Text("Rename") }
+                    TextButton(onClick = {
+                        actionEntry = null
+                        delete(entry)
+                    }) {
                         Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -721,7 +822,8 @@ private fun EntryRow(entry: SftpEntry, onClick: () -> Unit, onLongClick: () -> U
                 Text(entry.name, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     if (entry.isDir) "Directory" else formatSize(entry.size),
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

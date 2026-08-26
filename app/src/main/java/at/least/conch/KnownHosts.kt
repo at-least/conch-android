@@ -120,8 +120,10 @@ class KnownHostsStore(filesDir: File) {
                 ((blob[2].toInt() and 0xFF) shl 8) or (blob[3].toInt() and 0xFF)
             if (len < 4 || len > blob.size - 4) return false
             val alg = String(blob, 4, len, Charsets.US_ASCII)
-            return (alg.startsWith("ssh-") || alg.startsWith("ecdsa-") ||
-                alg.startsWith("sk-ssh-") || alg.startsWith("x509v3-")) &&
+            return (
+                alg.startsWith("ssh-") || alg.startsWith("ecdsa-") ||
+                    alg.startsWith("sk-ssh-") || alg.startsWith("x509v3-")
+                ) &&
                 alg.none { it.code < 32 || it.code > 126 }
         }
     }

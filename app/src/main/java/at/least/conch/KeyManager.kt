@@ -15,10 +15,10 @@ import java.util.UUID
 data class SshKeyInfo(
     val id: String,
     val name: String,
-    val algorithm: String,     // e.g. ssh-ed25519, ssh-rsa
+    val algorithm: String, // e.g. ssh-ed25519, ssh-rsa
     val createdAt: Long,
-    val publicLine: String,    // authorized_keys line
-    val fingerprint: String,   // SHA256:xxx
+    val publicLine: String, // authorized_keys line
+    val fingerprint: String, // SHA256:xxx
 )
 
 /**
@@ -107,8 +107,12 @@ class KeyManager(private val context: Context) {
                 else -> null
             }
             return persist(
-                name, type.toString(), privPkcs8, publicPoint,
-                ed25519Seed = edSeed, fallbackPublicKey = publicKey,
+                name,
+                type.toString(),
+                privPkcs8,
+                publicPoint,
+                ed25519Seed = edSeed,
+                fallbackPublicKey = publicKey,
             )
         } finally {
             tmp.delete()
@@ -170,7 +174,7 @@ class KeyManager(private val context: Context) {
     /** Loads the private key (decrypting at rest) into an sshj KeyProvider. */
     fun loadKeyProvider(client: SSHClient, id: String): KeyProvider {
         val pem = SecretsStore.get("key-priv:$id")
-            ?: throw IllegalStateException("Key data not found")
+            ?: error("Key data not found")
         val tmp = File.createTempFile("conch", ".key", context.cacheDir)
         try {
             tmp.writeText(pem)

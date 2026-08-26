@@ -40,7 +40,7 @@ class CrashReportingWiringRobolectricTest {
     @Test
     fun `enabled toggle alone stays inert without a compiled dsn`() {
         CrashReporting.setEnabled(true)
-        assertFalse(CrashReporting.isEnabled())   // isAvailable() gates the SDK
+        assertFalse(CrashReporting.isEnabled()) // isAvailable() gates the SDK
     }
 
     @Test

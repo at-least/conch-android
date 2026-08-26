@@ -1,12 +1,12 @@
 package at.least.conch
 
 import com.termux.terminal.TerminalBuffer
-import com.termux.terminal.TerminalEmulator as Engine
 import com.termux.terminal.TerminalOutput
 import com.termux.terminal.TerminalRow
 import com.termux.terminal.TerminalSessionClient
 import com.termux.terminal.TextStyle
 import com.termux.terminal.WcWidth
+import com.termux.terminal.TerminalEmulator as Engine
 
 /**
  * VT100 / xterm terminal emulator facade over the vendored Termux engine

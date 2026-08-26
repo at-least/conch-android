@@ -69,19 +69,22 @@ class SshSession(
     private val connector: (Host, KeyPrompt?) -> SSHClient = connector
         ?: { h, p ->
             SshConnectionFactory.connect(
-                context ?: throw IllegalStateException("context required for default connector"),
+                context ?: error("context required for default connector"),
                 h,
                 p,
             )
         }
+
     @Volatile
     private var client: SSHClient? = null
+
     @Volatile
     private var session: Session? = null
     private var shell: Session.Shell? = null
     private var shellOut: OutputStream? = null
     private val forwarderSockets = java.util.Collections.synchronizedList(mutableListOf<ServerSocket>())
     private val forwarderThreads = java.util.Collections.synchronizedList(mutableListOf<Thread>())
+
     @Volatile
     private var socksProxy: SocksProxy? = null
     private val closed = AtomicBoolean(false)
@@ -203,7 +206,10 @@ class SshSession(
         try {
             writerExecutor.execute {
                 try {
-                    synchronized(out) { out.write(data); out.flush() }
+                    synchronized(out) {
+                        out.write(data)
+                        out.flush()
+                    }
                 } catch (_: IOException) {
                 }
             }

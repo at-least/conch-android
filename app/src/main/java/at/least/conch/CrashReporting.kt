@@ -2,8 +2,8 @@ package at.least.conch
 
 import android.content.Context
 import io.sentry.Sentry
-import io.sentry.android.core.SentryAndroid
 import io.sentry.SentryOptions
+import io.sentry.android.core.SentryAndroid
 
 /**
  * Opt-in crash reporting via a self-hosted Sentry server.

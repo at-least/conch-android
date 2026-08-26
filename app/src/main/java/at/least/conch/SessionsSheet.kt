@@ -74,7 +74,9 @@ fun SessionsSheet(
                                 live.disconnect()
                                 sessions = LiveSessions.all()
                                 true
-                            } else false
+                            } else {
+                                false
+                            }
                         }
                     )
                     SwipeToDismissBox(

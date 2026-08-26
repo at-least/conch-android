@@ -25,10 +25,10 @@ class TerminalReplayTest {
     fun `fresh attach renders the pane through the alternate screen`() {
         val emu = newEmu()
         // what the PTY actually delivers on connect + tmuxAutoAttach:
-        emu.feed("user@srv ~ % ")                                   // prompt
-        emu.feed("COLORTERM=truecolor tmux new -A -s conch\r\n")    // PTY echo of our line
-        emu.feed("\u001b[?1049h\u001b[H\u001b[2J")                  // tmux enters alt screen, clears
-        emu.feed("CONCH-FIX1\r\n")                                  // pane content
+        emu.feed("user@srv ~ % ") // prompt
+        emu.feed("COLORTERM=truecolor tmux new -A -s conch\r\n") // PTY echo of our line
+        emu.feed("\u001b[?1049h\u001b[H\u001b[2J") // tmux enters alt screen, clears
+        emu.feed("CONCH-FIX1\r\n") // pane content
 
         // active (alt) screen: marker visible, nothing else
         assertEquals("CONCH-FIX1", emu.getRowText(0).trim())

@@ -155,11 +155,10 @@ TOFU accept/reject, and reconnect-after-drop.
 
 ## Development roadmap
 
-[PLAN.md](PLAN.md) tracks the mobile-first redesign in value order
-(① reconnect + tmux default ✅ → ② pull-down command panel → ③ gesture
-strip + modifier chips → ④ card tabs), gated by the hypotheses in
-[POC.md](POC.md). Both are part of the repo, one per platform — the iOS
-equivalents live in [conch-ios](https://github.com/at-least/conch-ios).
+Active work is gated by the hypotheses in [POC.md](POC.md) — each must run
+its `verify` command in this repo and paste real output before
+implementation work is committed. The iOS equivalents live in
+[conch-ios](https://github.com/at-least/conch-ios).
 
 ## Privacy
 

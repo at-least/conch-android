@@ -52,7 +52,9 @@ class SshConnectAuthInteractionTest {
     fun `wrong password fails with auth error`() {
         try {
             connectTrusted(
-                server, KnownHostsStore(dir), host(Host.AUTH_PASSWORD),
+                server,
+                KnownHostsStore(dir),
+                host(Host.AUTH_PASSWORD),
                 password = "wrong-password",
             )
             fail("expected UserAuthException")
@@ -89,7 +91,8 @@ class SshConnectAuthInteractionTest {
             val keyServer = TestSshd(password = null, authorizedKeys = listOf(key.publicKey)).start()
             try {
                 val ssh = connectTrusted(
-                    keyServer, KnownHostsStore(dir),
+                    keyServer,
+                    KnownHostsStore(dir),
                     host(Host.AUTH_KEY).apply { keyId = "k1" },
                     keyProvider = { s, _ -> s.loadKeys(key.file.absolutePath) },
                 )

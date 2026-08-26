@@ -1,12 +1,12 @@
 package at.least.conch
 
 import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.connection.channel.direct.DirectConnection
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -42,7 +42,10 @@ class SocksProxy(private val client: SSHClient) {
                     }
                 }.apply { isDaemon = true }.start()
             }
-        }.apply { isDaemon = true; name = "socks-accept" }
+        }.apply {
+            isDaemon = true
+            name = "socks-accept"
+        }
         acceptThread?.start()
         return ss.localPort
     }
@@ -72,30 +75,43 @@ class SocksProxy(private val client: SSHClient) {
         val cmd = input.read()
         input.read() // RSV
         val atyp = input.read()
-        if (cmd != 1) {   // only CONNECT
+        if (cmd != 1) { // only CONNECT
             reply(output, 0x07)
             return
         }
         val host = when (atyp) {
             0x01 -> {
-                val b = ByteArray(4); readFully(input, b)
+                val b = ByteArray(4)
+                readFully(input, b)
                 b.joinToString(".") { (it.toInt() and 0xFF).toString() }
             }
             0x03 -> {
-                val len = input.read(); val b = ByteArray(len); readFully(input, b)
+                val len = input.read()
+                val b = ByteArray(len)
+                readFully(input, b)
                 String(b)
             }
             0x04 -> {
-                val b = ByteArray(16); readFully(input, b)
+                val b = ByteArray(16)
+                readFully(input, b)
                 // build ipv6 text
                 buildString {
                     for (i in 0 until 8) {
                         if (i > 0) append(':')
-                        append(String.format("%x", ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF)))
+                        append(
+                            String.format(
+                                Locale.ROOT,
+                                "%x",
+                                ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF)
+                            )
+                        )
                     }
                 }
             }
-            else -> { reply(output, 0x08); return }
+            else -> {
+                reply(output, 0x08)
+                return
+            }
         }
         val portHi = input.read()
         val portLo = input.read()
@@ -105,10 +121,10 @@ class SocksProxy(private val client: SSHClient) {
         val chan = try {
             client.newDirectConnection(host, port)
         } catch (_: Exception) {
-            reply(output, 0x04)   // host unreachable
+            reply(output, 0x04) // host unreachable
             return
         }
-        reply(output, 0x00)       // succeeded
+        reply(output, 0x00) // succeeded
 
         // bridge both directions; closing one side closes the other
         val t1 = pump(sock.getInputStream(), chan.outputStream)
@@ -150,5 +166,8 @@ class SocksProxy(private val client: SSHClient) {
                 // signal EOF so the other side's read() unblocks
                 runCatching { (to as? java.io.Closeable)?.close() }
             }
-        }.apply { isDaemon = true; start() }
+        }.apply {
+            isDaemon = true
+            start()
+        }
 }

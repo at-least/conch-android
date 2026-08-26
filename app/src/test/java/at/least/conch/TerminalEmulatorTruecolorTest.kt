@@ -2,7 +2,6 @@ package at.least.conch
 
 import com.termux.terminal.TextStyle
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Truecolor (SGR 38;2 / 48;2) pins against the vendored Termux engine. */
@@ -36,9 +35,9 @@ class TerminalEmulatorTruecolorTest {
     fun `mixed palette and truecolor coexist`() {
         val emu = TerminalEmulator(cols = 10, rows = 2)
         emu.feed("\u001b[31mR\u001b[38;2;1;2;3mT\u001b[34mB")
-        assertEquals(1, TextStyle.decodeForeColor(styleAt0(emu, 0)))       // palette red
+        assertEquals(1, TextStyle.decodeForeColor(styleAt0(emu, 0))) // palette red
         assertEquals(0xFF010203.toInt(), TextStyle.decodeForeColor(styleAt0(emu, 1))) // truecolor
-        assertEquals(4, TextStyle.decodeForeColor(styleAt0(emu, 2)))       // palette blue
+        assertEquals(4, TextStyle.decodeForeColor(styleAt0(emu, 2))) // palette blue
     }
 
     @Test

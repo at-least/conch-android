@@ -4,8 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.nio.file.Files
 
 /**
  * BackupManager merge semantics (iOS BackupCodecTests
@@ -21,15 +19,19 @@ import java.nio.file.Files
 class BackupManagerMergeTest {
 
     private fun host(id: String, alias: String) = Host(
-        id = id, alias = alias, hostname = "$id.example.com",
-        port = 22, username = "user", authType = "PASSWORD",
+        id = id,
+        alias = alias,
+        hostname = "$id.example.com",
+        port = 22,
+        username = "user",
+        authType = "PASSWORD",
     )
 
     @Test
     fun `existing host id is kept verbatim and only new ids append`() {
         val existing = listOf(host("h1", "old-alias"))
         val incoming = listOf(
-            host("h1", "EDITED-alias"),   // same id — must NOT overwrite
+            host("h1", "EDITED-alias"), // same id — must NOT overwrite
             host("h2", "new-host"),
         )
         val (merged, added) = BackupManager.mergeHosts(existing, incoming)
@@ -51,10 +53,10 @@ class BackupManagerMergeTest {
     @Test
     fun `key import skips known ids and keys without their private half`() {
         val incoming = listOf(
-            KeyWire("k1", "n", "ssh-ed25519", 0L, "pub", "fp"),   // already known
-            KeyWire("k2", "n", "ssh-ed25519", 0L, "pub", "fp"),   // no pem — useless
-            KeyWire("", "n", "ssh-ed25519", 0L, "pub", "fp"),     // no id
-            KeyWire("k3", "n", "ssh-ed25519", 0L, "pub", "fp"),   // good
+            KeyWire("k1", "n", "ssh-ed25519", 0L, "pub", "fp"), // already known
+            KeyWire("k2", "n", "ssh-ed25519", 0L, "pub", "fp"), // no pem — useless
+            KeyWire("", "n", "ssh-ed25519", 0L, "pub", "fp"), // no id
+            KeyWire("k3", "n", "ssh-ed25519", 0L, "pub", "fp"), // good
         )
         val secrets = mapOf("k1" to "PEM", "k3" to "PEM")
         val imported = BackupManager.keyIdsToImport(setOf("k1"), incoming, secrets)
@@ -82,9 +84,9 @@ class BackupManagerMergeTest {
             "b.example.com ssh-ed25519 BBBB",
         )
         val incoming = listOf(
-            "b.example.com ssh-ed25519 BBBB",   // duplicate
-            "c.example.com ssh-ed25519 CCCC",   // new
-            "",                                  // blank
+            "b.example.com ssh-ed25519 BBBB", // duplicate
+            "c.example.com ssh-ed25519 CCCC", // new
+            "", // blank
         )
         val (union, grew) = BackupManager.mergeKnownHostsLines(current, incoming)
 

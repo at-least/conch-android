@@ -60,14 +60,14 @@ object SshConnectionFactory {
         when (host.authType) {
             Host.AUTH_KEY -> {
                 val keyId = host.keyId
-                    ?: throw IllegalStateException("Host is set to key auth but no key is selected")
+                    ?: error("Host is set to key auth but no key is selected")
                 val provider = keyProvider(ssh, keyId)
                 ssh.authPublickey(host.username, provider)
             }
             else -> {
                 val pw = password(host)
                 if (pw.isNullOrEmpty()) {
-                    throw IllegalStateException("No stored password — edit this host and save a password")
+                    error("No stored password — edit this host and save a password")
                 }
                 ssh.authPassword(host.username, pw)
             }

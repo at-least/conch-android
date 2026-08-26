@@ -145,26 +145,30 @@ private fun EditHostScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
-                value = alias, onValueChange = { alias = it },
+                value = alias,
+                onValueChange = { alias = it },
                 label = { Text("Name (optional)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = hostname, onValueChange = { hostname = it },
+                value = hostname,
+                onValueChange = { hostname = it },
                 label = { Text("Host") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = portText, onValueChange = { portText = it },
+                value = portText,
+                onValueChange = { portText = it },
                 label = { Text("Port (default 22)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = username, onValueChange = { username = it },
+                value = username,
+                onValueChange = { username = it },
                 label = { Text("Username") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -185,8 +189,13 @@ private fun EditHostScreen(
 
             if (authType == Host.AUTH_PASSWORD) {
                 OutlinedTextField(
-                    value = password, onValueChange = { password = it },
-                    label = { Text(if (isEdit && SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password") },
+                    value = password,
+                    onValueChange = { password = it },
+                    label = {
+                        Text(
+                            if (isEdit && SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password"
+                        )
+                    },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -204,7 +213,9 @@ private fun EditHostScreen(
                         onExpandedChange = { keysMenuOpen = it }
                     ) {
                         OutlinedTextField(
-                            value = keys.firstOrNull { it.id == selectedKeyId }?.let { "${it.name} (${it.fingerprint.takeLast(12)})" } ?: "Select key",
+                            value = keys.firstOrNull {
+                                it.id == selectedKeyId
+                            }?.let { "${it.name} (${it.fingerprint.takeLast(12)})" } ?: "Select key",
                             onValueChange = { },
                             readOnly = true,
                             label = { Text("Auth key") },
@@ -216,7 +227,12 @@ private fun EditHostScreen(
                         ExposedDropdownMenu(expanded = keysMenuOpen, onDismissRequest = { keysMenuOpen = false }) {
                             keys.forEach { k ->
                                 DropdownMenuItem(
-                                    text = { Column { Text(k.name); Text(k.fingerprint, fontSize = 11.sp) } },
+                                    text = {
+                                        Column {
+                                            Text(k.name)
+                                            Text(k.fingerprint, fontSize = 11.sp)
+                                        }
+                                    },
                                     onClick = {
                                         selectedKeyId = k.id
                                         keysMenuOpen = false
@@ -229,7 +245,8 @@ private fun EditHostScreen(
             }
 
             OutlinedTextField(
-                value = fontSizeText, onValueChange = { fontSizeText = it },
+                value = fontSizeText,
+                onValueChange = { fontSizeText = it },
                 label = { Text("Terminal font size sp (blank = 15)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -250,7 +267,8 @@ private fun EditHostScreen(
             }
 
             OutlinedTextField(
-                value = socksPortText, onValueChange = { socksPortText = it },
+                value = socksPortText,
+                onValueChange = { socksPortText = it },
                 label = { Text("SOCKS5 proxy port (blank = off)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -304,7 +322,9 @@ private fun EditHostScreen(
                     val fs = fontSizeText.toFloatOrNull() ?: 0f
                     if (port == null || port !in 1..65535) {
                         android.widget.Toast.makeText(
-                            ctx, "Invalid port", android.widget.Toast.LENGTH_SHORT
+                            ctx,
+                            "Invalid port",
+                            android.widget.Toast.LENGTH_SHORT
                         ).show()
                         return@Button
                     }

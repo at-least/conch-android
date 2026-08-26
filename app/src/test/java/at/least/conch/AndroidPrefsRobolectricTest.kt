@@ -156,9 +156,12 @@ class AndroidPrefsRobolectricTest {
         assertEquals(
             listOf(
                 SshKeyInfo(
-                    id = "k1", name = "my-phone", algorithm = "ssh-ed25519",
+                    id = "k1",
+                    name = "my-phone",
+                    algorithm = "ssh-ed25519",
                     createdAt = 1735689600123L,
-                    publicLine = "ssh-ed25519 AAAA my-phone", fingerprint = "SHA256:xxx",
+                    publicLine = "ssh-ed25519 AAAA my-phone",
+                    fingerprint = "SHA256:xxx",
                 )
             ),
             keys,

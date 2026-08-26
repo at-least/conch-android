@@ -2,7 +2,6 @@ package at.least.conch
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MoreVert
@@ -50,11 +48,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 
 class MainActivity : FragmentActivity() {
 
@@ -88,7 +86,6 @@ class MainActivity : FragmentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun HostListScreen() {
-        var menuHost by remember { mutableStateOf<Host?>(null) }
         var confirmDelete by remember { mutableStateOf<Host?>(null) }
         var showAbout by remember { mutableStateOf(false) }
         var mainMenuOpen by remember { mutableStateOf(false) }
@@ -102,7 +99,7 @@ class MainActivity : FragmentActivity() {
                 try {
                     val text = contentResolver.openInputStream(uri)?.use {
                         it.readBytes().decodeToString()
-                    } ?: throw IllegalStateException("Cannot read file")
+                    } ?: error("Cannot read file")
                     val parsed = OpenSshConfigParser.parse(text)
                     if (parsed.isEmpty()) {
                         importResult = "No importable hosts found"
@@ -181,7 +178,10 @@ class MainActivity : FragmentActivity() {
                             }
                             DropdownMenuItem(
                                 text = { Text("About") },
-                                onClick = { mainMenuOpen = false; showAbout = true }
+                                onClick = {
+                                    mainMenuOpen = false
+                                    showAbout = true
+                                }
                             )
                         }
                     }
@@ -272,7 +272,11 @@ class MainActivity : FragmentActivity() {
             AlertDialog(
                 onDismissRequest = { showAbout = false },
                 title = { Text("Conch 0.8.1") },
-                text = { Text("Android SSH client — free & open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux") },
+                text = {
+                    Text(
+                        "Android SSH client — free & open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux"
+                    )
+                },
                 confirmButton = {
                     TextButton(onClick = { showAbout = false }) { Text("OK") }
                 },
@@ -354,11 +358,17 @@ class MainActivity : FragmentActivity() {
                 )
                 DropdownMenuItem(
                     text = { Text("Edit") },
-                    onClick = { menuOpen = false; onEdit() }
+                    onClick = {
+                        menuOpen = false
+                        onEdit()
+                    }
                 )
                 DropdownMenuItem(
                     text = { Text("Delete") },
-                    onClick = { menuOpen = false; onDelete() }
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    }
                 )
             }
         }

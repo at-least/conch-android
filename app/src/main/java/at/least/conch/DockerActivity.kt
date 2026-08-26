@@ -35,7 +35,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.connection.channel.direct.Session
 import java.util.concurrent.Executors
 
 /** Docker container management over SSH (docker CLI): list, start, stop, logs. */
@@ -105,8 +104,11 @@ class DockerActivity : androidx.fragment.app.FragmentActivity() {
         exec(DockerParser.LIST_COMMAND) { out ->
             containers.value = DockerParser.parse(out)
             busy.value = false
-            status.value = if (containers.value.isEmpty() && out.contains("error", true))
-                out.trim().take(120) else null
+            status.value = if (containers.value.isEmpty() && out.contains("error", true)) {
+                out.trim().take(120)
+            } else {
+                null
+            }
         }
     }
 
@@ -221,24 +223,35 @@ class DockerActivity : androidx.fragment.app.FragmentActivity() {
         androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text("Logs") },
-                onClick = { menuOpen = false; showLogs(c) }
+                onClick = {
+                    menuOpen = false
+                    showLogs(c)
+                }
             )
             if (running) {
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text("Stop") },
-                    onClick = { menuOpen = false; action(c, "stop") }
+                    onClick = {
+                        menuOpen = false
+                        action(c, "stop")
+                    }
                 )
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text("Restart") },
-                    onClick = { menuOpen = false; action(c, "restart") }
+                    onClick = {
+                        menuOpen = false
+                        action(c, "restart")
+                    }
                 )
             } else {
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text("Start") },
-                    onClick = { menuOpen = false; action(c, "start") }
+                    onClick = {
+                        menuOpen = false
+                        action(c, "start")
+                    }
                 )
             }
         }
     }
 }
-
