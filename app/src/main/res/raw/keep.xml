@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- aboutlibraries loads res/raw/aboutlibraries.json reflectively (getIdentifier),
+     so the resource shrinker sees no static reference and strips it in release
+     builds. Keep it explicitly. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/aboutlibraries" />

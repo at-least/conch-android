@@ -1,5 +1,7 @@
 package at.least.conch
 
+import androidx.annotation.VisibleForTesting
+
 /**
  * One-time "remove ads" purchase state. The unlock flag is persisted in
  * [SecretsStore] (Android Keystore encrypted) so it cannot be flipped by
@@ -23,5 +25,11 @@ object PurchaseState {
     fun setAdFree() {
         SecretsStore.put(KEY, "1")
         cached = true
+    }
+
+    /** Drops the in-memory flag so tests start from the persisted state. */
+    @VisibleForTesting
+    fun resetCache() {
+        cached = null
     }
 }

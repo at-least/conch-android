@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("io.gitlab.arturbosch.detekt")
+    id("com.mikepenz.aboutlibraries.plugin")
 }
 
 apply(from = "sentry.gradle")
@@ -116,8 +117,23 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // OSS license attribution screen; json generated at build time by the
+    // aboutlibraries plugin (res/raw/aboutlibraries.json).
+    implementation("com.mikepenz:aboutlibraries-compose-m3:11.2.3")
+
+    // Heap-leak detection for long-lived foreground sessions; debug builds only.
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
+
+    // Compose-specific lint checks (unstable params, recomposition, ...).
+    lintChecks("com.slack.lint.compose:compose-lint-checks:1.4.2")
+
+    // ktlint-backed auto-formatting for detekt (./gradlew detektFormat).
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.7")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    // Virtual-time dispatchers for backoff/reconnect coroutine tests.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     // Robolectric: exercises real SharedPreferences / filesDir paths that
     // isReturnDefaultValues stubbing cannot reach (ExtraKeysConfig, AppLock,
     // HostStore/KeyManager on-disk formats).

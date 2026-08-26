@@ -25,6 +25,11 @@ style:
   UnusedPrivateMember:
     ignoreAnnotated: ['Test']
 
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by Jetpack convention
+    ignoreAnnotated: ['Composable']
+
 exceptions:
   TooGenericExceptionCaught:
     # Store loaders deliberately swallow ALL corruption (degrade-to-empty is

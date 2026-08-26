@@ -2,6 +2,78 @@
 <SmellBaseline>
   <ManuallySuppressedIssues></ManuallySuppressedIssues>
   <CurrentIssues>
+    <ID>ArgumentListWrapping:AndroidPrefsRobolectricTest.kt$AndroidPrefsRobolectricTest$( id = "k1", name = "my-phone", algorithm = "ssh-ed25519", createdAt = 1735689600123L, publicLine = "ssh-ed25519 AAAA my-phone", fingerprint = "SHA256:xxx", )</ID>
+    <ID>ArgumentListWrapping:BackupCodecTest.kt$BackupCodecTest$( hosts = emptyList(), hostSecrets = emptyMap(), keys = emptyList(), keySecrets = emptyMap(), snippets = emptyList(), knownHosts = "", )</ID>
+    <ID>ArgumentListWrapping:BackupManagerMergeTest.kt$BackupManagerMergeTest$( id = id, alias = alias, hostname = "$id.example.com", port = 22, username = "user", authType = "PASSWORD", )</ID>
+    <ID>ArgumentListWrapping:CommandHistory.kt$InputLineAssembler$(b.toChar())</ID>
+    <ID>ArgumentListWrapping:CommandHistoryTest.kt$CommandHistoryTest$(HistoryCrypto.decrypt(key, blob.clone().also { it[blob.size - 1] = (it.last().toInt() xor 1).toByte() }))</ID>
+    <ID>ArgumentListWrapping:CommandHistoryTest.kt$CommandHistoryTest$(key, blob.clone().also { it[blob.size - 1] = (it.last().toInt() xor 1).toByte() })</ID>
+    <ID>ArgumentListWrapping:Ed25519Codec.kt$Ed25519Codec$( (v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte() )</ID>
+    <ID>ArgumentListWrapping:Ed25519Codec.kt$Ed25519Codec$(hex.length / 2)</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( ctx, "Invalid port", android.widget.Toast.LENGTH_SHORT )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = alias, onValueChange = { alias = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = fontSizeText, onValueChange = { fontSizeText = it }, label = { Text("Terminal font size sp (blank = 15)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = hostname, onValueChange = { hostname = it }, label = { Text("Host") }, singleLine = true, modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = password, onValueChange = { password = it }, label = { Text(if (isEdit &amp;&amp; SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = portText, onValueChange = { portText = it }, label = { Text("Port (default 22)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = socksPortText, onValueChange = { socksPortText = it }, label = { Text("SOCKS5 proxy port (blank = off)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$( value = username, onValueChange = { username = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth() )</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$(if ((initial?.fontSizeSp ?: 0f) &gt; 0f) initial!!.fontSizeSp.toInt().toString() else "")</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$(if ((initial?.socksPort ?: 0) &gt; 0) initial!!.socksPort.toString() else "")</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$(if (initial != null &amp;&amp; initial.port != 22) initial.port.toString() else "")</ID>
+    <ID>ArgumentListWrapping:EditHostActivity.kt$(if (isEdit &amp;&amp; SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password")</ID>
+    <ID>ArgumentListWrapping:GoldenFormatTest.kt$GoldenFormatTest$( id = "k1", name = "my-phone", algorithm = "ssh-ed25519", createdAt = 1735689600123L, publicLine = "ssh-ed25519 AAAA… my-phone", fingerprint = "SHA256:xxx", )</ID>
+    <ID>ArgumentListWrapping:InputLineAssemblerTest.kt$InputLineAssemblerTest$( b("dropped"), b("\u001b[A"), byteArrayOf(0x0D), // dropped b("kept"), byteArrayOf(0x0D), // recorded )</ID>
+    <ID>ArgumentListWrapping:InputLineAssemblerTest.kt$InputLineAssemblerTest$("lone surrogate in recorded line", Character.isSurrogate(c) &amp;&amp; !("\uD83D\uDE00".contains(c)))</ID>
+    <ID>ArgumentListWrapping:KeyManager.kt$KeyManager$( name, type.toString(), privPkcs8, publicPoint, ed25519Seed = edSeed, fallbackPublicKey = publicKey, )</ID>
+    <ID>ArgumentListWrapping:KeysActivity.kt$KeysActivity$( Icons.Filled.Key, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant )</ID>
+    <ID>ArgumentListWrapping:LocalSshdAuthTest.kt$LocalSshdAuthTest$( "sudo", "bash", "-c", "mkdir -p /tmp/opencode/localtest &amp;&amp; cp ${tmpPub.absolutePath} /tmp/opencode/localtest/pub &amp;&amp; cat /tmp/opencode/localtest/pub &gt;&gt; /home/sshtest/.ssh/authorized_keys &amp;&amp; grep -c '${pubLine.split(" ")[1].take(20)}' /home/sshtest/.ssh/authorized_keys" )</ID>
+    <ID>ArgumentListWrapping:LocalSshdAuthTest.kt$LocalSshdAuthTest$( "sudo", "bash", "-c", "sed -i '/$uniqueTail/d' /home/sshtest/.ssh/authorized_keys" )</ID>
+    <ID>ArgumentListWrapping:LocalSshdAuthTest.kt$LocalSshdAuthTest$(" ")</ID>
+    <ID>ArgumentListWrapping:LocalSshdAuthTest.kt$LocalSshdAuthTest$(20)</ID>
+    <ID>ArgumentListWrapping:MainActivity.kt$MainActivity$("Android SSH client — free &amp; open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux")</ID>
+    <ID>ArgumentListWrapping:MonitorActivity.kt$MonitorActivity$( "CPU", "%.1f%%".format(s.cpuPercent), s.cpuPercent / 100.0, "load %.2f %.2f %.2f".format(s.load1, s.load5, s.load15) )</ID>
+    <ID>ArgumentListWrapping:SessionService.kt$SessionService$( this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE, )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( "CPU", "%.1f%%".format(s.cpuPercent), s.cpuPercent / 100.0, "load %.2f %.2f %.2f".format(s.load1, s.load5, s.load15) )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( if (entry.isDir) "Directory" else formatSize(entry.size), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp) )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp) )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( logsText, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 20, overflow = TextOverflow.Ellipsis, )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( name = it.name, path = it.path, isDir = it.isDirectory, size = it.attributes.size, mtime = it.attributes.mtime * 1000L, )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$( path, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f) )</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$("Rename")</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$("Restart")</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$("Start")</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$("Stop")</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(c, onTap = { showLogs(c) }, onStop = { action(c, "stop") }, onStart = { action(c, "start") }, onRestart = { action(c, "restart") }, onLogs = { showLogs(c) })</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(footnote, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(onClick = { actionEntry = null; renameText = entry.name; showRename = entry })</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(progress = { it.toFloat() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(text = { Text("Restart") }, onClick = { menuOpen = false; onRestart() })</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(text = { Text("Start") }, onClick = { menuOpen = false; onStart() })</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(text = { Text("Stop") }, onClick = { menuOpen = false; onStop() })</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(top = 6.dp)</ID>
+    <ID>ArgumentListWrapping:SessionTabs.kt$(top = 8.dp)</ID>
+    <ID>ArgumentListWrapping:SettingsActivity.kt$SettingsActivity$(Icons.Filled.FileDownload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))</ID>
+    <ID>ArgumentListWrapping:SettingsActivity.kt$SettingsActivity$(Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))</ID>
+    <ID>ArgumentListWrapping:SettingsActivity.kt$SettingsActivity$(end = 6.dp)</ID>
+    <ID>ArgumentListWrapping:SettingsActivity.kt$SettingsActivity$(this@SettingsActivity, "Command history cleared", Toast.LENGTH_SHORT)</ID>
+    <ID>ArgumentListWrapping:SftpActivity.kt$SftpActivity$(0xFF3B8EEA)</ID>
+    <ID>ArgumentListWrapping:SocksProxy.kt$SocksProxy$("%x", ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF))</ID>
+    <ID>ArgumentListWrapping:SocksProxy.kt$SocksProxy$(String.format("%x", ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF)))</ID>
+    <ID>ArgumentListWrapping:SshConnectAuthInteractionTest.kt$SshConnectAuthInteractionTest$( keyServer, KnownHostsStore(dir), host(Host.AUTH_KEY).apply { keyId = "k1" }, keyProvider = { s, _ -&gt; s.loadKeys(key.file.absolutePath) }, )</ID>
+    <ID>ArgumentListWrapping:SshConnectAuthInteractionTest.kt$SshConnectAuthInteractionTest$( server, KnownHostsStore(dir), host(Host.AUTH_PASSWORD), password = "wrong-password", )</ID>
+    <ID>ArgumentListWrapping:SshErrorMappingInteractionTest.kt$SshErrorMappingInteractionTest$("Connection refused")</ID>
+    <ID>ArgumentListWrapping:SshErrorMappingInteractionTest.kt$SshErrorMappingInteractionTest$("unexpected mapping: $msg (from ${e.javaClass.simpleName}: ${e.message})", msg.startsWith("Connection refused"))</ID>
+    <ID>ArgumentListWrapping:TerminalActivity.kt$TerminalActivity$(16.dp)</ID>
+    <ID>ArgumentListWrapping:TerminalActivity.kt$TerminalActivity$(Icons.Filled.SyncAlt, contentDescription = null, modifier = Modifier.size(16.dp))</ID>
+    <ID>ArgumentListWrapping:TerminalThemeTest.kt$TerminalThemeTest$("Default", "Dracula", "Solarized Dark", "Nord", "Gruvbox Dark")</ID>
+    <ID>ArgumentListWrapping:TerminalThemeTest.kt$TerminalThemeTest$(listOf("Default", "Dracula", "Solarized Dark", "Nord", "Gruvbox Dark"), TerminalTheme.ALL.map { it.name })</ID>
+    <ID>ArgumentListWrapping:TerminalView.kt$TerminalView$(4)</ID>
+    <ID>ArgumentListWrapping:TerminalView.kt$TerminalView$(8)</ID>
+    <ID>ArgumentListWrapping:TestSshd.kt$TestSshd.RecordedShell$((env.env[Environment.ENV_COLUMNS] ?: "?") to (env.env[Environment.ENV_LINES] ?: "?"))</ID>
+    <ID>ArgumentListWrapping:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$("only the original entry should remain", 1, File(dir, "known_hosts").readLines().count { it.isNotBlank() })</ID>
+    <ID>ArgumentListWrapping:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$(dir, "known_hosts")</ID>
     <ID>ComplexCondition:MonitorParser.kt$MonitorParser$cpu == null || mem == null || disk == null || load == null || up == null</ID>
     <ID>ComplexCondition:TerminalView.kt$TerminalView$cols &gt; 0 &amp;&amp; rows &gt; 0 &amp;&amp; (cols != lastSentCols || rows != lastSentRows)</ID>
     <ID>CyclomaticComplexMethod:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
@@ -11,7 +83,7 @@
     <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
     <ID>CyclomaticComplexMethod:MonitorParser.kt$MonitorParser$fun parse(output: String): Snapshot?</ID>
     <ID>CyclomaticComplexMethod:OpenSshConfigParser.kt$OpenSshConfigParser$fun parse(text: String): List&lt;ParsedHost&gt;</ID>
-    <ID>CyclomaticComplexMethod:SessionTabs.kt$@Composable fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/")</ID>
+    <ID>CyclomaticComplexMethod:SessionTabs.kt$@Composable fun SftpTab( session: SessionReconnector, connectionGen: Int, modifier: Modifier = Modifier, startPath: String = "/", )</ID>
     <ID>CyclomaticComplexMethod:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
     <ID>CyclomaticComplexMethod:TerminalView.kt$TerminalView$override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean</ID>
     <ID>EmptyElseBlock:CommandHistory.kt$InputLineAssembler$if (!pendingCr) appendPrintableChar('\n')</ID>
@@ -19,45 +91,27 @@
     <ID>EmptyFunctionBlock:TerminalEmulator.kt$TerminalEmulator.HostOutput${}</ID>
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.ExecCommand${}</ID>
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.RecordedShell${}</ID>
-    <ID>FunctionNaming:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:DockerActivity.kt$DockerActivity$@Composable private fun ContainerRow(c: DockerParser.Container)</ID>
-    <ID>FunctionNaming:DockerActivity.kt$DockerActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun DockerScreen()</ID>
-    <ID>FunctionNaming:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
-    <ID>FunctionNaming:KeysActivity.kt$KeysActivity$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable private fun KeysScreen()</ID>
-    <ID>FunctionNaming:MainActivity.kt$MainActivity$@OptIn(ExperimentalFoundationApi::class) @Composable private fun HostCard(host: Host, onClick: () -&gt; Unit, onEdit: () -&gt; Unit, onDelete: () -&gt; Unit)</ID>
-    <ID>FunctionNaming:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
-    <ID>FunctionNaming:MonitorActivity.kt$MonitorActivity$@Composable private fun MetricCard(title: String, value: String, progress: Double?, footnote: String)</ID>
-    <ID>FunctionNaming:MonitorActivity.kt$MonitorActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun MonitorScreen()</ID>
-    <ID>FunctionNaming:SessionTabs.kt$@Composable fun DockerTab(session: SessionReconnector)</ID>
-    <ID>FunctionNaming:SessionTabs.kt$@Composable fun MonitorTab(session: SessionReconnector)</ID>
-    <ID>FunctionNaming:SessionTabs.kt$@Composable fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/")</ID>
-    <ID>FunctionNaming:SessionTabs.kt$@Composable private fun MetricCard(title: String, value: String, progress: Double?, footnote: String)</ID>
-    <ID>FunctionNaming:SessionTabs.kt$@OptIn(ExperimentalFoundationApi::class) @Composable private fun ContainerRow( c: DockerParser.Container, onTap: () -&gt; Unit, onStop: () -&gt; Unit, onStart: () -&gt; Unit, onRestart: () -&gt; Unit, onLogs: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:SessionTabs.kt$@OptIn(ExperimentalFoundationApi::class) @Composable private fun EntryRow(entry: SftpEntry, onClick: () -&gt; Unit, onLongClick: () -&gt; Unit)</ID>
-    <ID>FunctionNaming:SessionsSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SessionsSheet( onOpen: (LiveSessions.Live) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:SettingsActivity.kt$SettingsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsScreen( exportLauncher: androidx.activity.result.contract.ActivityResultContracts.CreateDocument, importLauncher: androidx.activity.result.contract.ActivityResultContracts.OpenDocument, )</ID>
-    <ID>FunctionNaming:SettingsActivity.kt$SettingsActivity$@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable private fun TerminalThemePicker()</ID>
-    <ID>FunctionNaming:SftpActivity.kt$SftpActivity$@OptIn(ExperimentalFoundationApi::class) @Composable private fun EntryRow(entry: SftpEntry)</ID>
-    <ID>FunctionNaming:SftpActivity.kt$SftpActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SftpScreen()</ID>
-    <ID>FunctionNaming:SnippetsActivity.kt$SnippetsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SnippetsScreen()</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun ExtraKeysRow()</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun KeyButton(label: String, armed: Boolean = false, onClick: () -&gt; Unit)</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun LoadingTab(label: String)</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -&gt; Unit)</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@Composable private fun StatusDot(state: ConnState, keepAlive: Boolean)</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HistorySheet()</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
-    <ID>FunctionNaming:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class) @Composable private fun ExtraKeysEditor(current: List&lt;String&gt;, onSave: (List&lt;String&gt;) -&gt; Unit, onCancel: () -&gt; Unit)</ID>
     <ID>ImplicitDefaultLocale:SocksProxy.kt$SocksProxy$String.format("%x", ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF))</ID>
+    <ID>ImportOrdering:CrashReporting.kt$import android.content.Context import io.sentry.Sentry import io.sentry.android.core.SentryAndroid import io.sentry.SentryOptions</ID>
+    <ID>ImportOrdering:Ed25519Codec.kt$import java.security.SecureRandom import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters</ID>
+    <ID>ImportOrdering:MainActivity.kt$import android.content.Intent import android.os.Bundle import androidx.fragment.app.FragmentActivity import androidx.activity.compose.rememberLauncherForActivityResult import androidx.activity.compose.setContent import androidx.activity.result.contract.ActivityResultContracts import androidx.compose.foundation.ExperimentalFoundationApi import androidx.compose.foundation.background import androidx.compose.foundation.combinedClickable import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Box import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.PaddingValues import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.padding import androidx.compose.foundation.layout.size import androidx.compose.foundation.lazy.LazyColumn import androidx.compose.foundation.lazy.items import androidx.compose.foundation.shape.CircleShape import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.Add import androidx.compose.material.icons.filled.Key import androidx.compose.material.icons.filled.MoreVert import androidx.compose.material3.AlertDialog import androidx.compose.material3.Card import androidx.compose.material3.DropdownMenu import androidx.compose.material3.DropdownMenuItem import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.FloatingActionButton import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.MaterialTheme import androidx.compose.material3.Scaffold import androidx.compose.material3.Text import androidx.compose.material3.TextButton import androidx.compose.material3.TopAppBar import androidx.compose.runtime.Composable import androidx.compose.runtime.getValue import androidx.compose.runtime.mutableStateListOf import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.setValue import androidx.compose.runtime.snapshots.SnapshotStateList import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.draw.clip import androidx.compose.ui.graphics.Color import androidx.compose.ui.platform.LocalContext import androidx.compose.ui.text.font.FontWeight import androidx.compose.ui.text.style.TextAlign import androidx.compose.ui.unit.dp import androidx.compose.ui.unit.sp</ID>
+    <ID>ImportOrdering:SecretsStore.kt$import android.content.Context import android.content.SharedPreferences import java.security.KeyStore import javax.crypto.Cipher import javax.crypto.KeyGenerator import javax.crypto.SecretKey import javax.crypto.spec.GCMParameterSpec import android.security.keystore.KeyGenParameterSpec import android.security.keystore.KeyProperties</ID>
+    <ID>ImportOrdering:SettingsActivity.kt$import android.net.Uri import android.os.Bundle import android.widget.Toast import androidx.activity.ComponentActivity import androidx.activity.compose.rememberLauncherForActivityResult import androidx.activity.compose.setContent import androidx.activity.result.contract.ActivityResultContracts import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.padding import androidx.compose.foundation.rememberScrollState import androidx.compose.foundation.text.KeyboardOptions import androidx.compose.foundation.verticalScroll import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.FileDownload import androidx.compose.material.icons.filled.FileUpload import androidx.compose.material3.AlertDialog import androidx.compose.material3.Card import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.MaterialTheme import androidx.compose.material3.OutlinedButton import androidx.compose.material3.OutlinedTextField import androidx.compose.material3.Scaffold import androidx.compose.material3.Switch import androidx.compose.material3.Text import androidx.compose.material3.TextButton import androidx.compose.material3.TopAppBar import androidx.compose.runtime.Composable import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.getValue import androidx.compose.runtime.setValue import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.text.input.KeyboardType import androidx.compose.ui.text.input.PasswordVisualTransformation import androidx.compose.ui.unit.dp import androidx.compose.ui.unit.sp import java.util.concurrent.Executors</ID>
+    <ID>ImportOrdering:SettingsStore.kt$import android.content.Context import androidx.datastore.core.DataStore import androidx.datastore.preferences.core.Preferences import androidx.datastore.preferences.core.booleanPreferencesKey import androidx.datastore.preferences.core.edit import androidx.datastore.preferences.core.stringPreferencesKey import androidx.datastore.preferences.preferencesDataStoreFile import androidx.datastore.preferences.core.PreferenceDataStoreFactory import kotlinx.coroutines.runBlocking import kotlinx.coroutines.flow.first</ID>
+    <ID>ImportOrdering:SftpActivity.kt$import android.net.Uri import android.os.Bundle import android.os.Environment import android.provider.MediaStore import androidx.activity.ComponentActivity import androidx.activity.compose.rememberLauncherForActivityResult import androidx.activity.compose.setContent import androidx.activity.result.contract.ActivityResultContracts import androidx.compose.foundation.ExperimentalFoundationApi import androidx.compose.foundation.combinedClickable import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.padding import androidx.compose.foundation.lazy.LazyColumn import androidx.compose.foundation.lazy.items import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.ArrowUpward import androidx.compose.material.icons.filled.Add import androidx.compose.material.icons.filled.Description import androidx.compose.material.icons.filled.Folder import androidx.compose.material.icons.filled.Refresh import androidx.compose.material3.AlertDialog import androidx.compose.material3.Card import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.FloatingActionButton import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.LinearProgressIndicator import androidx.compose.material3.MaterialTheme import androidx.compose.material3.OutlinedTextField import androidx.compose.material3.Scaffold import androidx.compose.material3.Text import androidx.compose.material3.TextButton import androidx.compose.material3.TopAppBar import androidx.compose.runtime.Composable import androidx.compose.runtime.getValue import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.setValue import androidx.compose.ui.Modifier import androidx.compose.ui.text.font.FontFamily import androidx.compose.ui.text.style.TextOverflow import androidx.compose.ui.unit.dp import androidx.compose.ui.unit.sp import net.schmizz.sshj.SSHClient import net.schmizz.sshj.sftp.RemoteResourceInfo import net.schmizz.sshj.sftp.SFTPClient import java.io.File import java.text.SimpleDateFormat import java.util.Date import java.util.Locale import java.util.concurrent.Executors</ID>
+    <ID>ImportOrdering:TerminalActivity.kt$import android.content.ClipData import android.content.ClipboardManager import android.content.Context import android.os.Bundle import android.os.Handler import android.os.Looper import android.widget.Toast import androidx.fragment.app.FragmentActivity import androidx.activity.compose.setContent import androidx.compose.animation.core.LinearEasing import androidx.compose.animation.core.RepeatMode import androidx.compose.animation.core.animateFloat import androidx.compose.animation.core.infiniteRepeatable import androidx.compose.animation.core.rememberInfiniteTransition import androidx.compose.animation.core.tween import androidx.compose.foundation.background import androidx.compose.foundation.clickable import androidx.compose.foundation.horizontalScroll import androidx.compose.foundation.layout.Arrangement import androidx.compose.foundation.layout.Box import androidx.compose.foundation.layout.Column import androidx.compose.foundation.layout.PaddingValues import androidx.compose.foundation.layout.Row import androidx.compose.foundation.layout.defaultMinSize import androidx.compose.foundation.layout.fillMaxSize import androidx.compose.foundation.layout.fillMaxWidth import androidx.compose.foundation.layout.imePadding import androidx.compose.foundation.layout.height import androidx.compose.foundation.layout.padding import androidx.compose.foundation.layout.size import androidx.compose.foundation.lazy.LazyColumn import androidx.compose.foundation.lazy.items import androidx.compose.foundation.rememberScrollState import androidx.compose.foundation.shape.CircleShape import androidx.compose.material.icons.Icons import androidx.compose.material.icons.automirrored.filled.ArrowBack import androidx.compose.material.icons.filled.Code import androidx.compose.material.icons.filled.ContentCopy import androidx.compose.material.icons.filled.ContentPaste import androidx.compose.material.icons.filled.Folder import androidx.compose.material.icons.filled.History import androidx.compose.material.icons.filled.Keyboard import androidx.compose.material.icons.filled.Monitor import androidx.compose.material.icons.filled.MoreVert import androidx.compose.material.icons.filled.Search import androidx.compose.material.icons.filled.Storage import androidx.compose.material.icons.filled.SyncAlt import androidx.compose.material3.AlertDialog import androidx.compose.material3.AssistChip import androidx.compose.material3.AssistChipDefaults import androidx.compose.material3.Button import androidx.compose.material3.ButtonDefaults import androidx.compose.material3.DropdownMenu import androidx.compose.material3.DropdownMenuItem import androidx.compose.material3.ExperimentalMaterial3Api import androidx.compose.material3.Icon import androidx.compose.material3.IconButton import androidx.compose.material3.LinearProgressIndicator import androidx.compose.material3.MaterialTheme import androidx.compose.material3.ModalBottomSheet import androidx.compose.material3.NavigationBar import androidx.compose.material3.NavigationBarItem import androidx.compose.material3.Scaffold import androidx.compose.material3.Text import androidx.compose.material3.TextButton import androidx.compose.material3.TopAppBar import androidx.compose.material3.TopAppBarDefaults import androidx.compose.runtime.Composable import androidx.compose.runtime.LaunchedEffect import androidx.compose.runtime.getValue import androidx.compose.runtime.mutableStateOf import androidx.compose.runtime.remember import androidx.compose.runtime.setValue import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.draw.alpha import androidx.compose.ui.draw.clip import androidx.compose.ui.graphics.Color import androidx.compose.ui.text.font.FontFamily import androidx.compose.ui.text.style.TextOverflow import androidx.compose.ui.unit.dp import androidx.compose.ui.unit.sp import androidx.compose.ui.viewinterop.AndroidView import kotlinx.coroutines.Dispatchers import kotlinx.coroutines.delay import kotlinx.coroutines.withContext</ID>
+    <ID>ImportOrdering:TerminalEmulator.kt$import com.termux.terminal.TerminalBuffer import com.termux.terminal.TerminalEmulator as Engine import com.termux.terminal.TerminalOutput import com.termux.terminal.TerminalRow import com.termux.terminal.TerminalSessionClient import com.termux.terminal.TextStyle import com.termux.terminal.WcWidth</ID>
+    <ID>ImportOrdering:TestSshd.kt$import net.schmizz.sshj.SSHClient import org.apache.sshd.common.config.keys.KeyUtils import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory import org.apache.sshd.common.keyprovider.KeyPairProvider import org.apache.sshd.sftp.server.SftpSubsystemFactory import org.apache.sshd.server.Environment import org.apache.sshd.server.ExitCallback import org.apache.sshd.server.Signal import org.apache.sshd.server.SignalListener import org.apache.sshd.server.SshServer import org.apache.sshd.server.auth.password.PasswordAuthenticator import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator import org.apache.sshd.server.channel.ChannelSession import org.apache.sshd.server.command.Command import org.apache.sshd.server.command.CommandFactory import org.apache.sshd.server.forward.AcceptAllForwardingFilter import org.apache.sshd.server.shell.ShellFactory import org.bouncycastle.jce.provider.BouncyCastleProvider import org.junit.Assert.assertTrue import java.io.File import java.io.IOException import java.io.InputStream import java.io.OutputStream import java.net.InetSocketAddress import java.net.ServerSocket import java.net.Socket import java.security.KeyPair import java.security.KeyPairGenerator import java.security.PublicKey import java.security.Security import java.security.spec.ECGenParameterSpec import java.util.concurrent.ConcurrentLinkedQueue import java.util.concurrent.CountDownLatch import java.util.concurrent.TimeUnit import kotlin.concurrent.thread</ID>
+    <ID>Indentation:CorruptedKeyTest.kt$CorruptedKeyTest.OpenSshKeyBlob$ </ID>
     <ID>InstanceOfCheckForException:KnownHosts.kt$TofuHostKeyVerifier$e is ThreadDeath</ID>
     <ID>InstanceOfCheckForException:KnownHosts.kt$TofuHostKeyVerifier$e is VirtualMachineError</ID>
     <ID>InstanceOfCheckForException:SettingsActivity.kt$SettingsActivity$e is javax.crypto.AEADBadTagException</ID>
     <ID>LargeClass:TerminalActivity.kt$TerminalActivity : FragmentActivity</ID>
-    <ID>LongMethod:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, )</ID>
+    <ID>LongMethod:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
     <ID>LongMethod:KeysActivity.kt$KeysActivity$@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) @Composable private fun KeysScreen()</ID>
     <ID>LongMethod:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
-    <ID>LongMethod:SessionTabs.kt$@Composable fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/")</ID>
+    <ID>LongMethod:SessionTabs.kt$@Composable fun SftpTab( session: SessionReconnector, connectionGen: Int, modifier: Modifier = Modifier, startPath: String = "/", )</ID>
     <ID>LongMethod:SettingsActivity.kt$SettingsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsScreen( exportLauncher: androidx.activity.result.contract.ActivityResultContracts.CreateDocument, importLauncher: androidx.activity.result.contract.ActivityResultContracts.OpenDocument, )</ID>
     <ID>LongMethod:SftpActivity.kt$SftpActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SftpScreen()</ID>
     <ID>LongMethod:SnippetsActivity.kt$SnippetsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SnippetsScreen()</ID>
@@ -67,9 +121,6 @@
     <ID>LoopWithTooManyJumpStatements:KnownHosts.kt$KnownHostsStore$for</ID>
     <ID>LoopWithTooManyJumpStatements:MonitorActivity.kt$MonitorActivity$while</ID>
     <ID>LoopWithTooManyJumpStatements:OpenSshConfigParser.kt$OpenSshConfigParser$for</ID>
-    <ID>MaxLineLength:BackupCodec.kt$BackupCodec$hosts = o.optJSONArray("hosts")?.let { arr -&gt; (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList()</ID>
-    <ID>MaxLineLength:BackupCodec.kt$BackupCodec$keys = o.optJSONArray("keys")?.let { arr -&gt; (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList()</ID>
-    <ID>MaxLineLength:BackupCodec.kt$BackupCodec$snippets = o.optJSONArray("snippets")?.let { arr -&gt; (0 until arr.length()).map { arr.getJSONObject(it) } } ?: emptyList()</ID>
     <ID>MaxLineLength:CommandHistory.kt$InputLineAssembler$0x03 -&gt; if (inPaste) appendPrintableChar(b.toChar()) else { buf.clear(); dropPending = false }</ID>
     <ID>MaxLineLength:CommandHistory.kt$InputLineAssembler$0x09 -&gt; if (inPaste) appendPrintableChar(b.toChar()) else dropPending = true</ID>
     <ID>MaxLineLength:CommandHistoryTest.kt$CommandHistoryTest$assertNull(HistoryCrypto.decrypt(key, blob.clone().also { it[blob.size - 1] = (it.last().toInt() xor 1).toByte() }))</ID>
@@ -118,6 +169,53 @@
     <ID>MaxLineLength:TerminalView.kt$TerminalView$fun desiredRows(heightPx: Int): Int</ID>
     <ID>MaxLineLength:TestSshd.kt$TestSshd.RecordedShell$windowSizes.add((env.env[Environment.ENV_COLUMNS] ?: "?") to (env.env[Environment.ENV_LINES] ?: "?"))</ID>
     <ID>MaxLineLength:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$assertEquals("only the original entry should remain", 1, File(dir, "known_hosts").readLines().count { it.isNotBlank() })</ID>
+    <ID>MaximumLineLength:CommandHistory.kt$InputLineAssembler$ </ID>
+    <ID>MaximumLineLength:CommandHistoryTest.kt$CommandHistoryTest$ </ID>
+    <ID>MaximumLineLength:Ed25519Codec.kt$Ed25519Codec$ </ID>
+    <ID>MaximumLineLength:EditHostActivity.kt$ </ID>
+    <ID>MaximumLineLength:GoldenFormatTest.kt$GoldenFormatTest$ </ID>
+    <ID>MaximumLineLength:InteractionStringContractTest.kt$InteractionStringContractTest$ </ID>
+    <ID>MaximumLineLength:KeysActivity.kt$KeysActivity$ </ID>
+    <ID>MaximumLineLength:LocalSshdAuthTest.kt$LocalSshdAuthTest$ </ID>
+    <ID>MaximumLineLength:MainActivity.kt$MainActivity$ </ID>
+    <ID>MaximumLineLength:MonitorPollTest.kt$TerminalReplayTest$ </ID>
+    <ID>MaximumLineLength:SessionTabs.kt$ </ID>
+    <ID>MaximumLineLength:SettingsActivity.kt$SettingsActivity$ </ID>
+    <ID>MaximumLineLength:SftpActivity.kt$SftpActivity$ </ID>
+    <ID>MaximumLineLength:SocksProxy.kt$SocksProxy$ </ID>
+    <ID>MaximumLineLength:SshConnectionFactory.kt$SshConnectionFactory$ </ID>
+    <ID>MaximumLineLength:SshErrorMappingInteractionTest.kt$SshErrorMappingInteractionTest$ </ID>
+    <ID>MaximumLineLength:TerminalActivity.kt$TerminalActivity$ </ID>
+    <ID>MaximumLineLength:TerminalThemeTest.kt$TerminalThemeTest$ </ID>
+    <ID>MaximumLineLength:TerminalView.kt$TerminalView$ </ID>
+    <ID>MaximumLineLength:TestSshd.kt$TestSshd.RecordedShell$ </ID>
+    <ID>MaximumLineLength:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$ </ID>
+    <ID>MultiLineIfElse:CommandHistory.kt$InputLineAssembler$flush()</ID>
+    <ID>MultiLineIfElse:CommandPaletteSheet.kt$"Nothing matches \"$query\"."</ID>
+    <ID>MultiLineIfElse:CommandPaletteSheet.kt$"Type to search commands and snippets."</ID>
+    <ID>MultiLineIfElse:DockerActivity.kt$DockerActivity$null</ID>
+    <ID>MultiLineIfElse:DockerActivity.kt$DockerActivity$out.trim().take(120)</ID>
+    <ID>MultiLineIfElse:MonitorActivity.kt$MonitorActivity$"no swap"</ID>
+    <ID>MultiLineIfElse:MonitorActivity.kt$MonitorActivity$"swap ${formatBytes(s.swapUsedBytes)} / ${formatBytes(s.swapTotalBytes)}"</ID>
+    <ID>MultiLineIfElse:SessionTabs.kt$"no swap"</ID>
+    <ID>MultiLineIfElse:SessionTabs.kt$"swap ${formatBytes(s.swapUsedBytes)} / ${formatBytes(s.swapTotalBytes)}"</ID>
+    <ID>MultiLineIfElse:SessionsSheet.kt$false</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Choose a passphrase to encrypt the backup (min 6 characters). You will need it to restore."</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Enter the passphrase this backup was encrypted with."</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Import failed: ${e.message}"</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"No screen lock or biometrics set up on this device."</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Not available in this build (no reporting endpoint compiled in)."</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Require fingerprint, face or screen lock to open Conch."</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Send anonymous crash reports to the developer's self-hosted server. Host addresses, usernames and credentials are never included. Off by default."</ID>
+    <ID>MultiLineIfElse:SettingsActivity.kt$SettingsActivity$"Wrong passphrase or corrupted file"</ID>
+    <ID>MultiLineIfElse:TerminalActivity.kt$TerminalActivity$"First connection to ${request.endpoint}. Trust this host?"</ID>
+    <ID>MultiLineIfElse:TerminalActivity.kt$TerminalActivity$"No history yet. Commands you run are recorded here (encrypted on this device)."</ID>
+    <ID>MultiLineIfElse:TerminalActivity.kt$TerminalActivity$"Nothing matches \"$query\"."</ID>
+    <ID>MultiLineIfElse:TerminalActivity.kt$TerminalActivity$"The key reported by ${request.endpoint} differs from the recorded one. The server may have been reinstalled — or someone is intercepting the connection."</ID>
+    <ID>MultiLineIfElse:TerminalActivity.kt$TerminalActivity$0.35f + 0.65f * (1f - ((p - 0.8f) / 1.2f).coerceIn(0f, 1f))</ID>
+    <ID>MultiLineIfElse:TerminalActivity.kt$TerminalActivity$1f</ID>
+    <ID>MultiLineIfElse:TerminalView.kt$TerminalView.TerminalInputConnection$view.pasteText(text.toString())</ID>
+    <ID>MultiLineIfElse:TerminalView.kt$TerminalView.TerminalInputConnection$view.sendText(text.toString())</ID>
     <ID>NestedBlockDepth:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
     <ID>NestedBlockDepth:HostStore.kt$HostStore$fun load(): MutableList&lt;Host&gt;</ID>
     <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy bridges ipv4 connect to echo server`()</ID>
@@ -125,7 +223,44 @@
     <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy works with the jdk socks client`()</ID>
     <ID>NestedBlockDepth:SftpInteractionTest.kt$SftpInteractionTest$@Test(timeout = 60_000) fun `odd-offset odd-length reads return unscrambled bytes`()</ID>
     <ID>NestedBlockDepth:SshConnectAuthInteractionTest.kt$SshConnectAuthInteractionTest$@Test(timeout = 30_000) fun `ed25519 key not in authorized_keys is rejected`()</ID>
+    <ID>NoConsecutiveBlankLines:DockerActivity.kt$ </ID>
+    <ID>NoMultipleSpaces:BackupCodec.kt$BackupCodec$ </ID>
+    <ID>NoMultipleSpaces:BackupManagerMergeTest.kt$BackupManagerMergeTest$ </ID>
+    <ID>NoMultipleSpaces:CrashReportingWiringRobolectricTest.kt$CrashReportingWiringRobolectricTest$ </ID>
+    <ID>NoMultipleSpaces:ExtraKeysConfig.kt$ExtraKeysConfig$ </ID>
+    <ID>NoMultipleSpaces:HostStore.kt$Host$ </ID>
+    <ID>NoMultipleSpaces:InputLineAssemblerTest.kt$InputLineAssemblerTest$ </ID>
+    <ID>NoMultipleSpaces:KeyManager.kt$SshKeyInfo$ </ID>
+    <ID>NoMultipleSpaces:MonitorPollTest.kt$TerminalReplayTest$ </ID>
+    <ID>NoMultipleSpaces:ReconnectPolicyTest.kt$ReconnectPolicyTest$ </ID>
+    <ID>NoMultipleSpaces:SettingsActivity.kt$SettingsActivity$ </ID>
+    <ID>NoMultipleSpaces:SnippetStoreTest.kt$SnippetStoreTest$ </ID>
+    <ID>NoMultipleSpaces:SocksProxy.kt$SocksProxy$ </ID>
+    <ID>NoMultipleSpaces:TerminalEmulatorTruecolorTest.kt$TerminalEmulatorTruecolorTest$ </ID>
+    <ID>NoMultipleSpaces:TerminalView.kt$TerminalView$ </ID>
+    <ID>NoMultipleSpaces:UrlDetectTest.kt$UrlDetectTest$ </ID>
+    <ID>NoUnusedImports:BackupManagerMergeTest.kt$at.least.conch.BackupManagerMergeTest.kt</ID>
+    <ID>NoUnusedImports:CommandPaletteSheet.kt$at.least.conch.CommandPaletteSheet.kt</ID>
+    <ID>NoUnusedImports:DockerActivity.kt$at.least.conch.DockerActivity.kt</ID>
+    <ID>NoUnusedImports:Ed25519CodecTest.kt$at.least.conch.Ed25519CodecTest.kt</ID>
+    <ID>NoUnusedImports:KeyAuthRoundTripTest.kt$at.least.conch.KeyAuthRoundTripTest.kt</ID>
+    <ID>NoUnusedImports:KnownHostsStoreUnitTest.kt$at.least.conch.KnownHostsStoreUnitTest.kt</ID>
+    <ID>NoUnusedImports:MainActivity.kt$at.least.conch.MainActivity.kt</ID>
+    <ID>NoUnusedImports:SessionTabs.kt$at.least.conch.SessionTabs.kt</ID>
+    <ID>NoUnusedImports:SftpActivity.kt$at.least.conch.SftpActivity.kt</ID>
+    <ID>NoUnusedImports:SocksProxy.kt$at.least.conch.SocksProxy.kt</ID>
+    <ID>NoUnusedImports:SshSessionLifecycleInteractionTest.kt$at.least.conch.SshSessionLifecycleInteractionTest.kt</ID>
+    <ID>NoUnusedImports:TerminalActivity.kt$at.least.conch.TerminalActivity.kt</ID>
+    <ID>NoUnusedImports:TerminalEmulatorTruecolorTest.kt$at.least.conch.TerminalEmulatorTruecolorTest.kt</ID>
+    <ID>NoUnusedImports:TestSshd.kt$at.least.conch.TestSshd.kt</ID>
+    <ID>ParameterListWrapping:TerminalView.kt$TerminalView$(heightPx: Int)</ID>
+    <ID>SpacingAroundKeyword:CommandHistory.kt$InputLineAssembler$else</ID>
+    <ID>SpacingBetweenDeclarationsWithAnnotations:SshSession.kt$SshSession$@Volatile private var client: SSHClient? = null</ID>
+    <ID>SpacingBetweenDeclarationsWithAnnotations:SshSession.kt$SshSession$@Volatile private var session: Session? = null</ID>
+    <ID>SpacingBetweenDeclarationsWithAnnotations:SshSession.kt$SshSession$@Volatile private var socksProxy: SocksProxy? = null</ID>
     <ID>SpreadOperator:TerminalActivity.kt$TerminalActivity$(*current.toTypedArray())</ID>
+    <ID>StringTemplate:PortForwardInteractionTest.kt$PortForwardInteractionTest$${off}</ID>
+    <ID>StringTemplate:SshSessionLifecycleInteractionTest.kt$SshSessionLifecycleInteractionTest.RecordingCallbacks$${reasons}</ID>
     <ID>TooGenericExceptionThrown:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$throw RuntimeException("UI blew up")</ID>
     <ID>TooManyFunctions:Ed25519Codec.kt$Ed25519Codec</ID>
     <ID>TooManyFunctions:SessionReconnector.kt$SessionReconnector : Callbacks</ID>
@@ -153,5 +288,34 @@
     <ID>UseCheckOrError:SshConnectionFactory.kt$SshConnectionFactory$throw IllegalStateException("Host is set to key auth but no key is selected")</ID>
     <ID>UseCheckOrError:SshConnectionFactory.kt$SshConnectionFactory$throw IllegalStateException("No stored password — edit this host and save a password")</ID>
     <ID>UseCheckOrError:SshSession.kt$SshSession$throw IllegalStateException("context required for default connector")</ID>
+    <ID>Wrapping:CommandHistory.kt$InputLineAssembler$;</ID>
+    <ID>Wrapping:CommandHistory.kt$InputLineAssembler${ buf.clear(); dropPending = false }</ID>
+    <ID>Wrapping:CommandHistoryTest.kt$CommandHistoryTest$;</ID>
+    <ID>Wrapping:DockerActivity.kt$DockerActivity$;</ID>
+    <ID>Wrapping:EditHostActivity.kt$"${it.name} (${it.fingerprint.takeLast(12)})"</ID>
+    <ID>Wrapping:EditHostActivity.kt$;</ID>
+    <ID>Wrapping:EditHostActivity.kt$Text(if (isEdit &amp;&amp; SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password")</ID>
+    <ID>Wrapping:EditHostActivity.kt$it.id == selectedKeyId</ID>
+    <ID>Wrapping:EditHostActivity.kt$mutableStateOf(if ((initial?.fontSizeSp ?: 0f) &gt; 0f) initial!!.fontSizeSp.toInt().toString() else "")</ID>
+    <ID>Wrapping:EditHostActivity.kt$mutableStateOf(if ((initial?.socksPort ?: 0) &gt; 0) initial!!.socksPort.toString() else "")</ID>
+    <ID>Wrapping:InputLineAssemblerTest.kt$InputLineAssemblerTest$(</ID>
+    <ID>Wrapping:InputLineAssemblerTest.kt$InputLineAssemblerTest$("lone surrogate in recorded line", Character.isSurrogate(c) &amp;&amp; !("\uD83D\uDE00".contains(c)))</ID>
+    <ID>Wrapping:KeysActivity.kt$KeysActivity$;</ID>
+    <ID>Wrapping:KnownHosts.kt$KnownHostsStore.Companion$(</ID>
+    <ID>Wrapping:MainActivity.kt$MainActivity$;</ID>
+    <ID>Wrapping:MainActivity.kt$MainActivity$Text("Android SSH client — free &amp; open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux")</ID>
+    <ID>Wrapping:PortForwardInteractionTest.kt$PortForwardInteractionTest$;</ID>
+    <ID>Wrapping:SessionReconnectorInteractionTest.kt$SessionReconnectorInteractionTest$;</ID>
+    <ID>Wrapping:SessionTabs.kt$(</ID>
+    <ID>Wrapping:SessionTabs.kt$;</ID>
+    <ID>Wrapping:SettingsActivity.kt$SettingsActivity$TextButton(onClick = { showPassphrase.value = false passphraseText.value = "" pendingExport = null pendingImport = null }) { Text("Cancel") }</ID>
+    <ID>Wrapping:SftpActivity.kt$SftpActivity$;</ID>
+    <ID>Wrapping:SocksProxy.kt$SocksProxy$;</ID>
+    <ID>Wrapping:SshSession.kt$SshSession$;</ID>
+    <ID>Wrapping:SshSessionLifecycleInteractionTest.kt$SshSessionLifecycleInteractionTest$;</ID>
+    <ID>Wrapping:TerminalActivity.kt$TerminalActivity$;</ID>
+    <ID>Wrapping:TerminalView.kt$TerminalView$(</ID>
+    <ID>Wrapping:TerminalView.kt$TerminalView$(context, object : GestureDetector.SimpleOnGestureListener() { override fun onScroll( e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float, ): Boolean { if (abs(distanceY) &lt;= abs(distanceX)) return false val emu = emulator ?: return false val lines = (distanceY / cellHeight).roundToInt() if (lines != 0) { scrollOffset = (scrollOffset + lines).coerceIn(0, emu.scrollbackSize) invalidate() } return true } override fun onSingleTapConfirmed(e: MotionEvent): Boolean { if (scrollOffset &gt; 0) { scrollOffset = 0 invalidate() } else { showSoftKeyboard() } return true } override fun onLongPress(e: MotionEvent) { val url = urlAt(e.x, e.y) ?: return val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager cm.setPrimaryClip(android.content.ClipData.newPlainText("url", url)) android.widget.Toast.makeText(context, "URL copied", android.widget.Toast.LENGTH_SHORT).show() } override fun onFling( e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float, ): Boolean { // simple fling: consume remaining velocity as history lines if (abs(velocityY) &gt; 2000) { val emu = emulator ?: return false val lines = (velocityY / 8000f).roundToInt() scrollOffset = (scrollOffset - lines).coerceIn(0, emu.scrollbackSize) invalidate() } return true } })</ID>
+    <ID>Wrapping:TerminalView.kt$TerminalView$;</ID>
   </CurrentIssues>
 </SmellBaseline>
