@@ -56,6 +56,16 @@ class SshSession(
 
         fun cleanCloseReason(uptimeMs: Long): String =
             if (uptimeMs >= MIN_SESSION_MS) REASON_SESSION_ENDED else "Connection closed by remote"
+
+        /**
+         * Reasons that must NOT trigger a reconnect: the user ended the
+         * session, or authentication was rejected (retrying a bad password
+         * forever spams the server and can trip lockouts — let the user fix
+         * the credentials instead). Matches the prefixes SshConnectionFactory
+         * .describeError emits for auth failures.
+         */
+        fun isTerminalFailure(reason: String): Boolean =
+            reason == REASON_SESSION_ENDED || reason.startsWith("Authentication failed")
     }
 
     interface Callbacks {
@@ -137,9 +147,9 @@ class SshSession(
                     } catch (e: Exception) {
                         CrashReporting.report(e)
                         post {
-                            callbacks.onData(
-                                "\r\n\u001b[90m[socks5 127.0.0.1:${host.socksPort} unavailable — port in use?]\u001b[0m\r\n".toByteArray()
-                            )
+                            val msg = "\r\n\u001b[90m[socks5 127.0.0.1:${host.socksPort}" +
+                                " unavailable — port in use?]\u001b[0m\r\n"
+                            callbacks.onData(msg.toByteArray())
                         }
                     }
                 }

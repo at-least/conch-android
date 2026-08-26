@@ -283,8 +283,23 @@ class TerminalActivity : FragmentActivity() {
     private fun TerminalScreen() {
         val host = this.host
         var menuOpen by remember { mutableStateOf(false) }
-        val snippets = remember { SnippetStore(this).load() }
+        var snippets by remember { mutableStateOf(listOf<Snippet>()) }
         var tab by remember { mutableStateOf(SessionTab.TERMINAL) }
+
+        // Snippets load off-main whenever the sheet opens — newly saved
+        // snippets (history sheet → Save) appear on the next open too.
+        LaunchedEffect(snippetsSheetVisible.value) {
+            if (snippetsSheetVisible.value) {
+                snippets = withContext(Dispatchers.IO) { SnippetStore(this@TerminalActivity).load() }
+            }
+        }
+
+        // The hidden terminal must not eat hardware keys while another tab
+        // is showing; coming back re-focuses it for hardware-keyboard users.
+        LaunchedEffect(tab) {
+            val tv = terminalView ?: return@LaunchedEffect
+            if (tab == SessionTab.TERMINAL) tv.requestFocus() else tv.clearFocus()
+        }
 
         Scaffold(
             containerColor = Color(0xFF1A1B26),
@@ -551,6 +566,10 @@ class TerminalActivity : FragmentActivity() {
                     TextButton(onClick = {
                         keyPromptState.value = null
                         answer(false)
+                        // Declining trust is a decision, not a network blip:
+                        // stop the reconnect loop instead of re-prompting
+                        // on every backoff interval.
+                        stopReconnecting()
                     }) { Text("Cancel") }
                 }
             )
@@ -724,11 +743,13 @@ class TerminalActivity : FragmentActivity() {
     }
 
     private fun saveAsSnippet(command: String) {
-        val store = SnippetStore(this)
-        val list = store.load()
         val label = command.lineSequence().firstOrNull { it.isNotBlank() }?.take(40) ?: "snippet"
-        list.add(Snippet(label = label, command = command))
-        store.save(list)
+        historyExecutor.execute {
+            val store = SnippetStore(this)
+            val list = store.load()
+            list.add(Snippet(label = label, command = command))
+            store.save(list)
+        }
         Toast.makeText(this, "Saved snippet: $label", Toast.LENGTH_SHORT).show()
     }
 

@@ -68,7 +68,7 @@ class AtomicFileTest {
         io.mockk.mockkObject(SecretsStore) {
             io.mockk.every { SecretsStore.get(any()) } returns null
             io.mockk.every { SecretsStore.put(any(), any()) } answers {
-                if (firstArg<String>() == "host-pw:h2") throw IllegalStateException("keystore hiccup")
+                if (firstArg<String>() == "host-pw:h2") error("keystore hiccup")
             }
             val hosts = HostStore(context).load()
             // h2's migration failed; h1 migrated, h3 needs nothing — the

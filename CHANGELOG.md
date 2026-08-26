@@ -2,6 +2,43 @@
 
 ## 0.9.1 (unreleased)
 
+- Fixed: crash and gesture bugs — the command palette crashed when history
+  contained the same command twice (LazyColumn duplicate key; history only
+  dedups consecutive repeats); scrollback drag + fling moved opposite to the
+  mouse branch and platform convention (finger down now reveals older
+  history, pinned by TerminalScrollTest); the text-selection Copy chip could
+  throw on ultra-narrow viewports
+- Fixed: the sessions switcher now switches to the TAPPED session — each
+  terminal runs in its own task and the switcher moves that task to the
+  front; previously tapping session B could surface session A's terminal
+- Fixed: ending one session no longer drops the foreground protection of
+  the others — per-session notifications, and the service stops only when
+  the LAST session goes away
+- Fixed: resource leaks — a failed login leaked the connected socket and
+  sshj reader threads; the Files tab leaked one SFTP channel per visit
+  (channel exhaustion eventually killed the interactive shell); Monitor's
+  5s exec poll leaked its channel on failure; a SOCKS port collision
+  killed an otherwise healthy shell connection
+- Fixed: declining a host-key prompt or failing authentication now stops
+  the reconnect loop instead of re-prompting / retrying forever (auth
+  retry storms can trip server lockouts)
+- Data durability: every store (hosts, snippets, keys, known_hosts,
+  command history) writes atomically (temp file + fsync + rename) so a
+  crash mid-write can no longer truncate data into permanent loss; a
+  corrupt hosts/snippets/keys file is preserved as `*.corrupt` for
+  recovery instead of being silently overwritten; a keystore failure no
+  longer drops the tail of the host list during legacy migration
+- Command history: a transient keystore failure disables the store for
+  the session instead of regenerating the key (which permanently bricked
+  the file once the keystore recovered); a corrupt stored key is
+  regenerated AND persisted (previously each process got a different
+  ephemeral key, so history never survived a restart); hardware keys no
+  longer reach the hidden terminal while a tool tab is showing; snippets
+  reload when their sheet opens
+- Internal: unreachable standalone SFTP/Monitor/Docker activities removed
+  (~1,100 lines — the in-session tabs replaced them long ago); secrets
+  registry gains contains(); About shows the real build version;
+  OpenSSH checkint uses SecureRandom
 - Internal: codebase cleanup — dead code removed (pre-tab-era standalone
   SFTP/Monitor launchers, a duplicated URL regex, unused state/params),
   `error()` replaces `throw IllegalStateException`, ktlint formatting

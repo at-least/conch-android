@@ -124,9 +124,10 @@ class SessionReconnector(
             deliverStopped(reason)
             return
         }
-        // `exit` / CTRL+D on a healthy session: the user ended it on
-        // purpose — deliver the terminal state, never loop back in.
-        if (reason == SshSession.REASON_SESSION_ENDED) {
+        // `exit` / CTRL+D on a healthy session, or an auth rejection: the
+        // user (or the server) ended it on purpose — deliver the terminal
+        // state, never loop back in.
+        if (SshSession.isTerminalFailure(reason)) {
             deliverStopped(reason)
             return
         }

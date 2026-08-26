@@ -171,4 +171,54 @@ class SessionReconnectorBackoffLoopTest {
         assertEquals(listOf("user closed"), listener.stopped.toList())
         assertEquals("no 4th attempt may be scheduled after stop", 3, listener.reconnecting.size)
     }
+
+    @Test
+    fun `authentication failure is terminal - no retry loop`() = runTest {
+        val listener = RecordingListener()
+        val pending = CopyOnWriteArrayList<Job>()
+        val reconnector = SessionReconnector(
+            newSession = { cb ->
+                SshSession(
+                    context = null,
+                    host = Host(hostname = "127.0.0.1", username = "u", authType = Host.AUTH_PASSWORD),
+                    initialCols = 80,
+                    initialRows = 24,
+                    callbacks = cb,
+                    tofuPrompt = null,
+                    post = { it.run() },
+                    connector = { _, _ ->
+                        throw net.schmizz.sshj.userauth.UserAuthException("bad credentials")
+                    },
+                )
+            },
+            listener = listener,
+            postDelayed = { delayMs, action ->
+                pending += launch {
+                    delay(delayMs)
+                    action()
+                }
+            },
+            cancelScheduled = {
+                pending.forEach(Job::cancel)
+                pending.clear()
+            },
+        )
+
+        reconnector.start()
+        pumpUntil(testScheduler) { listener.stopped.isNotEmpty() }
+
+        // Retrying a rejected credential forever spams the server; the loop
+        // must deliver the terminal state on the FIRST failure instead.
+        assertTrue("no reconnect may be scheduled for an auth failure", listener.reconnecting.isEmpty())
+        assertTrue(listener.stopped.peek()?.startsWith("Authentication failed") == true)
+    }
+
+    @Test
+    fun `terminal failure classification`() {
+        assertTrue(SshSession.isTerminalFailure(SshSession.REASON_SESSION_ENDED))
+        assertTrue(SshSession.isTerminalFailure("Authentication failed: bad credentials"))
+        assertTrue(SshSession.isTerminalFailure("Authentication failed (wrong user/password/key?)"))
+        org.junit.Assert.assertFalse(SshSession.isTerminalFailure("Connection timed out"))
+        org.junit.Assert.assertFalse(SshSession.isTerminalFailure("Connection closed by remote"))
+    }
 }

@@ -80,7 +80,9 @@ object Ed25519Codec {
      */
     fun openSshPrivateKeyPem(seed: ByteArray, publicPoint: ByteArray, comment: String): String {
         require(seed.size == 32 && publicPoint.size == 32)
-        val check = java.util.Random().nextInt()
+        // The checkint pair is round-trip integrity, not a secret, but the
+        // rest of this file uses SecureRandom — no reason to mix RNGs.
+        val check = SecureRandom().nextInt()
 
         var priv = u32(check) + u32(check) +
             sshStr("ssh-ed25519".toByteArray()) +
