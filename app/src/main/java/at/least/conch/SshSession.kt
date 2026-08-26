@@ -42,6 +42,20 @@ class SshSession(
          * Pinned by InteractionStringContractTest.
          */
         const val TMUX_ATTACH_LINE = "COLORTERM=truecolor tmux new -A -s conch\r"
+
+        /**
+         * Reader-loop EOF after the shell lived at least [MIN_SESSION_MS]
+         * means the remote side closed a working session — the user typed
+         * `exit` / CTRL+D. Reported as [REASON_SESSION_ENDED] so the
+         * reconnector stops instead of looping back into a fresh shell
+         * (ConnectBot open issue: "Mark session as cleanly closed when
+         * exiting with CTRL+D").
+         */
+        const val REASON_SESSION_ENDED = "Session ended"
+        const val MIN_SESSION_MS = 10_000L
+
+        fun cleanCloseReason(uptimeMs: Long): String =
+            if (uptimeMs >= MIN_SESSION_MS) REASON_SESSION_ENDED else "Connection closed by remote"
     }
 
     interface Callbacks {
@@ -117,6 +131,7 @@ class SshSession(
                 val sh = s.startShell()
                 shell = sh
                 shellOut = sh.outputStream
+                establishedAtMs = System.currentTimeMillis()
 
                 if (!closed.get()) post { callbacks.onConnected() }
 
@@ -141,7 +156,9 @@ class SshSession(
                         post { callbacks.onData(copy) }
                     }
                 }
-                disconnectInner("Connection closed by remote")
+                val established = establishedAtMs
+                val uptime = if (established == 0L) 0L else System.currentTimeMillis() - established
+                disconnectInner(cleanCloseReason(uptime))
             } catch (e: Exception) {
                 CrashReporting.report(e)
                 disconnectInner(SshConnectionFactory.describeError(e))
@@ -152,6 +169,9 @@ class SshSession(
             start()
         }
     }
+
+    @Volatile
+    private var establishedAtMs = 0L
 
     private var readerThread: Thread? = null
 

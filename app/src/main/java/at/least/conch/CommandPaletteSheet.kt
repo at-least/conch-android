@@ -60,6 +60,7 @@ fun CommandPaletteSheet(
     onDismiss: () -> Unit,
     onOpenSnippets: () -> Unit,
     onOpenHistory: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var query by remember { mutableStateOf("") }
@@ -81,6 +82,7 @@ fun CommandPaletteSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        modifier = modifier,
     ) {
         Column(Modifier.fillMaxWidth()) {
             Row(

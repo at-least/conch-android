@@ -275,6 +275,12 @@ class MainActivity : FragmentActivity() {
                 text = { Text("Android SSH client — free & open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux") },
                 confirmButton = {
                     TextButton(onClick = { showAbout = false }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showAbout = false
+                        startActivity(Intent(this@MainActivity, LicensesActivity::class.java))
+                    }) { Text("Licenses") }
                 }
             )
         }

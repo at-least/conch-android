@@ -135,13 +135,13 @@ object MonitorPoll {
 }
 
 @Composable
-fun MonitorTab(session: SessionReconnector) {
+fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     var snapshot by remember { mutableStateOf<MonitorParser.Snapshot?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var autoRefresh by remember { mutableStateOf(true) }
 
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
@@ -238,7 +238,7 @@ private fun formatUptime(seconds: Long): String {
 // =====================================================================
 
 @Composable
-fun DockerTab(session: SessionReconnector) {
+fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     val containers = remember { mutableStateListOf<DockerParser.Container>() }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -277,7 +277,7 @@ fun DockerTab(session: SessionReconnector) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
         status?.let {
             Text(
                 it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp,
@@ -354,7 +354,12 @@ private fun ContainerRow(
 // =====================================================================
 
 @Composable
-fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String = "/") {
+fun SftpTab(
+    session: SessionReconnector,
+    connectionGen: Int,
+    modifier: Modifier = Modifier,
+    startPath: String = "/",
+) {
     val context = LocalContext.current
     var sftp by remember { mutableStateOf<SFTPClient?>(null) }
     var sftpFailed by remember { mutableStateOf(false) }
@@ -582,7 +587,7 @@ fun SftpTab(session: SessionReconnector, connectionGen: Int, startPath: String =
         uri?.let { upload(it) }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
         // breadcrumb / sort / up / refresh
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),

@@ -771,7 +771,7 @@ class TerminalActivity : FragmentActivity() {
     @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     @Composable
     private fun ExtraKeysEditor(current: List<String>, onSave: (List<String>) -> Unit, onCancel: () -> Unit) {
-        val selected = androidx.compose.runtime.mutableStateListOf(*current.toTypedArray())
+        val selected = remember { androidx.compose.runtime.mutableStateListOf(*current.toTypedArray()) }
         ModalBottomSheet(onDismissRequest = onCancel) {
             Text(
                 "Extra keys",

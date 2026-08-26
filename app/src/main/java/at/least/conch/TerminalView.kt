@@ -3,6 +3,7 @@ package at.least.conch
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.GestureDetector
@@ -117,7 +118,7 @@ class TerminalView @JvmOverloads constructor(
     private var lastSentCols = -1
     private var lastSentRows = -1
 
-    private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+    private val gestureListener = object : GestureDetector.SimpleOnGestureListener() {
         override fun onScroll(
             e1: MotionEvent?,
             e2: MotionEvent,
@@ -126,6 +127,19 @@ class TerminalView @JvmOverloads constructor(
         ): Boolean {
             if (abs(distanceY) <= abs(distanceX)) return false
             val emu = emulator ?: return false
+            // Mouse-tracking apps (htop/vim/tmux): scrolling is wheel input
+            // for the app, not local scrollback.
+            if (emu.mouseTracking) {
+                wheelRemainder += distanceY
+                val lines = (wheelRemainder / cellHeight).toInt()
+                if (lines != 0) {
+                    wheelRemainder -= lines * cellHeight
+                    val cell = MouseInput.cellAt(e2.x, e2.y, cellWidth, cellHeight, emu.cols, emu.rows)
+                    val button = MouseInput.wheelButton(lines)
+                    repeat(abs(lines)) { emu.sendMouse(button, cell.col, cell.row, true) }
+                }
+                return true
+            }
             val lines = (distanceY / cellHeight).roundToInt()
             if (lines != 0) {
                 scrollOffset = (scrollOffset + lines).coerceIn(0, emu.scrollbackSize)
@@ -135,6 +149,27 @@ class TerminalView @JvmOverloads constructor(
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            val emu = emulator
+            if (emu != null && emu.mouseTracking) {
+                // tap = left click (press + release); the soft keyboard stays
+                // reachable via the session toolbar button
+                val cell = MouseInput.cellAt(e.x, e.y, cellWidth, cellHeight, emu.cols, emu.rows)
+                emu.sendMouse(MouseInput.BUTTON_LEFT, cell.col, cell.row, true)
+                emu.sendMouse(MouseInput.BUTTON_LEFT, cell.col, cell.row, false)
+                return true
+            }
+            if (selection.isActive) {
+                val chip = chipRect
+                if (chip != null && chip.contains(e.x, e.y)) {
+                    copySelection()
+                } else {
+                    // any other tap dismisses the selection
+                    selection.clear()
+                    chipRect = null
+                    invalidate()
+                }
+                return true
+            }
             if (scrollOffset > 0) {
                 scrollOffset = 0
                 invalidate()
@@ -145,10 +180,21 @@ class TerminalView @JvmOverloads constructor(
         }
 
         override fun onLongPress(e: MotionEvent) {
-            val url = urlAt(e.x, e.y) ?: return
-            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("url", url))
-            android.widget.Toast.makeText(context, "URL copied", android.widget.Toast.LENGTH_SHORT).show()
+            mouseDragActive = false
+            val emu = emulator ?: return
+            if (emu.mouseTracking) {
+                // long-press + move = button-event drag (DECSET 1002; the
+                // engine suppresses it when only 1000 is active)
+                mouseDragActive = true
+                dragCell = MouseInput.cellAt(e.x, e.y, cellWidth, cellHeight, emu.cols, emu.rows)
+                emu.sendMouse(MouseInput.BUTTON_LEFT, dragCell!!.col, dragCell!!.row, true)
+                return
+            }
+            // text selection: anchor in external (content-glued) coordinates
+            selecting = true
+            chipRect = null
+            selection.startAnchor(externalRowAt(e.y), colAt(e.x))
+            invalidate()
         }
 
         override fun onFling(
@@ -157,16 +203,46 @@ class TerminalView @JvmOverloads constructor(
             velocityX: Float,
             velocityY: Float,
         ): Boolean {
+            val emu = emulator ?: return false
+            if (emu.mouseTracking) {
+                // wheel burst, capped so a flick cannot flood the channel
+                val lines = (velocityY / 4000f).roundToInt().coerceIn(-10, 10)
+                if (lines != 0) {
+                    val cell = MouseInput.cellAt(e2.x, e2.y, cellWidth, cellHeight, emu.cols, emu.rows)
+                    val button = MouseInput.wheelButton(lines)
+                    repeat(abs(lines)) { emu.sendMouse(button, cell.col, cell.row, true) }
+                }
+                return true
+            }
             // simple fling: consume remaining velocity as history lines
             if (abs(velocityY) > 2000) {
-                val emu = emulator ?: return false
                 val lines = (velocityY / 8000f).roundToInt()
                 scrollOffset = (scrollOffset - lines).coerceIn(0, emu.scrollbackSize)
                 invalidate()
             }
             return true
         }
-    })
+    }
+
+    private val gestureDetector = GestureDetector(context, gestureListener)
+
+    /** Sub-cell remainder carried between onScroll wheel conversions. */
+    private var wheelRemainder = 0f
+
+    /** Long-press drag armed while a mouse-tracking app wants drags. */
+    private var mouseDragActive = false
+    private var dragCell: MouseInput.Cell? = null
+
+    /** Active text selection (long-press + drag) and its Copy chip. */
+    private val selection = TextSelection()
+    private var selecting = false
+    private var chipRect: RectF? = null
+    private val selectionPaint = Paint().apply { color = 0x4080DEEA.toInt() }
+    private val chipPaint = Paint().apply { color = 0xEE264F78.toInt() }
+    private val chipTextPaint = Paint().apply {
+        color = 0xFFFFFFFF.toInt()
+        isAntiAlias = true
+    }
 
     /** Returns the URL under the given view coordinates, if any. */
     private fun urlAt(x: Float, y: Float): String? {
@@ -297,6 +373,8 @@ class TerminalView @JvmOverloads constructor(
         textPaint.isFakeBoldText = boldSaved
         textPaint.isUnderlineText = underlineSaved
 
+        drawSelection(canvas, emu, visibleRows)
+
         if (emu.cursorVisible && scrollOffset == 0) {
             val cx = paddingLeft + emu.cursorCol * cellWidth
             val cy = paddingTop + emu.cursorRow * cellHeight
@@ -321,12 +399,128 @@ class TerminalView @JvmOverloads constructor(
     private fun resolveColor(decoded: Int, defaultColor: Int): Int =
         if (decoded and 0xFF000000.toInt() != 0) decoded else palette[decoded]
 
+    /** Selection overlay: one translucent rect per visible selected row-span,
+     *  plus the floating Copy chip next to the caret. */
+    private fun drawSelection(canvas: Canvas, emu: TerminalEmulator, visibleRows: Int) {
+        if (!selection.isActive) return
+        val (s, e) = selection.normalized() ?: return
+        for (vi in 0 until visibleRows) {
+            val externalRow = vi - scrollOffset
+            if (externalRow in s.externalRow..e.externalRow && externalRow < emu.rows) {
+                val from = if (externalRow == s.externalRow) s.col else 0
+                val to = (if (externalRow == e.externalRow) e.col else emu.cols - 1).coerceAtMost(emu.cols - 1)
+                if (to >= from) {
+                    val left = paddingLeft + from * cellWidth
+                    val top = paddingTop + vi * cellHeight
+                    canvas.drawRect(
+                        left,
+                        top,
+                        left + (to - from + 1) * cellWidth,
+                        top + cellHeight,
+                        selectionPaint,
+                    )
+                }
+            }
+        }
+        chipRect?.let { chip ->
+            canvas.drawRoundRect(chip, 8f, 8f, chipPaint)
+            chipTextPaint.textSize = cellHeight * 0.9f
+            val ty = chip.centerY() - (chipTextPaint.descent() + chipTextPaint.ascent()) / 2f
+            canvas.drawText("  Copy  ", chip.left, ty, chipTextPaint)
+        }
+    }
+
     // ----------------------------------------------------------------- input
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val handled = gestureDetector.onTouchEvent(event)
+        if (mouseDragActive) forwardMouseDrag(event)
+        if (selecting) forwardSelectionDrag(event)
         val superHandled = super.onTouchEvent(event)
         return superHandled || handled
+    }
+
+    private fun forwardMouseDrag(event: MotionEvent) {
+        val emu = emulator ?: return
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                val cell = MouseInput.cellAt(event.x, event.y, cellWidth, cellHeight, emu.cols, emu.rows)
+                if (cell != dragCell) {
+                    dragCell = cell
+                    emu.sendMouse(MouseInput.BUTTON_LEFT_MOVED, cell.col, cell.row, true)
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                dragCell?.let { emu.sendMouse(MouseInput.BUTTON_LEFT, it.col, it.row, false) }
+                mouseDragActive = false
+                dragCell = null
+            }
+        }
+    }
+
+    private fun forwardSelectionDrag(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                selection.moveCaret(externalRowAt(event.y), colAt(event.x))
+                invalidate()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                selecting = false
+                onSelectionGestureEnd(event.x, event.y)
+                invalidate()
+            }
+        }
+    }
+
+    private fun externalRowAt(y: Float): Int =
+        ((y - paddingTop) / cellHeight).toInt() - scrollOffset
+
+    private fun colAt(x: Float): Int = ((x - paddingLeft) / cellWidth).toInt()
+
+    /** Selection gesture released: single-cell tap keeps the old URL copy;
+     *  a real drag arms the Copy chip next to the caret. */
+    private fun onSelectionGestureEnd(x: Float, y: Float) {
+        val emu = emulator ?: return
+        val (a, c) = selection.normalized() ?: return
+        if (a == c) {
+            // legacy one-tap behavior: long-press a URL copies the URL
+            val url = urlAt(x, y)
+            if (url != null) {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("url", url))
+                android.widget.Toast.makeText(context, "URL copied", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            selection.clear()
+            chipRect = null
+            return
+        }
+        chipRect = computeChipRect(emu, c)
+    }
+
+    private fun computeChipRect(emu: TerminalEmulator, caret: TextSelection.Cell): RectF {
+        val text = "  Copy  "
+        val tw = textPaint.measureText(text)
+        val th = cellHeight * 1.4f
+        val vi = (caret.externalRow + scrollOffset).coerceIn(0, emu.rows - 1)
+        val cx = (paddingLeft + (caret.col + 1) * cellWidth).coerceIn(paddingLeft.toFloat(), width - tw)
+        var top = paddingTop + vi * cellHeight - th
+        if (top < paddingTop) top = paddingTop + (vi + 1) * cellHeight
+        return RectF(cx, top, cx + tw, top + th)
+    }
+
+    private fun copySelection() {
+        val emu = emulator ?: return
+        val text = TextSelection.selectedText(emu, selection)
+        if (text.isNotEmpty()) {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("terminal", text))
+            android.widget.Toast
+                .makeText(context, "Copied ${text.length} chars", android.widget.Toast.LENGTH_SHORT)
+                .show()
+        }
+        selection.clear()
+        chipRect = null
+        invalidate()
     }
 
     fun showSoftKeyboard() {

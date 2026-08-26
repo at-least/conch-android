@@ -43,11 +43,12 @@ import java.util.concurrent.TimeUnit
 fun SessionsSheet(
     onOpen: (LiveSessions.Live) -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var sessions by remember { mutableStateOf(LiveSessions.all()) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, modifier = modifier) {
         Column(Modifier.fillMaxWidth()) {
             Text(
                 "Sessions",

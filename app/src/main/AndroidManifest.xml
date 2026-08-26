@@ -50,6 +50,7 @@
         <activity android:name=".MonitorActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".DockerActivity" android:exported="false" />
+        <activity android:name=".LicensesActivity" android:exported="false" />
 
         <service
             android:name=".SessionService"

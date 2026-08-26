@@ -124,6 +124,12 @@ class SessionReconnector(
             deliverStopped(reason)
             return
         }
+        // `exit` / CTRL+D on a healthy session: the user ended it on
+        // purpose — deliver the terminal state, never loop back in.
+        if (reason == SshSession.REASON_SESSION_ENDED) {
+            deliverStopped(reason)
+            return
+        }
         scheduler.onConnectionLost(
             connect = { start() },
             onScheduled = { n, delayMs -> listener.onReconnecting(n, delayMs, reason) },

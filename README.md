@@ -20,11 +20,12 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Scrollback history** (4000 lines) with gesture scrolling and a position indicator
 - Hardware keyboard: F1–F12, PgUp/PgDn, Home/End, Del, Ctrl+arrows
 - **User-configurable extra-keys row** (18-key pool, layout persists across sessions)
-- Long-press any URL in the output to copy it
+- **Text selection & copy** — long-press + drag selects (into scrollback too), floating Copy chip; long-press a URL still copies just the URL
+- **Mouse reporting** — apps that request xterm mouse tracking (htop, vim, tmux, Claude Code) get tap=click, drag, and scroll-as-wheel
 - 64 KB read buffer + per-frame repaint throttling — `cat` a huge file without stutter
 
 ### Connectivity
-- **Auto-reconnect with exponential backoff** (1s → 2s → … → 30s, unlimited retries) — mobile networks drop; conch comes back on its own
+- **Auto-reconnect with exponential backoff** (1s → 2s → … → 30s, unlimited retries) — mobile networks drop; conch comes back on its own. Typing `exit` / CTRL+D on a healthy session ends it cleanly instead of looping back in
 - **Connection health banner** — four states (connecting / connected / reconnecting(n) / stopped) with a status dot that pulses on the 15-second keep-alive heartbeat; tap the amber banner to give up retrying
 - **Multiple concurrent sessions** — "Connect (new session)" opens another terminal; each gets its own persistent notification
 - **Foreground service** keeps sessions alive when backgrounded (survives Android's task killers)

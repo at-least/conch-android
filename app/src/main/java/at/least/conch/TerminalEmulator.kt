@@ -83,6 +83,13 @@ class TerminalEmulator(cols: Int, rows: Int) {
     /** DECSET 2004: remote app asked for bracketed paste markers. */
     val bracketedPasteMode: Boolean get() = engine.isBracketedPasteMode()
 
+    /** DECSET 1000/1002: remote app wants mouse events (htop, vim, tmux). */
+    val mouseTracking: Boolean get() = engine.isMouseTrackingActive()
+
+    /** Forward a mouse event to the remote (1-based protocol coordinates). */
+    fun sendMouse(button: Int, col: Int, row: Int, pressed: Boolean) =
+        engine.sendMouseEvent(button, col, row, pressed)
+
     /** Lines of scrollback history held for the main screen. */
     val scrollbackSize: Int get() = screen.getActiveTranscriptRows()
 
