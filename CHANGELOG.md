@@ -6,8 +6,14 @@
   SFTP/Monitor launchers, a duplicated URL regex, unused state/params),
   `error()` replaces `throw IllegalStateException`, ktlint formatting
   applied project-wide, detekt baseline regenerated from 315 stale/legacy
-  entries down to 80 current structural ones; README/VENDOR.md doc drift
+  entries down to 68 current structural ones; README/VENDOR.md doc drift
   fixed
+- Internal/tests: POC.md H2 verified (SharedConnectionProbesTest —
+  Monitor/Docker probes parse identically over the shared connection);
+  SOCKS5 wire tests consolidated in SocksProxyTest with new error-path
+  coverage (bad-ATYP 0x08, silent non-SOCKS5 greeting drop, RST-tolerant
+  close detection); TerminalActivity decomposed (self-contained
+  composables extracted, 988→790 lines)
 
 - Internal: serialization/persistence tooling upgrade, no user-visible format
   changes (wire formats are pinned byte-equivalent by a new golden-format
