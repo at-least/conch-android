@@ -122,24 +122,34 @@ object TunnelCapsule {
  * JVM-testable.
  */
 object MonitorPoll {
-    data class State(val snapshot: MonitorParser.Snapshot?, val error: String?)
+    data class State(
+        val snapshot: MonitorParser.Snapshot?,
+        val error: String?,
+        /** Last unparsable raw output, shown under the error so users can
+         * self-diagnose (e.g. busybox `free`/`df` variants). Null when the
+         * parse is healthy. */
+        val raw: String? = null,
+    )
 
     fun reduce(state: State, out: String?): State {
         if (out != null) {
             val parsed = MonitorParser.parse(out)
             if (parsed != null) return State(parsed, null)
-            if (state.snapshot == null) return State(null, "Failed to read metrics")
+            if (state.snapshot == null) return State(null, "Failed to read metrics", out.take(RAW_CAP))
             return state
         }
-        if (state.snapshot == null) return State(null, "Failed to read metrics")
+        if (state.snapshot == null) return State(null, "Failed to read metrics", state.raw)
         return state
     }
+
+    const val RAW_CAP = 2000
 }
 
 @Composable
 fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     var snapshot by remember { mutableStateOf<MonitorParser.Snapshot?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var rawOut by remember { mutableStateOf<String?>(null) }
     var autoRefresh by remember { mutableStateOf(true) }
 
     Column(
@@ -156,7 +166,20 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
 
         error?.let {
             Card(Modifier.fillMaxWidth()) {
-                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(14.dp))
+                Column(Modifier.padding(14.dp)) {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                    rawOut?.let { raw ->
+                        Text(
+                            raw,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 12,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -197,9 +220,10 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
         if (!autoRefresh) return@LaunchedEffect
         while (true) {
             val out = withContext(Dispatchers.IO) { session.exec(MonitorParser.PROBE) }
-            val next = MonitorPoll.reduce(MonitorPoll.State(snapshot, error), out)
+            val next = MonitorPoll.reduce(MonitorPoll.State(snapshot, error, rawOut), out)
             snapshot = next.snapshot
             error = next.error
+            rawOut = next.raw
             delay(5_000)
         }
     }
@@ -269,7 +293,10 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             containers.clear()
             containers.addAll(DockerParser.parse(out))
             busy = false
-            status = if (containers.isEmpty() && out.contains("error", true)) out.trim().take(120) else null
+            // Raw fallback: no containers parsed but the host said SOMETHING
+            // ("docker: command not found", daemon errors, snap PATH issues) —
+            // surface it instead of an empty list. ServerBox parity driver.
+            status = if (containers.isEmpty() && out.isNotBlank()) out.trim().take(2000) else null
         }
     }
 
@@ -296,7 +323,10 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             Text(
                 it,
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 8,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }

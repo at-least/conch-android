@@ -71,6 +71,21 @@ class OpenSshConfigParserTest {
     }
 
     @Test
+    fun `parses identityfile directives case-insensitively with quotes`() {
+        val config = """
+            Host web
+              IdentityFile ~/.ssh/id_ed25519
+            Host db
+              identityfile "/path/with spaces/id_rsa"
+            Host bare
+        """.trimIndent()
+        val hosts = OpenSshConfigParser.parse(config)
+        assertEquals("~/.ssh/id_ed25519", hosts[0].identityFile)
+        assertEquals("/path/with spaces/id_rsa", hosts[1].identityFile)
+        assertEquals("", hosts[2].identityFile)
+    }
+
+    @Test
     fun `directives before any host block are ignored`() {
         val config = """
             GlobalOption yes

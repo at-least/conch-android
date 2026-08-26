@@ -48,6 +48,28 @@ class MonitorPollTest {
     }
 
     @Test
+    fun `parse failure with no prior snapshot keeps raw output for display`() {
+        val next = MonitorPoll.reduce(MonitorPoll.State(null, null), "free: invalid option -- 'b'")
+        assertEquals("free: invalid option -- 'b'", next.raw)
+    }
+
+    @Test
+    fun `good output clears stale raw output`() {
+        val stale = MonitorPoll.reduce(MonitorPoll.State(null, null), "garbage")
+        val next = MonitorPoll.reduce(stale, goodOut)
+        assertNull(next.raw)
+    }
+
+    @Test
+    fun `raw output is capped`() {
+        val next = MonitorPoll.reduce(
+            MonitorPoll.State(null, null),
+            "x".repeat(MonitorPoll.RAW_CAP + 500),
+        )
+        assertEquals(MonitorPoll.RAW_CAP, next.raw!!.length)
+    }
+
+    @Test
     fun `dead exec preserves the prior snapshot`() {
         val prior = MonitorParser.parse(goodOut)!!
         val next = MonitorPoll.reduce(MonitorPoll.State(prior, null), null)

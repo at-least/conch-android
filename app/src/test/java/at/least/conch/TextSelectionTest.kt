@@ -100,6 +100,41 @@ class TextSelectionTest {
     }
 
     @Test
+    fun `auto-wrapped rows copy as one line`() {
+        val emu = TerminalEmulator(10, 5)
+        // 25 chars through a 10-col screen: wraps 0→1→2 automatically
+        emu.feed("abcdefghijklmnopqrstuvwxy")
+        val sel = TextSelection()
+        sel.startAnchor(0, 0)
+        sel.moveCaret(2, 4)
+        assertEquals("abcdefghijklmnopqrstuvwxy", TextSelection.selectedText(emu, sel))
+    }
+
+    @Test
+    fun `wrapped join also works across the scrollback boundary`() {
+        val emu = TerminalEmulator(10, 2)
+        // 15 chars wrap across two rows; a following newline pushes the
+        // wrapped first row into scrollback (external -1), its continuation
+        // becomes screen row 0
+        emu.feed("abcdefghijklmno\r\nnext")
+        assertEquals(1, emu.scrollbackSize)
+        val sel = TextSelection()
+        sel.startAnchor(-1, 0)
+        sel.moveCaret(0, 9)
+        assertEquals("abcdefghijklmno", TextSelection.selectedText(emu, sel))
+    }
+
+    @Test
+    fun `hard newlines still break lines in the copy`() {
+        val emu = newEmu()
+        emu.feed("one\r\ntwo")
+        val sel = TextSelection()
+        sel.startAnchor(0, 0)
+        sel.moveCaret(1, 2)
+        assertEquals("one\ntwo", TextSelection.selectedText(emu, sel))
+    }
+
+    @Test
     fun `clear deactivates`() {
         val sel = TextSelection()
         sel.startAnchor(0, 0)

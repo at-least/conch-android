@@ -60,34 +60,51 @@ class TextSelection {
 
     companion object {
         /**
-         * Selected text, rows joined by \n. Columns are cell-accurate:
+         * Selected text. Rows joined by \n — except auto-wrapped rows
+         * (DECAWM at the margin), which concatenate onto the next row so a
+         * reflowed paragraph copies as one line. Columns are cell-accurate:
          * wide code points count one cell at their start column and are
          * copied whole.
          */
         fun selectedText(emu: TerminalEmulator, sel: TextSelection): String {
             val (s, e) = sel.normalized() ?: return ""
-            val rows = ArrayList<CharSequence>()
+            data class Part(val text: String, val joinedToNext: Boolean)
+            val rows = ArrayList<Part>()
             var r = s.externalRow
             while (r <= e.externalRow) {
                 if (r < -emu.scrollbackSize || r >= emu.rows) {
-                    rows.add("")
+                    rows.add(Part("", false))
                 } else {
                     val from = if (r == s.externalRow) s.col else 0
                     val to = if (r == e.externalRow) e.col else -1
-                    rows.add(rowRangeText(emu, r, from, to))
+                    val wraps = r < e.externalRow && emu.isLineWrapped(r)
+                    // A wrapped row's trailing cells continue on the next row:
+                    // keep them (no trimEnd) so joined content is intact.
+                    rows.add(Part(rowRangeText(emu, r, from, to, trim = !wraps), wraps))
                 }
                 r++
             }
-            return rows.joinToString("\n")
+            val sb = StringBuilder()
+            for (i in rows.indices) {
+                if (i > 0 && !rows[i - 1].joinedToNext) sb.append('\n')
+                sb.append(rows[i].text)
+            }
+            return sb.toString()
         }
 
         /** Text of [fromCol..toCol] (inclusive) on one external row. */
-        fun rowRangeText(emu: TerminalEmulator, externalRow: Int, fromCol: Int, toCol: Int): String {
+        fun rowRangeText(
+            emu: TerminalEmulator,
+            externalRow: Int,
+            fromCol: Int,
+            toCol: Int,
+            trim: Boolean = true,
+        ): String {
             val sb = StringBuilder()
             emu.forEachCell(externalRow) { col, cp, _ ->
                 if (col >= fromCol && (toCol < 0 || col <= toCol)) sb.appendCodePoint(cp)
             }
-            return sb.toString().trimEnd()
+            return if (trim) sb.toString().trimEnd() else sb.toString()
         }
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -45,11 +46,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** SSH key management: generate ed25519 keys, import, inspect, delete. */
 class KeysActivity : ComponentActivity() {
+
+    /** An import that needs a passphrase (first prompt or retry). */
+    private data class PassphrasePrompt(val name: String, val bytes: ByteArray, val error: String?)
 
     private val keys = mutableStateListOf<SshKeyInfo>()
 
@@ -63,6 +69,33 @@ class KeysActivity : ComponentActivity() {
         keys.clear()
         keys.addAll(KeyManager(this).list())
     }
+
+    /**
+     * Runs an import attempt; an encrypted key flips the UI into the
+     * passphrase prompt (re-prompting on a wrong passphrase) instead of
+     * failing out to the file picker. Parity driver: ConnectBot "wrong key
+     * passphrase gives no retry".
+     */
+    private fun attemptImport(name: String, bytes: ByteArray, passphrase: CharArray?) {
+        try {
+            KeyManager(this).import(name, bytes, passphrase)
+            keys.clear()
+            keys.addAll(KeyManager(this).list())
+            passphrasePrompt = null
+            passphraseText = ""
+            Toast.makeText(this, "Imported", Toast.LENGTH_SHORT).show()
+        } catch (e: EncryptedKeyException) {
+            passphrasePrompt = PassphrasePrompt(name, bytes, e.message ?: "Passphrase required")
+            passphraseText = ""
+        } catch (e: Exception) {
+            CrashReporting.report(e)
+            passphrasePrompt = null
+            Toast.makeText(this, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private var passphrasePrompt: PassphrasePrompt? by mutableStateOf(null)
+    private var passphraseText: String by mutableStateOf("")
 
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
     @Composable
@@ -80,10 +113,7 @@ class KeysActivity : ComponentActivity() {
                     val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         ?: error("Cannot read file")
                     val name = uri.lastPathSegment?.substringAfterLast('/') ?: "imported"
-                    KeyManager(this).import(name, bytes)
-                    keys.clear()
-                    keys.addAll(KeyManager(this).list())
-                    Toast.makeText(this, "Imported", Toast.LENGTH_SHORT).show()
+                    attemptImport(name, bytes, null)
                 } catch (e: Exception) {
                     CrashReporting.report(e)
                     Toast.makeText(this, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
@@ -192,6 +222,49 @@ class KeysActivity : ComponentActivity() {
                     }) { Text("Generate") }
                 },
                 dismissButton = { TextButton(onClick = { showGenerate = false }) { Text("Cancel") } }
+            )
+        }
+
+        passphrasePrompt?.let { prompt ->
+            AlertDialog(
+                onDismissRequest = {
+                    passphrasePrompt = null
+                    passphraseText = ""
+                },
+                title = { Text("Passphrase required") },
+                text = {
+                    Column {
+                        val intro = if (prompt.error!!.startsWith("Wrong")) {
+                            prompt.error
+                        } else {
+                            "\"${prompt.name}\" is passphrase-protected. The key is stored " +
+                                "decrypted (device-encrypted at rest); this is only needed once."
+                        }
+                        Text(intro, fontSize = 13.sp)
+                        OutlinedTextField(
+                            value = passphraseText,
+                            onValueChange = { passphraseText = it },
+                            label = { Text("Passphrase") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            isError = prompt.error.startsWith("Wrong"),
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (passphraseText.isEmpty()) return@TextButton
+                        attemptImport(prompt.name, prompt.bytes, passphraseText.toCharArray())
+                    }) { Text("Unlock") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        passphrasePrompt = null
+                        passphraseText = ""
+                    }) { Text("Cancel") }
+                }
             )
         }
 

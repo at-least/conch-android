@@ -120,7 +120,16 @@ class MainActivity : FragmentActivity() {
                         store.save(all)
                         hosts.clear()
                         hosts.addAll(all)
-                        importResult = "Imported $added hosts"
+                        val identityRefs = parsed
+                            .mapNotNull { p -> p.identityFile.takeIf { it.isNotBlank() } }
+                            .distinct()
+                        importResult = "Imported $added hosts" +
+                            if (identityRefs.isEmpty()) {
+                                ""
+                            } else {
+                                ". ${identityRefs.size} host(s) use identity files " +
+                                    "(${identityRefs.joinToString(", ")}) — import those keys in Key manager"
+                            }
                     }
                 } catch (e: Exception) {
                     importResult = "Import failed: ${e.message}"

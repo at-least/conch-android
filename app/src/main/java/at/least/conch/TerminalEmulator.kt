@@ -156,6 +156,14 @@ class TerminalEmulator(cols: Int, rows: Int) {
         }
     }
 
+    /**
+     * True if [externalRow]'s content auto-wrapped onto the next row (DECAWM
+     * at the right margin) as opposed to a hard newline. Selection copy
+     * joins wrapped rows without inserting '\n'. Parity driver: Termux
+     * "copied text includes trailing whitespace/newlines from wrapped lines".
+     */
+    fun isLineWrapped(externalRow: Int): Boolean = screen.getLineWrap(externalRow)
+
     fun getRowText(row: Int): String = rowText(row(row))
 
     fun getScrollbackRowText(line: Int): String = rowText(row(line - scrollbackSize))

@@ -44,6 +44,13 @@ data class KeyWire(
 }
 
 /**
+ * The key being imported is passphrase-protected (either no passphrase was
+ * supplied, or the supplied one was rejected). UI uses this to prompt and
+ * re-prompt instead of dumping the user back to a file picker.
+ */
+class EncryptedKeyException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/**
  * Manages SSH keypairs. Private halves are stored as PKCS#8 PEM, encrypted by
  * [SecretsStore] (Android Keystore); metadata lives in files/keys/keys.json.
  */
@@ -87,15 +94,17 @@ class KeyManager(private val context: Context) {
 
     /**
      * Imports an existing private key of any format sshj understands
-     * (OpenSSH new format, PKCS#8/PKCS#5 PEM, PuTTY). Encrypted (passphrase)
-     * keys are not supported — decrypt them before importing.
+     * (OpenSSH new format, PKCS#8/PKCS#5 PEM, PuTTY). Passphrase-encrypted
+     * keys are supported: [EncryptedKeyException] is thrown when a
+     * passphrase is required or the given one is wrong — supply it via
+     * [passphrase] and retry. Keys are stored decrypted (Keystore-encrypted
+     * at rest), so the passphrase is only needed at import time.
      */
-    fun import(name: String, pemBytes: ByteArray): SshKeyInfo {
+    fun import(name: String, pemBytes: ByteArray, passphrase: CharArray? = null): SshKeyInfo {
         val tmp = File.createTempFile("import", ".key", context.cacheDir)
         try {
             tmp.writeBytes(pemBytes)
-            val probe = SSHClient()
-            val provider = probe.loadKeys(tmp.absolutePath)
+            val provider = loadProvider(tmp, passphrase)
             val privPkcs8 = provider.private.encoded
                 ?: throw IllegalArgumentException("Unsupported private key format")
             val publicKey = provider.public
@@ -119,6 +128,43 @@ class KeyManager(private val context: Context) {
             )
         } finally {
             tmp.delete()
+        }
+    }
+
+    /**
+     * Loads a key file through sshj. Sniffs encryption before a passphrase-
+     * less load (so the UI can prompt), and with a passphrase treats any
+     * failure as a wrong passphrase (sshj surfaces AEAD/tag errors as
+     * assorted IOExceptions and RuntimeExceptions).
+     */
+    private fun loadProvider(keyFile: File, passphrase: CharArray?): KeyProvider {
+        if (passphrase == null && looksEncrypted(keyFile.readBytes())) {
+            throw EncryptedKeyException("This key is passphrase-protected")
+        }
+        val probe = SSHClient()
+        return try {
+            val provider = if (passphrase != null) {
+                probe.loadKeys(keyFile.absolutePath, passphrase)
+            } else {
+                probe.loadKeys(keyFile.absolutePath)
+            }
+            // FileKeyProvider parses lazily — force it inside this try so a
+            // wrong passphrase throws here, not at first use.
+            provider.private
+            provider
+        } catch (e: Exception) {
+            throw if (passphrase != null || mentionsEncryption(e)) {
+                EncryptedKeyException(
+                    if (passphrase != null) {
+                        "Wrong passphrase (or unreadable key): ${e.message}"
+                    } else {
+                        "This key is passphrase-protected"
+                    },
+                    e,
+                )
+            } else {
+                e
+            }
         }
     }
 
@@ -192,6 +238,54 @@ class KeyManager(private val context: Context) {
     }
 
     companion object {
+        /**
+         * Cheap sniff for passphrase-protected key material, before handing
+         * it to sshj: legacy PEM (`Proc-Type: 4,ENCRYPTED`), PKCS#8 encrypted
+         * header, or OpenSSH v1 whose cipher/KDF is not "none" (what
+         * `ssh-keygen -N` writes). Headers only — key bodies are never read.
+         */
+        internal fun looksEncrypted(b: ByteArray): Boolean {
+            if (b.size < "-----BEGIN".length) return false
+            val head = b.copyOfRange(0, minOf(b.size, 512)).toString(Charsets.ISO_8859_1)
+            if (head.contains("ENCRYPTED PRIVATE KEY")) return true
+            if (head.contains("Proc-Type: 4,ENCRYPTED")) return true
+            if (!head.contains("OPENSSH PRIVATE KEY")) return false
+            return opensshV1BodyEncrypted(head)
+        }
+
+        /**
+         * Decode enough base64 body to parse the openssh-key-v1 header:
+         * magic, then len-prefixed ciphername and kdfname. Encrypted iff
+         * either is not "none" (what `ssh-keygen -N` writes).
+         */
+        private fun opensshV1BodyEncrypted(head: String): Boolean {
+            val body = head.lineSequence().drop(1).firstOrNull { it.isNotBlank() } ?: return false
+            val bin = runCatching { Base64.getMimeDecoder().decode(body.take(400)) }.getOrNull()
+                ?: return false
+            val magic = "openssh-key-v1\u0000".toByteArray(Charsets.ISO_8859_1)
+            if (bin.size < magic.size) return false
+            if (!bin.copyOfRange(0, magic.size).contentEquals(magic)) return false
+            var i = magic.size
+            val cipher = lengthPrefixedField(bin, i) ?: return false
+            i = cipher.second
+            val kdf = lengthPrefixedField(bin, i) ?: return false
+            return cipher.first != "none" || kdf.first != "none"
+        }
+
+        /** Reads a 4-byte length-prefixed string at [i]; null when malformed. */
+        private fun lengthPrefixedField(bin: ByteArray, i: Int): Pair<String, Int>? {
+            if (i + 4 > bin.size) return null
+            var len = 0
+            for (k in 0 until 4) len = (len shl 8) or (bin[i + k].toInt() and 0xff)
+            if (len < 0 || len > 64 || i + 4 + len > bin.size) return null
+            return String(bin, i + 4, len, Charsets.ISO_8859_1) to i + 4 + len
+        }
+
+        private fun mentionsEncryption(e: Throwable): Boolean {
+            val m = (e.message ?: "").lowercase()
+            return "encrypted" in m || "passphrase" in m || "password" in m
+        }
+
         /** ssh wire blob = len-prefixed algorithm name + len-prefixed key data. */
         fun sshBlob(algorithm: String, keyData: ByteArray): ByteArray {
             val buf = Buffer.PlainBuffer()

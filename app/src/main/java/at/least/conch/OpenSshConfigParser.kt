@@ -13,6 +13,10 @@ object OpenSshConfigParser {
         var hostname: String = "",
         var user: String = "",
         var port: Int = 22,
+        /** IdentityFile path as written (tilde not expanded). No key is
+         * loaded — surfaced so the import UI can point the user at the key
+         * manager. */
+        var identityFile: String = "",
     )
 
     fun parse(text: String): List<ParsedHost> {
@@ -38,6 +42,7 @@ object OpenSshConfigParser {
                 "hostname" -> current?.hostname = value
                 "user" -> current?.user = value
                 "port" -> current?.port = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: 22
+                "identityfile" -> current?.identityFile = value.trim('"')
                 else -> { /* ignored directive */ }
             }
         }
