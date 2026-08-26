@@ -512,6 +512,14 @@ public final class WcWidth {
 
     /** Return the terminal display width of a code point: 0, 1 || 2. */
     public static int width(int ucs) {
+        // CONCH PATCH: variation selectors (U+FE00..U+FE0F) are zero-width
+        // combining marks. Upstream's ZERO_WIDTH table omits them, so
+        // U+FE0F (emoji presentation) advanced the cursor its own cell —
+        // "❤️" misaligned everything after it (termux-app open issue:
+        // "Some emojis with U+FE0F VARIATION SELECTOR-16 render at half
+        // the correct width"). Fold them into the preceding cell like any
+        // other combining mark.
+        if (ucs >= 0xFE00 && ucs <= 0xFE0F) return 0;
         if (ucs == 0 ||
             ucs == 0x034F ||
             (0x200B <= ucs && ucs <= 0x200F) ||

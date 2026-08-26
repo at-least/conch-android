@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,20 +99,29 @@ private fun EditHostScreen(
     onBack: () -> Unit,
     onSave: (Host, String) -> Unit,
 ) {
-    var alias by remember { mutableStateOf(initial?.alias.orEmpty()) }
-    var hostname by remember { mutableStateOf(initial?.hostname.orEmpty()) }
-    var portText by remember { mutableStateOf(if (initial != null && initial.port != 22) initial.port.toString() else "") }
-    var username by remember { mutableStateOf(initial?.username.orEmpty()) }
-    var authType by remember { mutableStateOf(initial?.authType ?: Host.AUTH_PASSWORD) }
-    var password by remember { mutableStateOf("") }
-    var fontSizeText by remember { mutableStateOf(if ((initial?.fontSizeSp ?: 0f) > 0f) initial!!.fontSizeSp.toInt().toString() else "") }
-    var keepAlive by remember { mutableStateOf(initial?.keepAlive ?: true) }
-    var tmux by remember { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
-    var socksPortText by remember { mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "") }
+    // rememberSaveable: the form must survive rotation / dark-mode config
+    // changes (ConnectBot ships the exact bug — form collapses and input
+    // is lost on rotate). `keys` reloads instead; it is derived data.
+    var alias by rememberSaveable { mutableStateOf(initial?.alias.orEmpty()) }
+    var hostname by rememberSaveable { mutableStateOf(initial?.hostname.orEmpty()) }
+    var portText by rememberSaveable {
+        mutableStateOf(if (initial != null && initial.port != 22) initial.port.toString() else "")
+    }
+    var username by rememberSaveable { mutableStateOf(initial?.username.orEmpty()) }
+    var authType by rememberSaveable { mutableStateOf(initial?.authType ?: Host.AUTH_PASSWORD) }
+    var password by rememberSaveable { mutableStateOf("") }
+    var fontSizeText by rememberSaveable {
+        mutableStateOf(if ((initial?.fontSizeSp ?: 0f) > 0f) initial!!.fontSizeSp.toInt().toString() else "")
+    }
+    var keepAlive by rememberSaveable { mutableStateOf(initial?.keepAlive ?: true) }
+    var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
+    var socksPortText by rememberSaveable {
+        mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "")
+    }
     val ctx = LocalContext.current
     val keys = remember { KeyManager(ctx).list() }
-    var selectedKeyId by remember { mutableStateOf(initial?.keyId) }
-    var keysMenuOpen by remember { mutableStateOf(false) }
+    var selectedKeyId by rememberSaveable { mutableStateOf(initial?.keyId) }
+    var keysMenuOpen by rememberSaveable { mutableStateOf(false) }
     val tunnels = remember { mutableStateListOf<Tunnel>().apply { initial?.tunnels?.let { addAll(it) } } }
 
     Scaffold(

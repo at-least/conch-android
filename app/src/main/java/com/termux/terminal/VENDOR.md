@@ -19,6 +19,9 @@ All modifications are marked with `CONCH PATCH` comments:
   DECSET 2004 bit so conch's paste path can pick bracketed vs sanitized
   encoding (upstream answers this only inside `TerminalOutput`-routed
   `paste()`, which conch bypasses to keep its own sanitize rules).
+- `WcWidth.java`: variation selectors U+FE00..U+FE0F return width 0
+  (upstream omits them, so U+FE0F emoji presentation advanced the cursor
+  a full cell and misaligned every following glyph).
 
 ## Why vendor instead of JitPack
 
