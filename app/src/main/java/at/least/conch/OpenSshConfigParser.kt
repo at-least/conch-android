@@ -21,9 +21,9 @@ object OpenSshConfigParser {
 
         for (rawLine in text.lines()) {
             val line = rawLine.substringBefore('#').trim()
-            if (line.isEmpty()) continue
             val key = line.substringBefore(' ').lowercase()
             val value = line.substringAfter(' ', "").trim()
+            // also covers blank/comment-only lines: their value is empty
             if (value.isEmpty()) continue
             when (key) {
                 "host" -> {

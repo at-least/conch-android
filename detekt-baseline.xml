@@ -2,15 +2,12 @@
 <SmellBaseline>
   <ManuallySuppressedIssues></ManuallySuppressedIssues>
   <CurrentIssues>
-    <ID>ComplexCondition:MonitorParser.kt$MonitorParser$cpu == null || mem == null || disk == null || load == null || up == null</ID>
-    <ID>ComplexCondition:TerminalView.kt$TerminalView$cols &gt; 0 &amp;&amp; rows &gt; 0 &amp;&amp; (cols != lastSentCols || rows != lastSentRows)</ID>
     <ID>CyclomaticComplexMethod:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
     <ID>CyclomaticComplexMethod:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:ExtraKeysConfig.kt$ExtraKeysConfig$fun bytesFor(id: String): ByteArray?</ID>
     <ID>CyclomaticComplexMethod:KeyInput.kt$KeyInput$fun keyBytes(code: Int): ByteArray?</ID>
     <ID>CyclomaticComplexMethod:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun HostListScreen()</ID>
     <ID>CyclomaticComplexMethod:MonitorParser.kt$MonitorParser$fun parse(output: String): Snapshot?</ID>
-    <ID>CyclomaticComplexMethod:OpenSshConfigParser.kt$OpenSshConfigParser$fun parse(text: String): List&lt;ParsedHost&gt;</ID>
     <ID>CyclomaticComplexMethod:SessionTabs.kt$@Composable fun SftpTab( session: SessionReconnector, connectionGen: Int, modifier: Modifier = Modifier, startPath: String = "/", )</ID>
     <ID>CyclomaticComplexMethod:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
     <ID>CyclomaticComplexMethod:TerminalView.kt$TerminalView$override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean</ID>
@@ -18,9 +15,6 @@
     <ID>EmptyFunctionBlock:TerminalEmulator.kt$TerminalEmulator.HostOutput${}</ID>
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.ExecCommand${}</ID>
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.RecordedShell${}</ID>
-    <ID>InstanceOfCheckForException:KnownHosts.kt$TofuHostKeyVerifier$e is ThreadDeath</ID>
-    <ID>InstanceOfCheckForException:KnownHosts.kt$TofuHostKeyVerifier$e is VirtualMachineError</ID>
-    <ID>InstanceOfCheckForException:SettingsActivity.kt$SettingsActivity$e is javax.crypto.AEADBadTagException</ID>
     <ID>LargeClass:TerminalActivity.kt$TerminalActivity : FragmentActivity</ID>
     <ID>LongMethod:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
     <ID>LongMethod:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
@@ -33,10 +27,7 @@
     <ID>LongMethod:SnippetsActivity.kt$SnippetsActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SnippetsScreen()</ID>
     <ID>LongMethod:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
     <ID>LongMethod:TerminalView.kt$TerminalView$override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean</ID>
-    <ID>LoopWithTooManyJumpStatements:DockerParser.kt$DockerParser$for</ID>
-    <ID>LoopWithTooManyJumpStatements:KnownHosts.kt$KnownHostsStore$for</ID>
     <ID>LoopWithTooManyJumpStatements:MonitorActivity.kt$MonitorActivity$while</ID>
-    <ID>LoopWithTooManyJumpStatements:OpenSshConfigParser.kt$OpenSshConfigParser$for</ID>
     <ID>MaxLineLength:EditHostActivity.kt$if (isEdit &amp;&amp; SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password"</ID>
     <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""[{"command":"df -h","id":"s1","label":"磁碟"},{"command":"echo 'multi\nline'","id":"s2","label":"q\"uote"}]"""</ID>
     <ID>MaxLineLength:GoldenFormatTest.kt$GoldenFormatTest$"""[{"hostId":"h1","text":"uptime","ts":1000},{"hostId":"h2","text":"echo 'multi\nline'","ts":2000},{"hostId":"h1","text":"中文コマンド","ts":3000}]"""</ID>
@@ -68,9 +59,6 @@
     <ID>MaximumLineLength:TerminalView.kt$TerminalView$ </ID>
     <ID>NestedBlockDepth:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
     <ID>NestedBlockDepth:HostStore.kt$HostStore$fun load(): MutableList&lt;Host&gt;</ID>
-    <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy bridges ipv4 connect to echo server`()</ID>
-    <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy resolves domain atyp targets`()</ID>
-    <ID>NestedBlockDepth:PortForwardInteractionTest.kt$PortForwardInteractionTest$@Test(timeout = 30_000) fun `socks proxy works with the jdk socks client`()</ID>
     <ID>NestedBlockDepth:SftpInteractionTest.kt$SftpInteractionTest$@Test(timeout = 60_000) fun `odd-offset odd-length reads return unscrambled bytes`()</ID>
     <ID>NestedBlockDepth:SshConnectAuthInteractionTest.kt$SshConnectAuthInteractionTest$@Test(timeout = 30_000) fun `ed25519 key not in authorized_keys is rejected`()</ID>
     <ID>TooGenericExceptionThrown:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$throw RuntimeException("UI blew up")</ID>

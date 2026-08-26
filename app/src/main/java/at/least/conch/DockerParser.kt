@@ -34,14 +34,12 @@ object DockerParser {
         @SerialName("Status") val status: String = "",
     )
 
-    fun parse(output: String): List<Container> {
-        val out = mutableListOf<Container>()
-        for (line in output.lines()) {
-            val l = line.trim()
-            if (l.isEmpty() || !l.startsWith("{")) continue
-            val o = runCatching { ConchJson.decodeFromString(ContainerWire.serializer(), l) }.getOrNull() ?: continue
-            out.add(Container(o.id, o.names, o.image, o.state, o.status))
-        }
-        return out
-    }
+    fun parse(output: String): List<Container> =
+        output.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.startsWith("{") }
+            .mapNotNull { line ->
+                runCatching { ConchJson.decodeFromString(ContainerWire.serializer(), line) }.getOrNull()
+            }
+            .map { Container(it.id, it.names, it.image, it.state, it.status) }
 }

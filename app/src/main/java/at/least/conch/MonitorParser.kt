@@ -73,7 +73,11 @@ object MonitorParser {
         val load = sections["LOAD"]?.firstOrNull { it.isNotBlank() }?.split(Regex("\\s+"))
         val up = sections["UP"]?.firstOrNull { it.isNotBlank() }?.split(Regex("\\s+"))
 
-        if (cpu == null || mem == null || disk == null || load == null || up == null) return null
+        if (cpu == null) return null
+        if (mem == null) return null
+        if (disk == null) return null
+        if (load == null) return null
+        if (up == null) return null
 
         return Snapshot(
             cpuPercent = cpu,

@@ -266,7 +266,8 @@ class TerminalView @JvmOverloads constructor(
     }
 
     private fun applyGridSize(cols: Int, rows: Int) {
-        if (cols > 0 && rows > 0 && (cols != lastSentCols || rows != lastSentRows)) {
+        val gridChanged = cols != lastSentCols || rows != lastSentRows
+        if (cols > 0 && rows > 0 && gridChanged) {
             lastSentCols = cols
             lastSentRows = rows
             onPtyResize?.invoke(cols, rows)

@@ -159,7 +159,7 @@ class SettingsActivity : ComponentActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
-                val wrongPass = e is javax.crypto.AEADBadTagException || e.cause is javax.crypto.AEADBadTagException
+                val wrongPass = e.isWrongPassphrase()
                 if (!wrongPass) CrashReporting.report(e) // wrong passphrases are user input, not bugs
                 runOnUiThread {
                     busy.value = false
@@ -438,5 +438,11 @@ class SettingsActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private companion object {
+        /** GCM tag failure at either depth = wrong passphrase (user input, not a bug). */
+        fun Throwable.isWrongPassphrase(): Boolean =
+            this is javax.crypto.AEADBadTagException || cause is javax.crypto.AEADBadTagException
     }
 }

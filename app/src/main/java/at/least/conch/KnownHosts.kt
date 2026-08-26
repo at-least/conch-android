@@ -22,14 +22,12 @@ class KnownHostsStore(filesDir: File) {
 
     fun status(hostname: String, port: Int, key: PublicKey): KnownStatus {
         val blob = blobOf(key)
-        var mismatch = false
-        for (line in readLines()) {
-            val entry = parseEntry(line) ?: continue
-            if (!matchesHost(entry.host, hostname, port)) continue
-            if (entry.blob.contentEquals(blob)) return KnownStatus.KNOWN
-            mismatch = true
+        val entries = readLines().mapNotNull(::parseEntry).filter { matchesHost(it.host, hostname, port) }
+        return when {
+            entries.any { it.blob.contentEquals(blob) } -> KnownStatus.KNOWN
+            entries.isNotEmpty() -> KnownStatus.MISMATCH
+            else -> KnownStatus.UNKNOWN
         }
-        return if (mismatch) KnownStatus.MISMATCH else KnownStatus.UNKNOWN
     }
 
     fun add(hostname: String, port: Int, key: PublicKey) {
@@ -184,7 +182,7 @@ class TofuHostKeyVerifier(
                 // a crashing prompt must not hang the handshake; truly fatal
                 // VM errors still propagate after unblocking the wait
                 future.complete(false)
-                if (e is VirtualMachineError || e is ThreadDeath) throw e
+                if (e.isFatalVmError()) throw e
             }
         }
         mainHandler?.post(runnable) ?: runnable()
@@ -207,3 +205,6 @@ data class KeyPromptRequest(
 )
 
 typealias KeyPrompt = (KeyPromptRequest, (Boolean) -> Unit) -> Unit
+
+/** Errors that must propagate even from a prompt wrapped in runCatching-style handling. */
+private fun Throwable.isFatalVmError(): Boolean = this is VirtualMachineError || this is ThreadDeath

@@ -125,12 +125,7 @@ class HostStore(context: Context) {
                 val wires = ConchJson.decodeFromString(ListSerializer(HostWire.serializer()), file.readText())
                 for (w in wires) {
                     val host = w.toHost()
-                    if (!w.password.isNullOrEmpty()) {
-                        if (SecretsStore.get("host-pw:${host.id}") == null) {
-                            SecretsStore.put("host-pw:${host.id}", w.password)
-                        }
-                        migrated = true
-                    }
+                    if (migrateLegacyPassword(w, host)) migrated = true
                     list.add(host)
                 }
             }
@@ -140,6 +135,15 @@ class HostStore(context: Context) {
             runCatching { save(list) }
         }
         return list
+    }
+
+    /** Moves a legacy plaintext password from hosts.json into the Keystore vault. */
+    private fun migrateLegacyPassword(w: HostWire, host: Host): Boolean {
+        if (w.password.isNullOrEmpty()) return false
+        if (SecretsStore.get("host-pw:${host.id}") == null) {
+            SecretsStore.put("host-pw:${host.id}", w.password)
+        }
+        return true
     }
 
     fun save(hosts: List<Host>) {
