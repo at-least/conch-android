@@ -46,12 +46,12 @@
     <ID>MaxLineLength:InteractionStringContractTest.kt$InteractionStringContractTest$"inner command (minus the CR terminator) stays byte-identical to iOS — the part iOS guards with command -v + printf wipe"</ID>
     <ID>MaxLineLength:KeysActivity.kt$KeysActivity$"No keys yet. Generate an ed25519 key, then add the public key to ~/.ssh/authorized_keys on your server."</ID>
     <ID>MaxLineLength:MainActivity.kt$MainActivity$"Android SSH client — free &amp; open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux"</ID>
-    <ID>MaxLineLength:MonitorPollTest.kt$TerminalReplayTest$"bare attach leaves echo residue in the normal buffer — B2's printf wipe must clear it (then flip this pin)"</ID>
     <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Choose a passphrase to encrypt the backup (min 6 characters). You will need it to restore."</ID>
     <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Export hosts (with passwords), keys, snippets and known hosts into a single encrypted file. The file is protected by your passphrase — it can be imported on another device."</ID>
     <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Imported: ${result.hostsAdded} hosts, ${result.keysAdded} keys, ${result.snippetsAdded} snippets"</ID>
     <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Remember the commands you run, per host, encrypted on this device. Search and re-run them from the terminal menu, or save them as snippets."</ID>
     <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$"Send anonymous crash reports to the developer's self-hosted server. Host addresses, usernames and credentials are never included. Off by default."</ID>
+    <ID>MaxLineLength:SharedConnectionProbesTest.kt$SharedConnectionProbesTest$"""{"ID":"f6e5d4c3b2a1","Names":"cache","Image":"redis:7-alpine","State":"exited","Status":"Exited (0) 4 days ago"}"""</ID>
     <ID>MaxLineLength:SshConnectionFactory.kt$SshConnectionFactory$else -&gt; "${e.message ?: "Error"} (${e.javaClass.simpleName})${e.cause?.let { " cause: ${it.message} (${it.javaClass.simpleName})" } ?: ""}"</ID>
     <ID>MaxLineLength:TerminalActivity.kt$TerminalActivity$"The key reported by ${request.endpoint} differs from the recorded one. The server may have been reinstalled — or someone is intercepting the connection."</ID>
     <ID>MaxLineLength:TerminalView.kt$TerminalView$field = value.coerceIn(6f * resources.displayMetrics.scaledDensity, 40f * resources.displayMetrics.scaledDensity)</ID>
@@ -61,8 +61,8 @@
     <ID>MaximumLineLength:KeysActivity.kt$KeysActivity$ </ID>
     <ID>MaximumLineLength:LocalSshdAuthTest.kt$LocalSshdAuthTest$ </ID>
     <ID>MaximumLineLength:MainActivity.kt$MainActivity$ </ID>
-    <ID>MaximumLineLength:MonitorPollTest.kt$TerminalReplayTest$ </ID>
     <ID>MaximumLineLength:SettingsActivity.kt$SettingsActivity$ </ID>
+    <ID>MaximumLineLength:SharedConnectionProbesTest.kt$SharedConnectionProbesTest$ </ID>
     <ID>MaximumLineLength:SshConnectionFactory.kt$SshConnectionFactory$ </ID>
     <ID>MaximumLineLength:TerminalActivity.kt$TerminalActivity$ </ID>
     <ID>MaximumLineLength:TerminalView.kt$TerminalView$ </ID>

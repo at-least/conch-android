@@ -127,7 +127,9 @@ dependencies {
     // Compose-specific lint checks (unstable params, recomposition, ...).
     lintChecks("com.slack.lint.compose:compose-lint-checks:1.4.2")
 
-    // ktlint-backed auto-formatting for detekt (./gradlew detektFormat).
+    // ktlint-backed auto-format rules for detekt — apply with
+    // `./gradlew :app:detekt --auto-correct` (no standalone detektFormat
+    // task is registered; the flag is the supported entry point).
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.7")
 
     testImplementation("junit:junit:4.13.2")

@@ -32,19 +32,27 @@ work. Each must run its `verify` command in THIS repo and paste real output.
   `probe` → "ran [probe]\n"; SFTP ls("/") → contains "hello"; shell still
   echoes ALIVE99 after exec+sftp. Full suite 254 tests, 0 failures, 0 errors.
 
-- [ ] H2: The Monitor probe (`cat /proc/stat /proc/loadavg /proc/uptime;
+- [x] H2: The Monitor probe (`cat /proc/stat /proc/loadavg /proc/uptime;
       free -b; df -B1 /`) and Docker probe (`docker ps -a --format
       '{{json .}}'`) work unchanged when run as exec channels on the
       shared connection instead of a dedicated one — i.e. the only
       change is WHERE the SSHClient comes from, not the command strings
       or parsers.
   why it matters: lets us reuse MonitorActivity/DockerActivity's existing
-  parsers + command strings verbatim, swapping only the connection source.
+      parsers + command strings verbatim, swapping only the connection source.
   verify: new test running both probes as exec on a shared SSHClient (the
-  H1 harness) and asserting MonitorParser.parse + DockerParser.parse
-  produce the same shapes as the existing dedicated-connection tests.
-  verdict:
-  evidence:
+      H1 harness) and asserting MonitorParser.parse + DockerParser.parse
+      produce the same shapes as the existing dedicated-connection tests.
+  verdict: verified
+  evidence: 2026-08-27 — `SharedConnectionProbesTest` (1 test, 0 fail):
+      with a live PTY shell on one SSHClient, exec of the exact
+      `MonitorParser.PROBE` constant returned the canned /proc-shape output
+      and parsed to a full Snapshot (cpu 96.08%, mem/swap/disk/loads/
+      uptime all field-asserted); exec of the exact `DockerParser.
+      LIST_COMMAND` constant returned canned NDJSON and parsed to the two
+      expected Containers; `recordedCommands` pinned both wire strings;
+      shell still echoed after both probes. Full suite 519 tests,
+      0 failures, 0 errors.
 
 - [ ] H3: A Material3 `NavigationBar` (bottom) or `TabRow` (top) can host
       the 4 in-session tabs while the terminal `AndroidView` stays mounted
