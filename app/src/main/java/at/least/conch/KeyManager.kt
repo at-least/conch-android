@@ -218,6 +218,14 @@ class KeyManager(private val context: Context) {
         SecretsStore.delete("key-priv:$id")
     }
 
+    /**
+     * The stored private key as PEM (OpenSSH v1 for ed25519, PKCS#8
+     * otherwise; `ssh -i` and ssh-keygen accept both). No-lock-in export —
+     * parity driver: Termius/JuiceSSH data-lock-in. UNENCRYPTED on disk;
+     * UI must warn.
+     */
+    fun exportPem(id: String): String? = SecretsStore.get("key-priv:$id")
+
     fun byId(id: String): SshKeyInfo? = list().firstOrNull { it.id == id }
 
     /** Loads the private key (decrypting at rest) into an sshj KeyProvider. */

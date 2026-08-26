@@ -34,7 +34,10 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - Keep-alive, per-host terminal font size, OSC window-title tracking
 
 ### Authentication & security
-- Password or **Ed25519 keys** (generate on-device or import OpenSSH/PKCS#8)
+- Password or **public-key auth**: generate **Ed25519** on-device, or import
+  **Ed25519 / RSA / ECDSA** keys (OpenSSH, PKCS#8/PKCS#5 PEM, PuTTY —
+  passphrase-protected included; wrong passphrase just re-prompts) and
+  export any key back out (`ssh -i` compatible). No lock-in.
 - **TOFU host-key verification** with fingerprints (`known_hosts`)
 - All secrets encrypted with the **Android Keystore** (AES-256-GCM)
 - Optional **biometric app lock** (fingerprint / face / device credential)

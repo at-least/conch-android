@@ -55,6 +55,8 @@ class TestSshd(
     sftpRoot: File? = null,
     fixedPort: Int? = null,
     private val execHandler: (String) -> ExecResult = { cmd -> ExecResult("$cmd\n".toByteArray()) },
+    /** Extra server tuning, applied after defaults — e.g. restricted algorithm factories for hardened-sshd tests. */
+    private val configure: (SshServer) -> Unit = {},
 ) : AutoCloseable {
 
     companion object {
@@ -122,6 +124,7 @@ class TestSshd(
             fileSystemFactory = VirtualFileSystemFactory(sftpRoot.toPath())
             subsystemFactories = listOf(SftpSubsystemFactory())
         }
+        configure(this)
     }
 
     fun start(): TestSshd {
