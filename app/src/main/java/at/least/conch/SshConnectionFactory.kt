@@ -57,23 +57,30 @@ object SshConnectionFactory {
         ssh.useCompression()
         ssh.connect(host.hostname, host.port)
 
-        when (host.authType) {
-            Host.AUTH_KEY -> {
-                val keyId = host.keyId
-                    ?: error("Host is set to key auth but no key is selected")
-                val provider = keyProvider(ssh, keyId)
-                ssh.authPublickey(host.username, provider)
-            }
-            else -> {
-                val pw = password(host)
-                if (pw.isNullOrEmpty()) {
-                    error("No stored password — edit this host and save a password")
+        try {
+            when (host.authType) {
+                Host.AUTH_KEY -> {
+                    val keyId = host.keyId
+                        ?: error("Host is set to key auth but no key is selected")
+                    val provider = keyProvider(ssh, keyId)
+                    ssh.authPublickey(host.username, provider)
                 }
-                ssh.authPassword(host.username, pw)
+                else -> {
+                    val pw = password(host)
+                    if (pw.isNullOrEmpty()) {
+                        error("No stored password — edit this host and save a password")
+                    }
+                    ssh.authPassword(host.username, pw)
+                }
             }
-        }
-        if (host.keepAlive) {
-            ssh.connection.keepAlive.setKeepAliveInterval(KEEP_ALIVE_INTERVAL_SECONDS)
+            if (host.keepAlive) {
+                ssh.connection.keepAlive.setKeepAliveInterval(KEEP_ALIVE_INTERVAL_SECONDS)
+            }
+        } catch (e: Exception) {
+            // The transport is already connected; without this the socket and
+            // sshj reader threads leak on every failed login attempt.
+            try { ssh.disconnect() } catch (_: Exception) {}
+            throw e
         }
         return ssh
     }
@@ -81,8 +88,8 @@ object SshConnectionFactory {
     fun describeError(e: Exception): String = when {
         e is java.net.UnknownHostException -> "Cannot resolve hostname"
         e.message?.contains("Connection refused", true) == true -> "Connection refused (port closed?)"
-        e is java.net.SocketTimeoutException -> "Connection timed out"
-        e.message?.contains("timed out", true) == true || e is java.net.SocketTimeoutException -> "Connection timed out"
+        e is java.net.SocketTimeoutException || e.message?.contains("timed out", true) == true ->
+            "Connection timed out"
         e is net.schmizz.sshj.userauth.UserAuthException -> "Authentication failed: ${e.message}"
         e.message?.contains("Auth fail", true) == true -> "Authentication failed (wrong user/password/key?)"
         e is IllegalStateException -> e.message ?: "Error"

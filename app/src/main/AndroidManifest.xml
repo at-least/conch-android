@@ -48,10 +48,7 @@
 
         <activity android:name=".KeysActivity" android:exported="false" />
         <activity android:name=".SnippetsActivity" android:exported="false" />
-        <activity android:name=".SftpActivity" android:exported="false" />
-        <activity android:name=".MonitorActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
-        <activity android:name=".DockerActivity" android:exported="false" />
         <activity android:name=".LicensesActivity" android:exported="false" />
 
         <service

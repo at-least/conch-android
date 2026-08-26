@@ -9,8 +9,8 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * Exec channel interaction — the exact pattern DockerActivity.exec() and
- * MonitorActivity.probe() use: startSession -> exec -> read all output.
+ * Exec channel interaction — the exact pattern the Docker tab (SessionTabs) uses
+ * MonitorTab probe: startSession -> exec -> read all output.
  */
 class SshExecInteractionTest {
 

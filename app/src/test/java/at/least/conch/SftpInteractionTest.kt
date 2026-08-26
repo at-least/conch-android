@@ -16,7 +16,7 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * SFTP subsystem interaction — the exact SFTPClient calls SftpActivity makes:
+ * SFTP subsystem interaction — the exact SFTPClient calls the Files tab (SessionTabs) makes:
  * canonicalize/ls, upload/download, mkdir/rm/rmdir/rename, open(CREAT).
  */
 class SftpInteractionTest {
@@ -67,14 +67,14 @@ class SftpInteractionTest {
         val local = File.createTempFile("conch-up", ".bin")
         local.writeBytes(payload)
         try {
-            // SftpActivity.upload(): getFileTransfer().upload(local, remote)
+            // Files tab upload(): getFileTransfer().upload(local, remote)
             sftp.getFileTransfer().upload(local.absolutePath, "/blob.bin")
 
             val listed = sftp.ls("/").first { it.name == "blob.bin" }
             assertFalse(listed.isDirectory)
             assertEquals(payload.size.toLong(), listed.attributes.size)
 
-            // SftpActivity.download(): sftp.get(remote, localPath)
+            // Files tab download(): sftp.get(remote, localPath)
             val down = File.createTempFile("conch-down", ".bin")
             try {
                 sftp.get("/blob.bin", down.absolutePath)
@@ -117,7 +117,7 @@ class SftpInteractionTest {
     @Test(timeout = 30_000)
     fun `rename moves a file within the same directory`() {
         File(root, "old-name.txt").writeText("payload")
-        // SftpActivity.rename(): parent + "/" + newName
+        // Files tab rename(): parent + "/" + newName
         sftp.rename("/old-name.txt", "/new-name.txt")
         assertFalse(File(root, "old-name.txt").exists())
         assertEquals("payload", File(root, "new-name.txt").readText())
@@ -125,7 +125,7 @@ class SftpInteractionTest {
 
     @Test(timeout = 30_000)
     fun `open with CREAT creates an empty file`() {
-        // SftpActivity.newFile(): open(remote, CREAT).close()
+        // Files tab newFile(): open(remote, CREAT).close()
         sftp.open(
             "/fresh.txt",
             java.util.Collections.singleton(net.schmizz.sshj.sftp.OpenMode.CREAT),

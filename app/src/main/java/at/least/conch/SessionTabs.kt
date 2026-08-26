@@ -37,6 +37,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -75,8 +76,7 @@ import java.util.Locale
  *
  * UI is Material3 / Android-native. These composables are stateless re: the
  * connection — they take the reconnector and a coroutine scope is implied by
- * LaunchedEffect. Each is embedded inside TerminalActivity's TabRow (E3); the
- * standalone *Activity classes remain as deep-link/widget entry points.
+ * LaunchedEffect. Each is embedded inside TerminalActivity's TabRow (E3).
  */
 
 // =====================================================================
@@ -397,6 +397,15 @@ private fun ContainerRow(
 // SFTP (Files)
 // =====================================================================
 
+/** One remote directory entry as shown by the Files tab. */
+data class SftpEntry(
+    val name: String,
+    val path: String,
+    val isDir: Boolean,
+    val size: Long,
+    val mtime: Long,
+)
+
 @Composable
 fun SftpTab(
     session: SessionReconnector,
@@ -444,6 +453,13 @@ fun SftpTab(
             }
             path = home
         }
+    }
+
+    // Leaving the Files tab discards this state — without closing here every
+    // visit leaked one SFTPClient (a channel on the shared connection), until
+    // the server's channel limit killed the interactive shell too.
+    DisposableEffect(Unit) {
+        onDispose { sftp?.let { runCatching { it.close() } } }
     }
 
     fun refresh() {

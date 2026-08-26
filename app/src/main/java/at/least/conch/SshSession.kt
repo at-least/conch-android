@@ -80,7 +80,11 @@ class SshSession(
 
     @Volatile
     private var session: Session? = null
+
+    @Volatile
     private var shell: Session.Shell? = null
+
+    @Volatile
     private var shellOut: OutputStream? = null
     private val forwarderSockets = java.util.Collections.synchronizedList(mutableListOf<ServerSocket>())
     private val forwarderThreads = java.util.Collections.synchronizedList(mutableListOf<Thread>())
@@ -118,13 +122,25 @@ class SshSession(
                 startTunnels(ssh)
 
                 if (host.socksPort > 0) {
-                    val proxy = SocksProxy(ssh)
-                    val bound = proxy.start(host.socksPort)
-                    socksProxy = proxy
-                    post {
-                        callbacks.onData(
-                            "\r\n\u001b[90m[socks5 listening on 127.0.0.1:$bound]\u001b[0m\r\n".toByteArray()
-                        )
+                    // A bind failure (port already used, likely by another
+                    // concurrent session) must not kill an otherwise healthy
+                    // shell connection — same tolerance as per-tunnel binds.
+                    try {
+                        val proxy = SocksProxy(ssh)
+                        val bound = proxy.start(host.socksPort)
+                        socksProxy = proxy
+                        post {
+                            callbacks.onData(
+                                "\r\n\u001b[90m[socks5 listening on 127.0.0.1:$bound]\u001b[0m\r\n".toByteArray()
+                            )
+                        }
+                    } catch (e: Exception) {
+                        CrashReporting.report(e)
+                        post {
+                            callbacks.onData(
+                                "\r\n\u001b[90m[socks5 127.0.0.1:${host.socksPort} unavailable — port in use?]\u001b[0m\r\n".toByteArray()
+                            )
+                        }
                     }
                 }
 
@@ -166,7 +182,7 @@ class SshSession(
                 CrashReporting.report(e)
                 disconnectInner(SshConnectionFactory.describeError(e))
             }
-        }.also { readerThread = it }.apply {
+        }.apply {
             name = "ssh-reader"
             isDaemon = true
             start()
@@ -175,8 +191,6 @@ class SshSession(
 
     @Volatile
     private var establishedAtMs = 0L
-
-    private var readerThread: Thread? = null
 
     private fun startTunnels(ssh: SSHClient) {
         for (t in host.tunnels) {
@@ -251,16 +265,21 @@ class SshSession(
     fun exec(command: String): String? {
         val ssh = client ?: return null
         if (closed.get()) return null
+        // Close the channel on every path: the Monitor tab polls this every
+        // few seconds, and leaked channels eventually exhaust the server's
+        // channel limit — which would kill the interactive shell's connection.
+        var s: Session? = null
         return try {
-            val s = ssh.startSession()
+            s = ssh.startSession()
             val cmd = s.exec(command)
             val out = cmd.inputStream.readBytes().decodeToString()
             cmd.close()
-            s.close()
             out
         } catch (e: Exception) {
             CrashReporting.report(e)
             null
+        } finally {
+            try { s?.close() } catch (_: Exception) {}
         }
     }
 
