@@ -8,31 +8,20 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
@@ -46,18 +35,13 @@ import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -69,11 +53,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,10 +67,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-class TerminalActivity : FragmentActivity() {
+/** Connection health shown as the banner: dot style + color per state (see [StatusDot]). */
+internal enum class ConnState { CONNECTING, CONNECTED, RECONNECTING, STOPPED }
 
-    /** Connection health shown as the banner: dot style + color per state. */
-    private enum class ConnState { CONNECTING, CONNECTED, RECONNECTING, STOPPED }
+class TerminalActivity : FragmentActivity() {
 
     private var reconnector: SessionReconnector? = null
     private var host: Host? = null
@@ -749,6 +731,7 @@ class TerminalActivity : FragmentActivity() {
         Toast.makeText(this, "Saved snippet: $label", Toast.LENGTH_SHORT).show()
     }
 
+    @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     @Composable
     private fun ExtraKeysRow() {
         val context = androidx.compose.ui.platform.LocalContext.current
@@ -790,155 +773,10 @@ class TerminalActivity : FragmentActivity() {
         }
     }
 
-    @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-    @Composable
-    private fun ExtraKeysEditor(current: List<String>, onSave: (List<String>) -> Unit, onCancel: () -> Unit) {
-        val selected = remember { current.toMutableStateList() }
-        ModalBottomSheet(onDismissRequest = onCancel) {
-            Text(
-                "Extra keys",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            Text(
-                "Tap to add or remove. Long-press ⚙ row keys later to reorder (drag support coming).",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            // selected chips (tap to remove)
-            androidx.compose.foundation.layout.FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                selected.forEach { id ->
-                    androidx.compose.material3.FilterChip(
-                        selected = true,
-                        onClick = { selected.remove(id) },
-                        label = { Text(ExtraKeysConfig.labelFor(id)) }
-                    )
-                }
-            }
-            // available chips (tap to append)
-            androidx.compose.foundation.layout.FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ExtraKeysConfig.ALL.forEach { def ->
-                    if (def.id !in selected) {
-                        androidx.compose.material3.FilterChip(
-                            selected = false,
-                            onClick = { selected.add(def.id) },
-                            label = { Text(def.label) }
-                        )
-                    }
-                }
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(onClick = { onSave(selected.toList()) }) { Text("Save") }
-                TextButton(onClick = onCancel) { Text("Cancel") }
-            }
-        }
-    }
-
     private fun toggleCtrl() {
         val tv = terminalView ?: return
         tv.ctrlArmed = !tv.ctrlArmed
         ctrlArmed.value = tv.ctrlArmed
-    }
-
-    @Composable
-    private fun KeyButton(label: String, armed: Boolean = false, onClick: () -> Unit) {
-        Button(
-            onClick = onClick,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (armed) Color(0xFF2196F3) else Color(0xFF263238),
-                contentColor = Color(0xFFE0E0E0)
-            ),
-            modifier = Modifier
-                .padding(horizontal = 2.dp)
-                .height(40.dp)
-                .defaultMinSize(minWidth = 48.dp)
-        ) {
-            Text(label, fontSize = 13.sp)
-        }
-    }
-
-    /**
-     * Health dot for the status banner:
-     * - CONNECTED + keep-alive: flashes once every 15s — the visible
-     *   heartbeat, synced to the SSH keep-alive cadence (sshj offers no
-     *   per-reply callback, so this is the cadence, not the reply)
-     * - CONNECTED without keep-alive: solid
-     * - CONNECTING / RECONNECTING: blinking
-     * - STOPPED: dim grey
-     */
-    @Composable
-    private fun StatusDot(state: ConnState, keepAlive: Boolean) {
-        val alpha = when (state) {
-            ConnState.CONNECTED -> if (keepAlive) heartbeatAlpha() else 1f
-            ConnState.CONNECTING, ConnState.RECONNECTING -> blinkAlpha()
-            ConnState.STOPPED -> 0.35f
-        }
-        val color = if (state == ConnState.STOPPED) Color(0xFF37474F) else Color.White
-        Box(
-            Modifier
-                .size(8.dp)
-                .alpha(alpha)
-                .clip(CircleShape)
-                .background(color)
-        )
-    }
-
-    /** Full brightness for 0.8s, decays to 0.35 by 2s, holds until the next 15s beat. */
-    @Composable
-    private fun heartbeatAlpha(): Float {
-        val transition = rememberInfiniteTransition(label = "heartbeat")
-        val phase = transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 15f,
-            animationSpec = infiniteRepeatable(tween(15_000, easing = LinearEasing)),
-            label = "phase",
-        )
-        // derivedStateOf: while the computed alpha holds at 0.35f (13 of every
-        // 15 seconds) the structurally-equal write suppresses recomposition —
-        // the animation clock ticks cheaply instead of redrawing every frame
-        val alpha = remember {
-            androidx.compose.runtime.derivedStateOf {
-                val p = phase.value
-                if (p < 0.8f) {
-                    1f
-                } else {
-                    0.35f + 0.65f * (1f - ((p - 0.8f) / 1.2f).coerceIn(0f, 1f))
-                }
-            }
-        }
-        return alpha.value
-    }
-
-    @Composable
-    private fun blinkAlpha(): Float {
-        val transition = rememberInfiniteTransition(label = "blink")
-        val a by transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 0.25f,
-            animationSpec = infiniteRepeatable(
-                tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                RepeatMode.Reverse,
-            ),
-            label = "alpha",
-        )
-        return a
     }
 
     private fun disconnectAndFinish() {
@@ -949,40 +787,4 @@ class TerminalActivity : FragmentActivity() {
     }
 
     /** In-session tabs moved to SessionTabs.kt (SessionTab) so they are unit-testable. */
-
-    @Composable
-    private fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -> Unit) {
-        NavigationBar(containerColor = Color(0xFF10151E)) {
-            SessionTab.entries.forEach { t ->
-                NavigationBarItem(
-                    selected = tab == t,
-                    onClick = { onTab(t) },
-                    icon = { Icon(t.icon, contentDescription = t.title) },
-                    label = { Text(t.title, fontSize = 11.sp) },
-                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFE0E0E0),
-                        selectedTextColor = Color(0xFFE0E0E0),
-                        indicatorColor = Color(0xFF1E62B4),
-                        unselectedIconColor = Color(0xFF9E9E9E),
-                        unselectedTextColor = Color(0xFF9E9E9E),
-                    ),
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun LoadingTab(label: String) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                LinearProgressIndicator(Modifier.fillMaxWidth(0.6f))
-                Text(
-                    "$label — connecting…",
-                    fontSize = 13.sp,
-                    color = Color(0xFF9E9E9E),
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-        }
-    }
 }

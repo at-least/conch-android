@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,8 +27,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -845,4 +849,42 @@ private fun formatSize(bytes: Long): String = when {
     bytes >= 1 shl 20 -> "%.1f MB".format(bytes / 1048576.0)
     bytes >= 1 shl 10 -> "%.1f KB".format(bytes / 1024.0)
     else -> "$bytes B"
+}
+
+/** Bottom navigation between the four in-session tabs. */
+@Composable
+internal fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -> Unit) {
+    NavigationBar(containerColor = Color(0xFF10151E)) {
+        SessionTab.entries.forEach { t ->
+            NavigationBarItem(
+                selected = tab == t,
+                onClick = { onTab(t) },
+                icon = { Icon(t.icon, contentDescription = t.title) },
+                label = { Text(t.title, fontSize = 11.sp) },
+                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFE0E0E0),
+                    selectedTextColor = Color(0xFFE0E0E0),
+                    indicatorColor = Color(0xFF1E62B4),
+                    unselectedIconColor = Color(0xFF9E9E9E),
+                    unselectedTextColor = Color(0xFF9E9E9E),
+                ),
+            )
+        }
+    }
+}
+
+/** Placeholder while a tool tab waits for the shared connection. */
+@Composable
+internal fun LoadingTab(label: String) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            LinearProgressIndicator(Modifier.fillMaxWidth(0.6f))
+            Text(
+                "$label — connecting…",
+                fontSize = 13.sp,
+                color = Color(0xFF9E9E9E),
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
 }
