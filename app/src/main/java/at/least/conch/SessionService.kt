@@ -9,12 +9,18 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Keeps the process alive while a terminal session is connected. Started by
- * TerminalActivity on connect; stops on disconnect. The persistent
- * notification tells Android's resource killers we're actively working
- * (the lesson every terminal app learned from Termux's "signal 9" reports).
+ * Keeps the process alive while terminal sessions are connected. Terminal
+ * activities register on connect and unregister on disconnect. The persistent
+ * notifications tell Android's resource killers we're actively working (the
+ * lesson every terminal app learned from Termux's "signal 9" reports).
+ *
+ * Concurrent sessions each keep their own notification, keyed by the session
+ * id; the service itself stops only when the LAST session goes away — ending
+ * session A must not drop the foreground protection of still-live session B.
  */
 class SessionService : Service() {
 
@@ -22,25 +28,60 @@ class SessionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            val notifId = intent.getIntExtra("notifId", NOTIF_ID_BASE)
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(notifId)
+            val sessionId = intent.getStringExtra("sessionId")
+            if (sessionId != null) stopSession(sessionId)
+            return START_NOT_STICKY
+        }
+        val sessionId = intent?.getStringExtra("sessionId")
+        val hostName = intent?.getStringExtra("hostName") ?: "session"
+        if (sessionId == null) {
             stopSelf()
             return START_NOT_STICKY
         }
-        val hostName = intent?.getStringExtra("hostName") ?: "session"
-        // unique id per host so several concurrent sessions each keep
-        // their own persistent notification
-        val notifId = (intent?.getStringExtra("hostId") ?: hostName).hashCode()
+        Registry.add(sessionId, hostName)
         try {
-            startForeground(notifId, buildNotification(hostName))
+            // Bind the foreground state to (re-affirm) this session's
+            // notification. Extra notifications for other live sessions are
+            // posted below — they inform, the bound one protects the process.
+            startForeground(Registry.notifIdFor(sessionId), buildNotification(hostName))
+            Registry.entries().forEach { (id, name) ->
+                notify(id, buildNotification(name))
+            }
         } catch (_: Exception) {
             // Android 14+ denies some FGS starts (background timing); the
             // session still works without the persistent notification.
+            Registry.remove(sessionId)
             stopSelf()
             return START_NOT_STICKY
         }
         return START_NOT_STICKY
+    }
+
+    private fun stopSession(sessionId: String) {
+        Registry.remove(sessionId)
+        val notifId = Registry.takeNotifId(sessionId)
+        if (notifId != null) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(notifId)
+        }
+        val remaining = Registry.entries()
+        if (remaining.isEmpty()) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        } else {
+            // Re-bind the foreground state to a still-live session (the
+            // canceled notification may have been the bound one).
+            val (id, name) = remaining.first()
+            try {
+                startForeground(id, buildNotification(name))
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun notify(notifId: Int, notification: Notification) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notifId, notification)
     }
 
     private fun buildNotification(hostName: String): Notification {
@@ -72,15 +113,50 @@ class SessionService : Service() {
             .build()
     }
 
+    /**
+     * Process-wide bookkeeping shared between the service instance and the
+     * static start/stop entry points. Pure data — JVM-testable.
+     */
+    object Registry {
+        private val namesById = ConcurrentHashMap<String, String>()
+        private val notifIds = ConcurrentHashMap<String, Int>()
+        private val nextNotifId = AtomicInteger(NOTIF_ID_BASE + 1)
+
+        fun add(sessionId: String, hostName: String) {
+            namesById[sessionId] = hostName
+        }
+
+        fun remove(sessionId: String) {
+            namesById.remove(sessionId)
+        }
+
+        fun notifIdFor(sessionId: String): Int =
+            notifIds.getOrPut(sessionId) { nextNotifId.getAndIncrement() }
+
+        /** Stop tracking a session's notification id — null if never assigned. */
+        fun takeNotifId(sessionId: String): Int? = notifIds.remove(sessionId)
+
+        fun entries(): List<Pair<Int, String>> =
+            namesById.entries.map { notifIdFor(it.key) to it.value }
+
+        fun isEmpty(): Boolean = namesById.isEmpty()
+
+        fun clear() {
+            namesById.clear()
+            notifIds.clear()
+        }
+    }
+
     companion object {
         private const val CHANNEL_ID = "conchapp_sessions"
         private const val NOTIF_ID_BASE = 1
         private const val ACTION_STOP = "at.least.conch.action.STOP_SESSION"
 
-        fun start(context: Context, hostId: String, hostName: String) {
+        fun start(context: Context, sessionId: String, hostName: String) {
+            Registry.add(sessionId, hostName)
             val intent = Intent(context, SessionService::class.java)
+                .putExtra("sessionId", sessionId)
                 .putExtra("hostName", hostName)
-                .putExtra("hostId", hostId)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -88,8 +164,11 @@ class SessionService : Service() {
             }
         }
 
-        fun stop(context: Context) {
-            context.stopService(Intent(context, SessionService::class.java))
+        fun stop(context: Context, sessionId: String) {
+            val intent = Intent(context, SessionService::class.java)
+                .setAction(ACTION_STOP)
+                .putExtra("sessionId", sessionId)
+            runCatching { context.startService(intent) }
         }
     }
 }

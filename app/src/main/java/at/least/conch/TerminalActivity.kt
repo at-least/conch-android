@@ -216,7 +216,7 @@ class TerminalActivity : FragmentActivity() {
                 ) {
                     requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
                 }
-                runCatching { SessionService.start(this, h.id, name) }
+                runCatching { SessionService.start(this, sessionId, name) }
             }
         }
         terminalView?.post { terminalView?.showSoftKeyboard() }
@@ -243,7 +243,7 @@ class TerminalActivity : FragmentActivity() {
         statusColor.value = Color(0xFFE53935)
         emulator?.feed("\r\u001b[90m── Connection closed: $reason ──\u001b[0m\r\n")
         terminalView?.invalidate()
-        SessionService.stop(this)
+        SessionService.stop(this, sessionId)
         Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
     }
 
@@ -256,7 +256,7 @@ class TerminalActivity : FragmentActivity() {
         LiveSessions.unregister(sessionId)
         reconnector?.stop()
         reconnector = null
-        SessionService.stop(this)
+        SessionService.stop(this, sessionId)
         historyExecutor.shutdown()
         super.onDestroy()
     }
@@ -789,7 +789,7 @@ class TerminalActivity : FragmentActivity() {
     private fun disconnectAndFinish() {
         reconnector?.stop()
         reconnector = null
-        SessionService.stop(this)
+        SessionService.stop(this, sessionId)
         finish()
     }
 
