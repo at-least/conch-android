@@ -6,7 +6,6 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -22,8 +21,8 @@ import kotlin.concurrent.thread
 
 /**
  * direct-tcpip channel interaction: the local port forwarder exactly as
- * SshSession.startTunnels() builds it, plus the app's hand-rolled SOCKS5
- * proxy on top of direct connections.
+ * SshSession.startTunnels() builds it. SOCKS5 coverage lives in
+ * [SocksProxyTest].
  */
 class PortForwardInteractionTest {
 
@@ -104,8 +103,8 @@ class PortForwardInteractionTest {
 
     @Test(timeout = 60_000)
     fun `large payload stays intact through the tunnel`() {
-        startForward(echo.port)
         val payload = ByteArray(256 * 1024) { (it * 31 + 7).toByte() }
+        startForward(echo.port)
         connectWithRetry(forwardSocket.localPort).use { s ->
             assertArrayEquals(payload, roundTrip(s, payload))
         }
@@ -135,185 +134,6 @@ class PortForwardInteractionTest {
         } finally {
             runCatching { a.close() }
             runCatching { b.close() }
-        }
-    }
-
-    /** Consumes the remaining 8 bytes of a 10-byte SOCKS5 reply (after VER+REP). */
-    private fun drainReplyTail(input: InputStream) {
-        val tail = ByteArray(8)
-        var off = 0
-        while (off < 8) {
-            val n = input.read(tail, off, 8 - off)
-            if (n < 0) fail("reply tail truncated")
-            off += n
-        }
-    }
-
-    @Test(timeout = 30_000)
-    fun `socks proxy bridges ipv4 connect to echo server`() {
-        val proxy = SocksProxy(ssh)
-        try {
-            val bound = proxy.start(0)
-            Socket("127.0.0.1", bound).use { s ->
-                s.soTimeout = 10_000
-                val out = s.getOutputStream()
-                val input = s.getInputStream()
-
-                // greeting: NO-AUTH
-                out.write(byteArrayOf(5, 1, 0))
-                out.flush()
-                assertEquals(5, input.read())
-                assertEquals(0, input.read())
-
-                // CONNECT 127.0.0.1:<echo>
-                val p = echo.port
-                out.write(
-                    byteArrayOf(5, 1, 0, 1, 127, 0, 0, 1, (p shr 8).toByte(), p.toByte()),
-                )
-                out.flush()
-                assertEquals(5, input.read())
-                assertEquals("reply must report success", 0, input.read())
-                drainReplyTail(input)
-
-                val payload = "socks says hi".toByteArray()
-                out.write(payload)
-                out.flush()
-                val buf = ByteArray(payload.size)
-                val acc = ByteArrayOutputStream()
-                while (acc.size() < payload.size) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    acc.write(buf, 0, n)
-                }
-                assertEquals("socks says hi", acc.toString())
-            }
-        } finally {
-            proxy.stop()
-        }
-    }
-
-    @Test(timeout = 30_000)
-    fun `socks proxy resolves domain atyp targets`() {
-        val proxy = SocksProxy(ssh)
-        try {
-            val bound = proxy.start(0)
-            Socket("127.0.0.1", bound).use { s ->
-                s.soTimeout = 10_000
-                val out = s.getOutputStream()
-                val input = s.getInputStream()
-
-                out.write(byteArrayOf(5, 1, 0))
-                out.flush()
-                input.read()
-                input.read()
-
-                val host = "localhost".toByteArray()
-                val p = echo.port
-                out.write(byteArrayOf(5, 1, 0, 3, host.size.toByte()))
-                out.write(host)
-                out.write(byteArrayOf((p shr 8).toByte(), p.toByte()))
-                out.flush()
-                assertEquals(5, input.read())
-                assertEquals("domain CONNECT must succeed", 0, input.read())
-                drainReplyTail(input)
-
-                out.write("via domain".toByteArray())
-                out.flush()
-                val expect = "via domain".toByteArray()
-                val got = ByteArray(expect.size)
-                var off = 0
-                while (off < got.size) {
-                    val n = input.read(got, off, got.size - off)
-                    if (n < 0) fail("echo truncated after $off bytes")
-                    off += n
-                }
-                assertEquals("via domain", String(got))
-            }
-        } finally {
-            proxy.stop()
-        }
-    }
-
-    @Test(timeout = 30_000)
-    fun `socks proxy rejects non-connect commands`() {
-        val proxy = SocksProxy(ssh)
-        try {
-            val bound = proxy.start(0)
-            Socket("127.0.0.1", bound).use { s ->
-                s.soTimeout = 10_000
-                val out = s.getOutputStream()
-                val input = s.getInputStream()
-
-                out.write(byteArrayOf(5, 1, 0))
-                out.flush()
-                input.read()
-                input.read()
-
-                // BIND (0x02) is not supported
-                out.write(byteArrayOf(5, 2, 0, 1, 127, 0, 0, 1, 0, 80))
-                out.flush()
-                assertEquals(5, input.read())
-                assertEquals("command not supported must be 0x07", 0x07, input.read())
-            }
-        } finally {
-            proxy.stop()
-        }
-    }
-
-    @Test(timeout = 30_000)
-    fun `socks proxy reports unreachable targets`() {
-        val proxy = SocksProxy(ssh)
-        try {
-            val bound = proxy.start(0)
-            Socket("127.0.0.1", bound).use { s ->
-                s.soTimeout = 10_000
-                val out = s.getOutputStream()
-                val input = s.getInputStream()
-
-                out.write(byteArrayOf(5, 1, 0))
-                out.flush()
-                input.read()
-                input.read()
-
-                // port 1 on loopback: nothing listens there
-                out.write(byteArrayOf(5, 1, 0, 1, 127, 0, 0, 1, 0, 1))
-                out.flush()
-                assertEquals(5, input.read())
-                assertEquals("host unreachable must be 0x04", 0x04, input.read())
-            }
-        } finally {
-            proxy.stop()
-        }
-    }
-
-    @Test(timeout = 30_000)
-    fun `socks proxy works with the jdk socks client`() {
-        val proxy = SocksProxy(ssh)
-        try {
-            val bound = proxy.start(0)
-            val sock = Socket(
-                java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", bound)),
-            )
-            sock.soTimeout = 10_000
-            try {
-                sock.connect(java.net.InetSocketAddress("127.0.0.1", echo.port), 10_000)
-                sock.getOutputStream().apply {
-                    write("jdk socks".toByteArray())
-                    flush()
-                }
-                val got = ByteArray("jdk socks".toByteArray().size)
-                var off = 0
-                while (off < got.size) {
-                    val n = sock.getInputStream().read(got, off, got.size - off)
-                    if (n < 0) fail("stream closed early")
-                    off += n
-                }
-                assertEquals("jdk socks", String(got))
-            } finally {
-                runCatching { sock.close() }
-            }
-        } finally {
-            proxy.stop()
         }
     }
 }
