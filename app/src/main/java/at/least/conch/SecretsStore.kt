@@ -56,6 +56,7 @@ object SecretsStore {
 
     @Synchronized
     fun get(alias: String): String? {
+        check(::prefs.isInitialized) { "SecretsStore not initialised" }
         val blob = prefs.getString(alias, null) ?: return null
         val (iv, ct) = decode(blob) ?: return null
         return try {
@@ -67,8 +68,21 @@ object SecretsStore {
         }
     }
 
+    /**
+     * True when an entry exists regardless of whether it currently decrypts —
+     * distinguishes "never stored" from "stored but the keystore is having a
+     * bad day" (get() returns null for both, and overwriting the latter
+     * destroys the data once the keystore recovers).
+     */
+    @Synchronized
+    fun contains(alias: String): Boolean {
+        check(::prefs.isInitialized) { "SecretsStore not initialised" }
+        return prefs.contains(alias)
+    }
+
     @Synchronized
     fun delete(alias: String) {
+        check(::prefs.isInitialized) { "SecretsStore not initialised" }
         prefs.edit().remove(alias).apply()
     }
 

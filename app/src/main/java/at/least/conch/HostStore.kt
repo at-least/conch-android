@@ -120,21 +120,37 @@ class HostStore(context: Context) {
     fun load(): MutableList<Host> {
         val list = mutableListOf<Host>()
         var migrated = false
-        try {
-            if (file.exists()) {
+        if (file.exists()) {
+            try {
                 val wires = ConchJson.decodeFromString(ListSerializer(HostWire.serializer()), file.readText())
                 for (w in wires) {
-                    val host = w.toHost()
-                    if (migrateLegacyPassword(w, host)) migrated = true
-                    list.add(host)
+                    try {
+                        val host = w.toHost()
+                        if (migrateLegacyPassword(w, host)) migrated = true
+                        list.add(host)
+                    } catch (_: Exception) {
+                        // one unreadable entry (keystore hiccup during the
+                        // legacy migration) must not drop the whole tail of
+                        // the list — the next save would persist the loss
+                    }
                 }
+            } catch (_: Exception) {
+                // keep a copy for recovery: the next save would otherwise
+                // overwrite the corrupt-but-maybe-salvageable file
+                preserveCorrupt()
             }
-        } catch (_: Exception) {
         }
         if (migrated) {
             runCatching { save(list) }
         }
         return list
+    }
+
+    private fun preserveCorrupt() {
+        if (!file.exists()) return
+        runCatching {
+            file.copyTo(File(file.parentFile, "${file.name}.corrupt"), overwrite = true)
+        }
     }
 
     /** Moves a legacy plaintext password from hosts.json into the Keystore vault. */
@@ -148,7 +164,7 @@ class HostStore(context: Context) {
 
     fun save(hosts: List<Host>) {
         val arr = hosts.map { HostWire.from(it) }
-        file.writeText(ConchJson.encodeToString(ListSerializer(HostWire.serializer()), arr))
+        AtomicFile.write(file, ConchJson.encodeToString(ListSerializer(HostWire.serializer()), arr))
     }
 
     fun deleteSecrets(hostId: String) {

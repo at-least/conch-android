@@ -157,6 +157,54 @@ class CommandHistoryTest {
         assertNotNull(HistoryCrypto.decrypt(key, blob))
     }
 
+    // ------------------------------------------------------- stored-key plan
+
+    @Test
+    fun `valid stored key plans USE and decodes`() {
+        val key = HistoryCrypto.newKey()
+        val stored = CommandHistoryStore.encodeKey(key)
+        assertEquals(CommandHistoryStore.KeyPlan.USE, CommandHistoryStore.planForKey(stored, aliasPresent = true))
+        assertTrue(CommandHistoryStore.decodeKey(stored)!!.contentEquals(key))
+    }
+
+    @Test
+    fun `wrong-length stored key plans REGENERATE`() {
+        val short = CommandHistoryStore.encodeKey(ByteArray(16))
+        assertEquals(CommandHistoryStore.KeyPlan.REGENERATE, CommandHistoryStore.planForKey(short, true))
+        assertNull(CommandHistoryStore.decodeKey(short))
+    }
+
+    @Test
+    fun `undecodable stored key plans REGENERATE`() {
+        assertEquals(CommandHistoryStore.KeyPlan.REGENERATE, CommandHistoryStore.planForKey("!!!", true))
+        assertNull(CommandHistoryStore.decodeKey("!!!"))
+    }
+
+    @Test
+    fun `unreadable-but-present key plans DISABLED not REGENERATE`() {
+        // get() returned null while the alias exists: regenerating would
+        // permanently brick the history file.
+        assertEquals(CommandHistoryStore.KeyPlan.DISABLED, CommandHistoryStore.planForKey(null, true))
+    }
+
+    @Test
+    fun `absent key plans REGENERATE first run`() {
+        assertEquals(CommandHistoryStore.KeyPlan.REGENERATE, CommandHistoryStore.planForKey(null, false))
+    }
+
+    @Test
+    fun `disabled store never writes and loads empty`() {
+        var wrote = false
+        val disabled = CommandHistoryStore(
+            readFile = { null },
+            writeFile = { wrote = true },
+            key = null,
+        )
+        disabled.record("h1", "must-not-persist")
+        assertFalse(wrote)
+        assertTrue(disabled.load().isEmpty())
+    }
+
     @Test
     fun `concurrent record and clear never corrupt the file`() {
         val dir = Files.createTempDirectory("conch-history-conc")

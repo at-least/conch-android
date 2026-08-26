@@ -1,7 +1,6 @@
 package at.least.conch
 
 import android.content.Context
-import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
 
 /**
@@ -121,10 +120,9 @@ class BackupManager(private val context: Context) {
                     merged.add(byId.getValue(id))
                 }
                 existingKeys.forEach { merged.add(KeyWire.from(it)) }
-                val metaFile = File(context.filesDir, "keys").apply { mkdirs() }
-                File(metaFile, "keys.json").writeText(
-                    ConchJson.encodeToString(ListSerializer(KeyWire.serializer()), merged)
-                )
+                // through KeyManager so the write is atomic and the format
+                // has a single owner
+                km.save(merged.map { it.toInfo() })
             }
         }
 
@@ -143,7 +141,7 @@ class BackupManager(private val context: Context) {
         val currentLines = if (file.exists()) file.readLines() else emptyList()
         val (union, grew) = mergeKnownHostsLines(currentLines, payload.knownHosts.lines())
         if (grew) {
-            file.writeText(union.joinToString("\n", postfix = "\n"))
+            AtomicFile.write(file, union.joinToString("\n", postfix = "\n"))
         }
 
         return RestoreResult(addedHostIds.size, keysAdded, snippetsAdded, grew)

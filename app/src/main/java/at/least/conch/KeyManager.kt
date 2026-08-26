@@ -60,13 +60,16 @@ class KeyManager(private val context: Context) {
                 out.addAll(wires.map { it.toInfo() })
             }
         } catch (_: Exception) {
+            // keep a copy for recovery before the next save overwrites it
+            runCatching { metaFile.copyTo(File(metaFile.parentFile, "${metaFile.name}.corrupt"), overwrite = true) }
         }
         return out
     }
 
-    private fun save(keys: List<SshKeyInfo>) {
+    /** Persists the key metadata list (atomic write; restore merges via this too). */
+    fun save(keys: List<SshKeyInfo>) {
         val arr = keys.map { KeyWire.from(it) }
-        metaFile.writeText(ConchJson.encodeToString(ListSerializer(KeyWire.serializer()), arr))
+        AtomicFile.write(metaFile, ConchJson.encodeToString(ListSerializer(KeyWire.serializer()), arr))
     }
 
     /** Generates a new Ed25519 keypair and stores it encrypted. */

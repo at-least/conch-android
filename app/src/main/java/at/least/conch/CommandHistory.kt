@@ -70,27 +70,29 @@ object HistoryCrypto {
 class CommandHistoryStore(
     private val readFile: () -> ByteArray?,
     private val writeFile: (ByteArray) -> Unit,
-    private val key: ByteArray,
+    private val key: ByteArray?,
 ) {
 
     constructor(context: Context) : this(
         readFile = {
             File(context.filesDir, FILE_NAME).takeIf { it.exists() }?.takeIf { it.length() > 0 }?.readBytes()
         },
-        writeFile = { bytes -> File(context.filesDir, FILE_NAME).writeBytes(bytes) },
+        writeFile = { bytes -> AtomicFile.write(File(context.filesDir, FILE_NAME), bytes) },
         key = loadOrCreateKey(),
     )
 
     fun load(): MutableList<HistoryEntry> = synchronized(FILE_LOCK) {
+        val k = key ?: return mutableListOf()
         val blob = readFile() ?: return mutableListOf()
-        val json = HistoryCrypto.decrypt(key, blob) ?: return mutableListOf()
+        val json = HistoryCrypto.decrypt(k, blob) ?: return mutableListOf()
         historyFromJson(json).toMutableList()
     }
 
     fun record(hostId: String, text: String, ts: Long = System.currentTimeMillis()) {
         synchronized(FILE_LOCK) {
+            val k = key ?: return
             val next = append(load(), hostId, text, ts)
-            writeFile(HistoryCrypto.encrypt(key, historyToJson(next)))
+            writeFile(HistoryCrypto.encrypt(k, historyToJson(next)))
         }
     }
 
@@ -99,6 +101,18 @@ class CommandHistoryStore(
     }
 
     fun clear() = synchronized(FILE_LOCK) { writeFile(ByteArray(0)) }
+
+    /**
+     * Decides what to do with the stored history key:
+     * - [KeyPlan.USE] — the stored value decodes to a valid 256-bit key;
+     * - [KeyPlan.REGENERATE] — no key yet, or the stored value is corrupt
+     *   (safe to replace: history is already unreadable);
+     * - [KeyPlan.DISABLED] — the alias exists but reading it failed
+     *   (transient keystore trouble). Regenerating would PERMANENTLY
+     *   brick the existing history file, so the store goes read-only for
+     *   this session instead.
+     */
+    enum class KeyPlan { USE, REGENERATE, DISABLED }
 
     companion object {
         const val MAX_ENTRIES = 1000
@@ -150,17 +164,34 @@ class CommandHistoryStore(
             }
         }
 
-        private fun loadOrCreateKey(): ByteArray {
-            SecretsStore.get(KEY_ALIAS)?.let { stored ->
-                return try {
-                    android.util.Base64.decode(stored, android.util.Base64.NO_WRAP)
-                } catch (_: Exception) {
-                    HistoryCrypto.newKey()
+        /**
+         * Decides what to do with the stored history key (see [KeyPlan]).
+         */
+        fun planForKey(stored: String?, aliasPresent: Boolean): KeyPlan = when {
+            stored != null && decodeKey(stored) != null -> KeyPlan.USE
+            stored != null -> KeyPlan.REGENERATE
+            aliasPresent -> KeyPlan.DISABLED
+            else -> KeyPlan.REGENERATE
+        }
+
+        fun decodeKey(stored: String): ByteArray? = try {
+            java.util.Base64.getDecoder().decode(stored).takeIf { it.size == 32 }
+        } catch (_: Exception) {
+            null
+        }
+
+        fun encodeKey(key: ByteArray): String =
+            java.util.Base64.getEncoder().encodeToString(key)
+
+        private fun loadOrCreateKey(): ByteArray? {
+            val stored = SecretsStore.get(KEY_ALIAS)
+            return when (planForKey(stored, SecretsStore.contains(KEY_ALIAS))) {
+                KeyPlan.USE -> decodeKey(stored!!)
+                KeyPlan.REGENERATE -> HistoryCrypto.newKey().also {
+                    SecretsStore.put(KEY_ALIAS, encodeKey(it))
                 }
+                KeyPlan.DISABLED -> null
             }
-            val fresh = HistoryCrypto.newKey()
-            SecretsStore.put(KEY_ALIAS, android.util.Base64.encodeToString(fresh, android.util.Base64.NO_WRAP))
-            return fresh
         }
     }
 }

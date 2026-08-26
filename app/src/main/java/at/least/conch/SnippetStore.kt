@@ -46,12 +46,14 @@ class SnippetStore(private val file: File) {
                 list.addAll(wires.map { it.toSnippet() })
             }
         } catch (_: Exception) {
+            // keep a copy for recovery before the next save overwrites it
+            runCatching { file.copyTo(File(file.parentFile, "${file.name}.corrupt"), overwrite = true) }
         }
         return list
     }
 
     fun save(snippets: List<Snippet>) {
         val arr = snippets.map { SnippetWire.from(it) }
-        file.writeText(ConchJson.encodeToString(ListSerializer(SnippetWire.serializer()), arr))
+        AtomicFile.write(file, ConchJson.encodeToString(ListSerializer(SnippetWire.serializer()), arr))
     }
 }

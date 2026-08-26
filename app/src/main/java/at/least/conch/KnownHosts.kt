@@ -31,11 +31,15 @@ class KnownHostsStore(filesDir: File) {
     }
 
     fun add(hostname: String, port: Int, key: PublicKey) {
-        val line = entryFor(hostname, port, key)
-        val existing = readLines().toMutableSet()
-        if (line !in existing) {
-            existing.add(line)
-            file.writeText(existing.joinToString("\n", postfix = "\n"))
+        // sshj handshakes run on their own threads; two simultaneous TOFU
+        // accepts must not lose each other's read-modify-write
+        synchronized(this) {
+            val line = entryFor(hostname, port, key)
+            val existing = readLines().toMutableSet()
+            if (line !in existing) {
+                existing.add(line)
+                AtomicFile.write(file, existing.joinToString("\n", postfix = "\n"))
+            }
         }
     }
 
