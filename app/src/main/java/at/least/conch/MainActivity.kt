@@ -258,12 +258,10 @@ class MainActivity : FragmentActivity() {
 
         if (showSessions) {
             SessionsSheet(
-                onOpen = { live ->
-                    val intent = Intent(this@MainActivity, TerminalActivity::class.java)
-                    intent.putExtra("hostId", live.hostId)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    startActivity(intent)
-                },
+                // Focus the live session's own task — an intent with
+                // REORDER_TO_FRONT cannot target a specific session's
+                // activity and would surface an arbitrary terminal.
+                onOpen = { live -> live.focus() },
                 onDismiss = { showSessions = false },
             )
         }
@@ -271,7 +269,7 @@ class MainActivity : FragmentActivity() {
         if (showAbout) {
             AlertDialog(
                 onDismissRequest = { showAbout = false },
-                title = { Text("Conch 0.8.1") },
+                title = { Text("Conch ${BuildConfig.VERSION_NAME}") },
                 text = {
                     Text(
                         "Android SSH client — free & open-source\nsshj + built-in VT terminal + Jetpack Compose\nKey auth / TOFU / tunnels / SFTP / monitor / snippets / tmux"
@@ -378,8 +376,12 @@ class MainActivity : FragmentActivity() {
         if (alias.isNotBlank()) alias else "$username@$hostname"
 
     private fun openTerminal(host: Host) {
+        // Own task per session (LiveSessions design): the sessions switcher
+        // moves tasks to the front, so each terminal must be individually
+        // addressable.
         val intent = Intent(this, TerminalActivity::class.java)
         intent.putExtra("hostId", host.id)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         startActivity(intent)
     }
 

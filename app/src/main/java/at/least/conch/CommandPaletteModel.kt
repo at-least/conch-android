@@ -14,8 +14,12 @@ object CommandPaletteModel {
         val origin: Origin,
         val text: String,
         val label: String? = null,
+        // Position within the result list. History only dedups consecutive
+        // repeats, so the same text can appear twice; LazyColumn keys must
+        // stay unique or Compose throws at composition time.
+        val ordinal: Int = 0,
     ) {
-        val id: String get() = (if (origin == Origin.HISTORY) "h" else "s") + ":" + text
+        val id: String get() = "${if (origin == Origin.HISTORY) "h" else "s"}:$ordinal"
     }
 
     fun filter(
@@ -28,7 +32,8 @@ object CommandPaletteModel {
         val snippetEntries = snippets.map { Entry(Origin.SNIPPET, it.second, it.first) }
 
         if (q.isEmpty()) {
-            return history.takeLast(limit).reversed().map { Entry(Origin.HISTORY, it) }
+            return history.takeLast(limit).reversed()
+                .mapIndexed { i, text -> Entry(Origin.HISTORY, text, ordinal = i) }
         }
 
         fun score(text: String): Int? {
@@ -53,6 +58,6 @@ object CommandPaletteModel {
         return hits
             .sortedWith(compareBy({ it.score }, { it.tie }))
             .take(limit)
-            .map { it.entry }
+            .mapIndexed { i, hit -> hit.entry.copy(ordinal = i) }
     }
 }

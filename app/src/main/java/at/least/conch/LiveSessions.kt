@@ -21,8 +21,12 @@ object LiveSessions {
         val startedAt: Long,
         /** Disconnect + finish the owning Activity. Safe to call from any thread. */
         private val disconnectFn: () -> Unit,
+        /** Bring the owning Activity's task to the foreground. Safe to call from any thread. */
+        private val focusFn: () -> Unit = {},
     ) {
         fun disconnect() = disconnectFn()
+
+        fun focus() = focusFn()
     }
 
     private val sessions = ConcurrentHashMap<String, Live>()

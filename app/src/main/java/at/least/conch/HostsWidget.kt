@@ -67,7 +67,9 @@ object HostsWidget {
         val intent = Intent().apply {
             setClassName(context, "at.least.conch.TerminalActivity")
             putExtra("hostId", hostId)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Own task per session (LiveSessions design), like every other
+            // terminal launch site.
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         }
         context.startActivity(intent)
     }

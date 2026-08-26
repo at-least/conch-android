@@ -125,19 +125,18 @@ class TerminalView @JvmOverloads constructor(
             // Mouse-tracking apps (htop/vim/tmux): scrolling is wheel input
             // for the app, not local scrollback.
             if (emu.mouseTracking) {
-                wheelRemainder += distanceY
-                val lines = (wheelRemainder / cellHeight).toInt()
+                val (lines, remainder) = TerminalScroll.wheelLines(wheelRemainder, distanceY, cellHeight)
                 if (lines != 0) {
-                    wheelRemainder -= lines * cellHeight
+                    wheelRemainder = remainder
                     val cell = MouseInput.cellAt(e2.x, e2.y, cellWidth, cellHeight, emu.cols, emu.rows)
                     val button = MouseInput.wheelButton(lines)
                     repeat(abs(lines)) { emu.sendMouse(button, cell.col, cell.row, true) }
                 }
                 return true
             }
-            val lines = (distanceY / cellHeight).roundToInt()
-            if (lines != 0) {
-                scrollOffset = (scrollOffset + lines).coerceIn(0, emu.scrollbackSize)
+            val next = TerminalScroll.afterDrag(scrollOffset, distanceY, cellHeight, emu.scrollbackSize)
+            if (next != scrollOffset) {
+                scrollOffset = next
                 invalidate()
             }
             return true
@@ -210,9 +209,9 @@ class TerminalView @JvmOverloads constructor(
                 return true
             }
             // simple fling: consume remaining velocity as history lines
-            if (abs(velocityY) > 2000) {
-                val lines = (velocityY / 8000f).roundToInt()
-                scrollOffset = (scrollOffset - lines).coerceIn(0, emu.scrollbackSize)
+            val next = TerminalScroll.afterFling(scrollOffset, velocityY, emu.scrollbackSize)
+            if (next != scrollOffset) {
+                scrollOffset = next
                 invalidate()
             }
             return true
@@ -504,7 +503,10 @@ class TerminalView @JvmOverloads constructor(
         val tw = textPaint.measureText(text)
         val th = cellHeight * 1.4f
         val vi = (caret.externalRow + scrollOffset).coerceIn(0, emu.rows - 1)
-        val cx = (paddingLeft + (caret.col + 1) * cellWidth).coerceIn(paddingLeft.toFloat(), width - tw)
+        // A viewport narrower than the chip text (tiny font + split screen)
+        // would make coerceIn(min > max) throw; clamp instead.
+        val maxX = (width - tw).coerceAtLeast(paddingLeft.toFloat())
+        val cx = (paddingLeft + (caret.col + 1) * cellWidth).coerceIn(paddingLeft.toFloat(), maxX)
         var top = paddingTop + vi * cellHeight - th
         if (top < paddingTop) top = paddingTop + (vi + 1) * cellHeight
         return RectF(cx, top, cx + tw, top + th)

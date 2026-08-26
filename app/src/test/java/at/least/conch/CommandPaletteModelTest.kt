@@ -70,4 +70,22 @@ class CommandPaletteModelTest {
         val out = CommandPaletteModel.filter("run", history, emptyList(), limit = 25)
         assertEquals(25, out.size)
     }
+
+    @Test
+    fun `duplicate history texts yield unique lazy keys`() {
+        // History dedups only consecutive repeats: ls/pwd/ls keeps two "ls".
+        val out = CommandPaletteModel.filter("", listOf("ls", "pwd", "ls"), emptyList())
+        assertEquals(out.size, out.map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun `duplicate texts across snippets and history yield unique lazy keys`() {
+        val out = CommandPaletteModel.filter(
+            "df",
+            listOf("df -h", "df -h"),
+            listOf("disk" to "df -h"),
+        )
+        assertTrue(out.size > 1)
+        assertEquals(out.size, out.map { it.id }.toSet().size)
+    }
 }

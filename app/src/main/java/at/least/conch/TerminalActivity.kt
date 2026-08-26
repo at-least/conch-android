@@ -198,6 +198,7 @@ class TerminalActivity : FragmentActivity() {
                     displayName = if (h.alias.isNotBlank()) h.alias else h.hostname,
                     startedAt = System.currentTimeMillis(),
                     disconnectFn = { runOnUiThread { disconnectAndFinish() } },
+                    focusFn = { runOnUiThread { bringToFront() } },
                 )
             )
         }
@@ -777,6 +778,12 @@ class TerminalActivity : FragmentActivity() {
         val tv = terminalView ?: return
         tv.ctrlArmed = !tv.ctrlArmed
         ctrlArmed.value = tv.ctrlArmed
+    }
+
+    /** Sessions-switcher target: bring this terminal's own task to the front. */
+    private fun bringToFront() {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        runCatching { am.moveTaskToFront(taskId, 0) }
     }
 
     private fun disconnectAndFinish() {

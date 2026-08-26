@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sessions switcher: bring a live terminal's own task back to the front. -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
 
     <application
         android:name=".App"
