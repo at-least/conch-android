@@ -218,6 +218,10 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     // leave-composition. Re-attaches when autoRefresh flips back on.
     LaunchedEffect(autoRefresh) {
         if (!autoRefresh) return@LaunchedEffect
+        if (isWindowsHost(session)) {
+            error = "Windows host: Monitor is not supported. Terminal, Files and Docker still work."
+            return@LaunchedEffect
+        }
         while (true) {
             val out = withContext(Dispatchers.IO) { session.exec(MonitorParser.PROBE) }
             val next = MonitorPoll.reduce(MonitorPoll.State(snapshot, error, rawOut), out)
@@ -933,4 +937,10 @@ internal fun LoadingTab(label: String) {
             )
         }
     }
+}
+
+/** The Monitor probe reads /proc — a clear message beats a generic error on Windows OpenSSH hosts (ServerBox #491 parity). */
+private suspend fun isWindowsHost(session: SessionReconnector): Boolean {
+    val uname = withContext(Dispatchers.IO) { session.exec("uname -s") }
+    return uname?.contains("NT", true) == true
 }

@@ -320,12 +320,51 @@ class TerminalView @JvmOverloads constructor(
      * keeping bursts like `cat bigfile` smooth.
      */
     fun feedAndInvalidate(data: ByteArray) {
-        emulator?.feed(data)
+        val zm = zmodem ?: ZmodemReceiver().also { zmodem = it }
+        val res = zm.feed(data)
+        if (res.send.isNotEmpty()) onData?.invoke(res.send)
+        for (e in res.events) zmodemEvent(e)
+        if (res.display.isNotEmpty()) emulator?.feed(res.display)
         if (!repaintScheduled) {
             repaintScheduled = true
             postOnAnimation {
                 repaintScheduled = false
                 invalidate()
+            }
+        }
+    }
+
+    /**
+     * ZMODEM downloads: `sz` on the remote is detected in the output stream
+     * (bytes are then routed to the receiver, not the screen); protocol
+     * replies go back over the SSH channel; file bytes go to the sink.
+     * Parity driver: Termius's most-reacted feature request (rz/sz).
+     */
+    interface ZmodemSink {
+        fun onZmodemOffer(name: String, size: Long)
+        fun onZmodemData(chunk: ByteArray)
+        fun onZmodemComplete(name: String, size: Long)
+        fun onZmodemFailed(reason: String)
+    }
+
+    private var zmodem: ZmodemReceiver? = null
+    var zmodemSink: ZmodemSink? = null
+
+    private fun zmodemEvent(e: ZmodemReceiver.Event) {
+        when (e) {
+            is ZmodemReceiver.Event.Started -> Unit
+            is ZmodemReceiver.Event.Offered -> {
+                emulator?.feed("\r\n\u001b[90m[zmodem] receiving ${e.name} (${e.size} bytes)\u001b[0m\r\n")
+                zmodemSink?.onZmodemOffer(e.name, e.size)
+            }
+            is ZmodemReceiver.Event.Data -> zmodemSink?.onZmodemData(e.chunk)
+            is ZmodemReceiver.Event.Complete -> {
+                emulator?.feed("\u001b[90m[zmodem] done — ${e.name} (${e.size} bytes)\u001b[0m\r\n")
+                zmodemSink?.onZmodemComplete(e.name, e.size)
+            }
+            is ZmodemReceiver.Event.Failed -> {
+                emulator?.feed("\u001b[90m[zmodem] failed: ${e.reason}\u001b[0m\r\n")
+                zmodemSink?.onZmodemFailed(e.reason)
             }
         }
     }

@@ -511,6 +511,7 @@ class TerminalActivity : FragmentActivity() {
                                         fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
                                     }
                                     theme = TerminalTheme.byName(SettingsStore.terminalTheme(this@TerminalActivity))
+                                    zmodemSink = zmodemDownloadSink()
                                     setOnClickListener { showSoftKeyboard() }
                                     post { requestFocus() }
                                 }
@@ -808,6 +809,93 @@ class TerminalActivity : FragmentActivity() {
         val tv = terminalView ?: return
         tv.altArmed = !tv.altArmed
         altArmed.value = tv.altArmed
+    }
+
+    /**
+     * ZMODEM download sink: saves to the system Downloads collection
+     * (MediaStore on API 29+, no permission needed); older devices fall
+     * back to the app's external files dir.
+     */
+    private fun zmodemDownloadSink(): TerminalView.ZmodemSink {
+        var uri: android.net.Uri? = null
+        var out: java.io.OutputStream? = null
+        return object : TerminalView.ZmodemSink {
+            override fun onZmodemOffer(name: String, size: Long) {
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        val values = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
+                            put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+                        }
+                        uri = contentResolver.insert(
+                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            values,
+                        )
+                        out = uri?.let { contentResolver.openOutputStream(it) }
+                    } else {
+                        val dir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+                            ?: filesDir
+                        val f = java.io.File(dir, name)
+                        uri = android.net.Uri.fromFile(f)
+                        out = f.outputStream()
+                    }
+                    if (out == null) throw IllegalStateException("cannot open download stream")
+                } catch (e: Exception) {
+                    CrashReporting.report(e)
+                    android.widget.Toast.makeText(
+                        this@TerminalActivity,
+                        "Cannot save ${'$'}{e.message}",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+
+            override fun onZmodemData(chunk: ByteArray) {
+                try {
+                    out?.write(chunk)
+                } catch (e: Exception) {
+                    CrashReporting.report(e)
+                }
+            }
+
+            override fun onZmodemComplete(name: String, size: Long) {
+                try {
+                    out?.close()
+                    if (android.os.Build.VERSION.SDK_INT >= 29 && uri != null) {
+                        contentResolver.update(
+                            uri!!,
+                            android.content.ContentValues().apply {
+                                put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+                            },
+                            null,
+                            null,
+                        )
+                    }
+                    android.widget.Toast.makeText(
+                        this@TerminalActivity,
+                        "Saved $name ($size bytes) to Downloads",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                } catch (e: Exception) {
+                    CrashReporting.report(e)
+                } finally {
+                    out = null
+                    uri = null
+                }
+            }
+
+            override fun onZmodemFailed(reason: String) {
+                try {
+                    out?.close()
+                    if (uri != null) {
+                        contentResolver.delete(uri!!, null, null)
+                    }
+                } catch (_: Exception) {
+                }
+                out = null
+                uri = null
+            }
+        }
     }
 
     /** Sessions-switcher target: bring this terminal's own task to the front. */
