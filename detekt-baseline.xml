@@ -3,6 +3,8 @@
   <ManuallySuppressedIssues></ManuallySuppressedIssues>
   <CurrentIssues>
     <ID>ComplexCondition:ZmodemReceiver.kt$ZmodemReceiver$c == ZCRCE || c == ZCRCG || c == ZCRCW || c == ZCRCQ</ID>
+    <ID>ComplexCondition:ZmodemSender.kt$ZmodemSender$digits.isEmpty() &amp;&amp; (c == ZDLE || c == 0x0D || c == 0x0A)</ID>
+    <ID>ComplexCondition:ZmodemSender.kt$ZmodemSender.Companion$b == ZDLE || b == 0x10 || b == 0x11 || b == 0x13 || b == 0x7F</ID>
     <ID>CyclomaticComplexMethod:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
     <ID>CyclomaticComplexMethod:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, otherHosts: List&lt;Host&gt;, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>
     <ID>CyclomaticComplexMethod:ExtraKeysConfig.kt$ExtraKeysConfig$fun bytesFor(id: String): ByteArray?</ID>
@@ -13,6 +15,7 @@
     <ID>CyclomaticComplexMethod:TerminalActivity.kt$TerminalActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun TerminalScreen()</ID>
     <ID>CyclomaticComplexMethod:TerminalView.kt$TerminalView$override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean</ID>
     <ID>CyclomaticComplexMethod:ZmodemReceiver.kt$ZmodemReceiver$private fun nextFrame(): Frame?</ID>
+    <ID>CyclomaticComplexMethod:ZmodemSender.kt$ZmodemSender$private fun nextFrame(): Frame?</ID>
     <ID>EmptyFunctionBlock:TerminalEmulator.kt$TerminalEmulator.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:TerminalEmulator.kt$TerminalEmulator.HostOutput${}</ID>
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.ExecCommand${}</ID>
@@ -72,10 +75,15 @@
     <ID>TooManyFunctions:TerminalEmulator.kt$TerminalEmulator$&lt;no name provided&gt; : TerminalSessionClient</ID>
     <ID>TooManyFunctions:TerminalView.kt$TerminalView : View</ID>
     <ID>TooManyFunctions:ZmodemReceiver.kt$ZmodemReceiver</ID>
+    <ID>TooManyFunctions:ZmodemSender.kt$ZmodemSender</ID>
+    <ID>UnusedPrivateMember:ZmodemSender.kt$ZmodemSender$private fun hdrToLong(hdr: IntArray): Long</ID>
+    <ID>UnusedPrivateMember:ZmodemSender.kt$ZmodemSender.Companion$private fun pos4(v: Long): IntArray</ID>
     <ID>UseCheckOrError:TerminalActivity.kt$TerminalActivity.&lt;no name provided&gt;$throw IllegalStateException("cannot open download stream")</ID>
     <ID>UseCheckOrError:ZmodemReceiver.kt$ZmodemReceiver$throw IllegalStateException("header CRC mismatch")</ID>
     <ID>UseCheckOrError:ZmodemReceiver.kt$ZmodemReceiver$throw IllegalStateException("subpacket CRC mismatch")</ID>
     <ID>Wrapping:ZmodemReceiver.kt$ZmodemReceiver$(</ID>
     <ID>Wrapping:ZmodemReceiver.kt$ZmodemReceiver$;</ID>
+    <ID>Wrapping:ZmodemSender.kt$ZmodemSender$(</ID>
+    <ID>Wrapping:ZmodemSender.kt$ZmodemSender$;</ID>
   </CurrentIssues>
 </SmellBaseline>
