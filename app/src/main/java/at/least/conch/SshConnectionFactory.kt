@@ -29,11 +29,13 @@ object SshConnectionFactory {
         context: Context,
         host: Host,
         prompt: KeyPrompt? = null,
+        agentKeys: AgentKeySource? = null,
     ): SSHClient {
         val jumpHost = host.jumpHostId?.let { id ->
             HostStore(context).load().firstOrNull { it.id == id }
                 ?: error("Jump host not found — edit this host and reselect a jump host")
         }
+        val keys = agentKeys ?: if (host.forwardAgent) KeyManagerAgentSource(context) else null
         return connect(
             host = host,
             jumpHost = jumpHost,
@@ -42,6 +44,7 @@ object SshConnectionFactory {
             keyProvider = { ssh, keyId -> KeyManager(context).loadKeyProvider(ssh, keyId) },
             password = { h -> SecretsStore.get("host-pw:${h.id}") },
             mainHandler = mainHandler,
+            agentKeys = keys,
         )
     }
 
@@ -51,6 +54,8 @@ object SshConnectionFactory {
      *
      * @param jumpHost optional saved host to ProxyJump through (single hop);
      *                 its own jumpHostId is ignored. Both host keys get TOFU.
+     * @param agentKeys key source for ssh-agent forwarding; the Android
+     *                 overload defaults it when the host opts in.
      */
     fun connect(
         host: Host,
@@ -60,9 +65,12 @@ object SshConnectionFactory {
         password: (Host) -> String?,
         mainHandler: Handler? = null,
         jumpHost: Host? = null,
+        agentKeys: AgentKeySource? = null,
     ): SSHClient {
-        val jump = jumpHost?.let { buildClient(it, prompt, store, keyProvider, password, mainHandler) }
-        return buildClient(host, prompt, store, keyProvider, password, mainHandler, jump)
+        val jump = jumpHost?.let {
+            buildClient(it, prompt, store, keyProvider, password, mainHandler, agentKeys = null)
+        }
+        return buildClient(host, prompt, store, keyProvider, password, mainHandler, jump, agentKeys)
     }
 
     /**
@@ -85,6 +93,7 @@ object SshConnectionFactory {
         password: (Host) -> String?,
         mainHandler: Handler?,
         jump: SSHClient? = null,
+        agentKeys: AgentKeySource? = null,
     ): SSHClient {
         val ssh = if (jump != null) JumpedClient(jump) else SSHClient()
         ssh.addHostKeyVerifier(TofuHostKeyVerifier(store, prompt, mainHandler))
@@ -115,6 +124,13 @@ object SshConnectionFactory {
             }
             if (host.keepAlive) {
                 ssh.connection.keepAlive.setKeepAliveInterval(KEEP_ALIVE_INTERVAL_SECONDS)
+            }
+            if (host.forwardAgent && agentKeys != null) {
+                // a refusing server must not kill the session (tunnel policy)
+                try {
+                    AgentForwarding.attach(ssh, agentKeys)
+                } catch (_: Exception) {
+                }
             }
         } catch (e: Exception) {
             // The transport is already connected; without this the socket and

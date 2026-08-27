@@ -71,6 +71,27 @@ class OpenSshConfigParserTest {
     }
 
     @Test
+    fun `parses forwardagent yes and ignores anything else`() {
+        val config = """
+            Host trusted
+              HostName a.example.com
+              ForwardAgent yes
+
+            Host untrusted
+              HostName b.example.com
+              forwardagent no
+
+            Host ask
+              HostName c.example.com
+              ForwardAgent ask
+        """.trimIndent()
+        val hosts = OpenSshConfigParser.parse(config)
+        org.junit.Assert.assertTrue(hosts[0].forwardAgent)
+        org.junit.Assert.assertFalse(hosts[1].forwardAgent)
+        org.junit.Assert.assertFalse(hosts[2].forwardAgent)
+    }
+
+    @Test
     fun `parses identityfile directives case-insensitively with quotes`() {
         val config = """
             Host web

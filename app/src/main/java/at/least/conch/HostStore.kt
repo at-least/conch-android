@@ -56,6 +56,8 @@ data class HostWire(
     /** Other host id to connect through (ProxyJump). Omitted when null so the JSON stays byte-compatible. */
     @EncodeDefault(Mode.NEVER) val jumpHostId: String? = null,
     @EncodeDefault(Mode.NEVER) val password: String? = null,
+    /** ssh-agent forwarding; omitted when false for byte-compatible backups. */
+    @EncodeDefault(Mode.NEVER) val forwardAgent: Boolean = false,
 ) {
     fun toHost(): Host {
         val host = Host(
@@ -71,6 +73,7 @@ data class HostWire(
             tmuxAutoAttach = tmuxAutoAttach,
             socksPort = socksPort,
             jumpHostId = jumpHostId,
+            forwardAgent = forwardAgent,
         )
         host.tunnels.addAll(tunnels.map { it.toTunnel() })
         return host
@@ -91,6 +94,7 @@ data class HostWire(
             socksPort = h.socksPort,
             tunnels = h.tunnels.map { TunnelWire.from(it) },
             jumpHostId = h.jumpHostId,
+            forwardAgent = h.forwardAgent,
         )
     }
 }
@@ -112,6 +116,8 @@ data class Host(
     var socksPort: Int = 0, // local SOCKS5 proxy (0 = off)
     /** ProxyJump: id of another saved host to tunnel this connection through (null = direct). */
     var jumpHostId: String? = null,
+    /** ssh-agent forwarding (-A): the server may ask this device to sign with stored keys. */
+    var forwardAgent: Boolean = false,
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
     companion object {

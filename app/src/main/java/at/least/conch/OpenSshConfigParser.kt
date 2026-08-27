@@ -20,6 +20,8 @@ object OpenSshConfigParser {
         /** ProxyJump target (first hop; multi-hop unsupported). Matched
          * against imported aliases to auto-link jumpHostId. */
         var proxyJump: String = "",
+        /** ForwardAgent yes — offered to the user as the host's agent setting. */
+        var forwardAgent: Boolean = false,
     )
 
     fun parse(text: String): List<ParsedHost> {
@@ -43,6 +45,7 @@ object OpenSshConfigParser {
                 "port" -> current?.port = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: 22
                 "identityfile" -> current?.identityFile = value.trim('"')
                 "proxyjump" -> current?.proxyJump = firstProxyHop(value)
+                "forwardagent" -> current?.forwardAgent = value.equals("yes", ignoreCase = true)
                 else -> { /* ignored directive */ }
             }
         }

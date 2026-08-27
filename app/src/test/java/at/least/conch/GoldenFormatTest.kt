@@ -3,7 +3,9 @@ package at.least.conch
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
@@ -113,6 +115,24 @@ class GoldenFormatTest {
             """{"alias":"","authType":"PASSWORD","fontSizeSp":0,"hostname":"h","id":"golden-2","keepAlive":true,"keyId":null,"port":22,"socksPort":0,"tmuxAutoAttach":true,"tunnels":[],"username":"u"}""",
             canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host))),
         )
+    }
+
+    @Test
+    fun `golden host json - forwardAgent omitted unless true, old backups decode false`() {
+        // @EncodeDefault(NEVER): false must not appear, so the golden strings
+        // above (which never mention forwardAgent) stay byte-identical.
+        val host = Host(id = "fa-1", hostname = "h", username = "u")
+        val jsonOff = canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host)))
+        assertFalse(jsonOff.contains("forwardAgent"))
+        host.forwardAgent = true
+        val jsonOn = canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host)))
+        assertTrue(jsonOn.contains("\"forwardAgent\":true"))
+        // pre-feature backup without the field decodes to the safe default
+        val back = ConchJson.decodeFromString(
+            HostWire.serializer(),
+            """{"id":"x","hostname":"h","username":"u"}""",
+        ).toHost()
+        assertEquals(false, back.forwardAgent)
     }
 
     @Test

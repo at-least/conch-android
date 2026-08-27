@@ -114,6 +114,7 @@ class MainActivity : FragmentActivity() {
                                 hostname = p.hostname,
                                 port = p.port,
                                 username = p.user,
+                                forwardAgent = p.forwardAgent,
                             )
                             all.add(host)
                             imported.add(p to host)

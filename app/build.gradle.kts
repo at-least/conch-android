@@ -107,6 +107,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     implementation("com.hierynomus:sshj:0.38.0")
+    // sshj declares eddsa runtime-only, so it ships in the APK but is not on
+    // the compile classpath; SshAgentSigner references EdDSA types directly.
+    implementation("net.i2p.crypto:eddsa:0.3.0")
     implementation("org.slf4j:slf4j-android:1.7.36")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
@@ -156,4 +159,10 @@ dependencies {
         exclude(group = "org.slf4j", module = "slf4j-android")
     }
     testRuntimeOnly("org.slf4j:slf4j-nop:2.0.16")
+}
+
+tasks.withType<Test>().configureEach {
+    // -Dconch.localSshdTest=true is a Gradle-daemon JVM flag; relay it into the
+    // test JVM so opt-in Docker-sshd tests (DockerSshdAuthTest) can see it.
+    System.getProperty("conch.localSshdTest")?.let { systemProperty("conch.localSshdTest", it) }
 }

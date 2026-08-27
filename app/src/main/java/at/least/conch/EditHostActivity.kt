@@ -117,6 +117,7 @@ private fun EditHostScreen(
     }
     var keepAlive by rememberSaveable { mutableStateOf(initial?.keepAlive ?: true) }
     var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
+    var forwardAgent by rememberSaveable { mutableStateOf(initial?.forwardAgent ?: false) }
     var socksPortText by rememberSaveable {
         mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "")
     }
@@ -306,6 +307,19 @@ private fun EditHostScreen(
                     onClick = { tmux = !tmux },
                     label = { Text("Auto-attach tmux") }
                 )
+                FilterChip(
+                    selected = forwardAgent,
+                    onClick = { forwardAgent = !forwardAgent },
+                    label = { Text("Agent forwarding") }
+                )
+            }
+            if (forwardAgent) {
+                Text(
+                    "Agent forwarding lets this server ask your device to sign " +
+                        "with EVERY stored key — enable only on servers you trust.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
 
             OutlinedTextField(
@@ -389,6 +403,7 @@ private fun EditHostScreen(
                             tmuxAutoAttach = tmux,
                             socksPort = socksPortText.toIntOrNull() ?: 0,
                             jumpHostId = jumpHostId,
+                            forwardAgent = forwardAgent,
                             tunnels = tunnels.toMutableList(),
                         ),
                         password

@@ -175,6 +175,7 @@ class SshSession(
 
                 val s = ssh.startSession()
                 session = s
+                AgentForwarding.requestOn(host, s)
                 s.allocatePTY("xterm-256color", cols, rows, 0, 0, emptyMap())
                 val sh = s.startShell()
                 shell = sh
@@ -241,6 +242,7 @@ class SshSession(
             post { callbacks.onData(hint.toByteArray()) }
         }
     }
+
     private fun startTunnels(ssh: SSHClient) {
         for (t in host.tunnels) {
             if (t.localPort !in 1..65535 || t.host.isBlank() || t.port !in 1..65535) continue
@@ -330,6 +332,7 @@ class SshSession(
         var s: Session? = null
         return try {
             s = ssh.startSession()
+            AgentForwarding.requestOn(host, s)
             val cmd = s.exec(command)
             val out = cmd.inputStream.readBytes().decodeToString()
             cmd.close()
