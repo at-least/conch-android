@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,6 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -151,6 +155,7 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     var error by remember { mutableStateOf<String?>(null) }
     var rawOut by remember { mutableStateOf<String?>(null) }
     var autoRefresh by remember { mutableStateOf(true) }
+    val history = remember { MetricHistory() }
 
     Column(
         modifier
@@ -187,31 +192,7 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
         }
 
-        snapshot?.let { s ->
-            MetricCard(
-                "CPU",
-                "%.1f%%".format(s.cpuPercent),
-                s.cpuPercent / 100.0,
-                "load %.2f %.2f %.2f".format(s.load1, s.load5, s.load15)
-            )
-            MetricCard(
-                "Memory",
-                "${formatBytes(s.memUsedBytes)} / ${formatBytes(s.memTotalBytes)}",
-                ratio(s.memUsedBytes, s.memTotalBytes),
-                if (s.swapTotalBytes > 0) {
-                    "swap ${formatBytes(s.swapUsedBytes)} / ${formatBytes(s.swapTotalBytes)}"
-                } else {
-                    "no swap"
-                }
-            )
-            MetricCard(
-                "Disk (/)",
-                "${formatBytes(s.diskUsedBytes)} / ${formatBytes(s.diskTotalBytes)}",
-                ratio(s.diskUsedBytes, s.diskTotalBytes),
-                "%.1f%% used".format(100.0 * s.diskUsedBytes / s.diskTotalBytes.coerceAtLeast(1))
-            )
-            MetricCard("Uptime", formatUptime(s.uptimeSeconds), null, "since boot")
-        }
+        snapshot?.let { s -> MetricCards(s, history) }
     }
 
     // Poll loop: runs while mounted + autoRefresh; cancels automatically on
@@ -228,13 +209,52 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             snapshot = next.snapshot
             error = next.error
             rawOut = next.raw
+            next.snapshot?.let { history.push(System.currentTimeMillis(), it) }
             delay(5_000)
         }
     }
 }
 
 @Composable
-private fun MetricCard(title: String, value: String, progress: Double?, footnote: String) {
+private fun MetricCards(s: MonitorParser.Snapshot, history: MetricHistory) {
+    MetricCard(
+        "CPU",
+        "%.1f%%".format(s.cpuPercent),
+        s.cpuPercent / 100.0,
+        "load %.2f %.2f %.2f".format(s.load1, s.load5, s.load15),
+        history = history.cpuSeries(),
+        historyMax = 100.0,
+    )
+    MetricCard(
+        "Memory",
+        "${formatBytes(s.memUsedBytes)} / ${formatBytes(s.memTotalBytes)}",
+        ratio(s.memUsedBytes, s.memTotalBytes),
+        if (s.swapTotalBytes > 0) {
+            "swap ${formatBytes(s.swapUsedBytes)} / ${formatBytes(s.swapTotalBytes)}"
+        } else {
+            "no swap"
+        },
+        history = history.memSeries(),
+        historyMax = 1.0,
+    )
+    MetricCard(
+        "Disk (/)",
+        "${formatBytes(s.diskUsedBytes)} / ${formatBytes(s.diskTotalBytes)}",
+        ratio(s.diskUsedBytes, s.diskTotalBytes),
+        "%.1f%% used".format(100.0 * s.diskUsedBytes / s.diskTotalBytes.coerceAtLeast(1))
+    )
+    MetricCard("Uptime", formatUptime(s.uptimeSeconds), null, "since boot")
+}
+
+@Composable
+private fun MetricCard(
+    title: String,
+    value: String,
+    progress: Double?,
+    footnote: String,
+    history: DoubleArray? = null,
+    historyMax: Double = 1.0,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(title, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -245,6 +265,16 @@ private fun MetricCard(title: String, value: String, progress: Double?, footnote
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
             }
+            history?.let { series ->
+                Sparkline(
+                    series,
+                    historyMax,
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .height(36.dp),
+                )
+            }
             Text(
                 footnote,
                 fontSize = 12.sp,
@@ -252,6 +282,25 @@ private fun MetricCard(title: String, value: String, progress: Double?, footnote
                 modifier = Modifier.padding(top = 6.dp)
             )
         }
+    }
+}
+
+/**
+ * One-pixel-per-ambition line chart: oldest→newest [values] clamped to
+ * [max], drawn as a single polyline. Geometry lives in [SparklineGeometry]
+ * (pure, unit-tested); this is the thin Canvas shell.
+ */
+@Composable
+private fun Sparkline(values: DoubleArray, max: Double, modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.primary
+    Canvas(modifier) {
+        val pts = SparklineGeometry.points(values, size.width, size.height, max)
+        if (pts.size < 2) return@Canvas
+        val path = Path().apply {
+            moveTo(pts.first().first, pts.first().second)
+            for (i in 1 until pts.size) lineTo(pts[i].first, pts[i].second)
+        }
+        drawPath(path, color, style = Stroke(width = 2.dp.toPx()))
     }
 }
 

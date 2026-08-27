@@ -54,6 +54,7 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
   swipe to disconnect that session only
 - **SFTP** — browse, download, upload, rename, delete, mkdir/new-file, sort by name/size/time
 - **Monitor** — live CPU / memory / swap / disk / load / uptime dashboard
+  with 5-minute CPU/RAM history sparklines (no extra server load)
 - **Docker** — list containers, start/stop/restart, view logs
 - **Snippets** — save frequent commands, run them from the terminal menu
 - **ZMODEM transfers** — `sz <file>` saves straight to your Downloads; `rz`
