@@ -6,10 +6,13 @@ import android.os.Looper
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.connection.channel.direct.Parameters
 import net.schmizz.sshj.connection.channel.direct.Session
+import net.schmizz.sshj.connection.channel.forwarded.RemotePortForwarder
+import net.schmizz.sshj.connection.channel.forwarded.SocketForwardingConnectListener
 import net.schmizz.sshj.sftp.SFTPClient
 import java.io.IOException
 import java.io.OutputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -35,11 +38,24 @@ class SshSession(
     connector: ((Host, KeyPrompt?) -> SSHClient)? = null,
 ) {
     companion object {
+        /** Raw exec output for one command; closes its channel on every path. */
+        internal fun execChannelOutput(ssh: SSHClient, command: String): String {
+            val s = ssh.startSession()
+            try {
+                val cmd = s.exec(command)
+                val out = cmd.inputStream.readBytes().decodeToString()
+                cmd.close()
+                return out
+            } finally {
+                try { s.close() } catch (_: Exception) {}
+            }
+        }
+
         /**
          * Wire contract: the inner command is byte-identical to the iOS
-         * suffix (InteractionStringTests.swift); Android does not yet carry
-         * the iOS `command -v tmux` guard + printf wipe prefix (PLAN B2/H3).
-         * Pinned by InteractionStringContractTest.
+         * suffix (InteractionStringTests.swift); Android carries the same
+         * `command -v tmux` guard (graceful no-tmux hint). The attach line
+         * itself is pinned by InteractionStringContractTest.
          */
         const val TMUX_ATTACH_LINE = "COLORTERM=truecolor tmux new -A -s conch\r"
 
@@ -98,6 +114,9 @@ class SshSession(
     private var shellOut: OutputStream? = null
     private val forwarderSockets = java.util.Collections.synchronizedList(mutableListOf<ServerSocket>())
     private val forwarderThreads = java.util.Collections.synchronizedList(mutableListOf<Thread>())
+    private val remoteForwards = java.util.Collections.synchronizedList(
+        mutableListOf<RemotePortForwarder.Forward>(),
+    )
 
     @Volatile
     private var socksProxy: SocksProxy? = null
@@ -165,12 +184,7 @@ class SshSession(
                 if (!closed.get()) post { callbacks.onConnected() }
 
                 if (host.tmuxAutoAttach) {
-                    // -A: attach if the session exists, create it otherwise;
-                    // COLORTERM lets remote apps use RGB (truecolor) output
-                    synchronized(sh.outputStream) {
-                        sh.outputStream.write(TMUX_ATTACH_LINE.toByteArray())
-                        sh.outputStream.flush()
-                    }
+                    attachTmuxOrHint(ssh, sh)
                 }
 
                 val input = sh.inputStream
@@ -202,23 +216,58 @@ class SshSession(
     @Volatile
     private var establishedAtMs = 0L
 
+    /**
+     * tmux auto-attach with graceful degradation (iOS `command -v tmux`
+     * guard parity): when tmux is missing, print a dim one-time hint with
+     * the install command instead of a bare "command not found".
+     */
+    private fun attachTmuxOrHint(ssh: SSHClient, sh: Session.Shell) {
+        val hasTmux = try {
+            execChannelOutput(ssh, "command -v tmux").isNotEmpty()
+        } catch (_: Exception) {
+            true // probe failed — let the attach line speak for itself
+        }
+        if (hasTmux) {
+            // -A: attach if the session exists, create it otherwise;
+            // COLORTERM lets remote apps use RGB (truecolor) output
+            synchronized(sh.outputStream) {
+                sh.outputStream.write(TMUX_ATTACH_LINE.toByteArray())
+                sh.outputStream.flush()
+            }
+        } else {
+            val hint = "\r\n\u001b[90m[no tmux on this host — install it " +
+                "(e.g. apt install tmux) to keep sessions across drops. " +
+                "Disable Auto-attach tmux in host settings to hide this.]\u001b[0m\r\n"
+            post { callbacks.onData(hint.toByteArray()) }
+        }
+    }
     private fun startTunnels(ssh: SSHClient) {
         for (t in host.tunnels) {
             if (t.localPort !in 1..65535 || t.host.isBlank() || t.port !in 1..65535) continue
             try {
-                val serverSocket = ServerSocket(t.localPort, 50, InetAddress.getByName("127.0.0.1"))
-                forwarderSockets.add(serverSocket)
-                val params = Parameters("127.0.0.1", t.localPort, t.host, t.port)
-                val lpf = ssh.newLocalPortForwarder(params, serverSocket)
-                val thread = Thread {
-                    try {
-                        lpf.listen()
-                    } catch (_: Exception) {
+                if (t.remote) {
+                    // -R: server binds the port; arriving connections are
+                    // bridged to host:port resolved on THIS device
+                    val bound = ssh.remotePortForwarder.bind(
+                        RemotePortForwarder.Forward("127.0.0.1", t.localPort),
+                        SocketForwardingConnectListener(InetSocketAddress(t.host, t.port)),
+                    )
+                    remoteForwards.add(bound)
+                } else {
+                    val serverSocket = ServerSocket(t.localPort, 50, InetAddress.getByName("127.0.0.1"))
+                    forwarderSockets.add(serverSocket)
+                    val params = Parameters("127.0.0.1", t.localPort, t.host, t.port)
+                    val lpf = ssh.newLocalPortForwarder(params, serverSocket)
+                    val thread = Thread {
+                        try {
+                            lpf.listen()
+                        } catch (_: Exception) {
+                        }
                     }
+                    forwarderThreads.add(thread)
+                    thread.isDaemon = true
+                    thread.start()
                 }
-                forwarderThreads.add(thread)
-                thread.isDaemon = true
-                thread.start()
             } catch (_: Exception) {
                 // tunnel port unavailable — skip, shell continues
             }
@@ -323,6 +372,15 @@ class SshSession(
             forwarderThreads.forEach { it.interrupt() }
             forwarderThreads.clear()
         }
+        synchronized(remoteForwards) {
+            remoteForwards.forEach { f ->
+                try {
+                    client?.remotePortForwarder?.cancel(f)
+                } catch (_: Exception) {
+                }
+            }
+            remoteForwards.clear()
+        }
         socksProxy?.stop()
         socksProxy = null
     }
@@ -331,7 +389,8 @@ class SshSession(
     val tunnelCount: Int
         get() {
             val fw = synchronized(forwarderSockets) { forwarderSockets.count { !it.isClosed } }
-            return fw + (if (socksProxy != null) 1 else 0)
+            val rf = synchronized(remoteForwards) { remoteForwards.size }
+            return fw + rf + (if (socksProxy != null) 1 else 0)
         }
 
     fun disconnect(reason: String = "Disconnected") {

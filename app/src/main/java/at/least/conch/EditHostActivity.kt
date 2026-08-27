@@ -63,6 +63,7 @@ class EditHostActivity : ComponentActivity() {
             EditHostScreen(
                 isEdit = initial != null,
                 initial = initial,
+                otherHosts = store.load().filter { it.id != initial?.id },
                 onBack = { finish() },
                 onSave = { host, password -> save(host, password) }
             )
@@ -96,6 +97,7 @@ class EditHostActivity : ComponentActivity() {
 private fun EditHostScreen(
     isEdit: Boolean,
     initial: Host?,
+    otherHosts: List<Host>,
     onBack: () -> Unit,
     onSave: (Host, String) -> Unit,
 ) {
@@ -122,6 +124,8 @@ private fun EditHostScreen(
     val keys = remember { KeyManager(ctx).list() }
     var selectedKeyId by rememberSaveable { mutableStateOf(initial?.keyId) }
     var keysMenuOpen by rememberSaveable { mutableStateOf(false) }
+    var jumpHostId by rememberSaveable { mutableStateOf(initial?.jumpHostId) }
+    var jumpMenuOpen by rememberSaveable { mutableStateOf(false) }
     val tunnels = remember { mutableStateListOf<Tunnel>().apply { initial?.tunnels?.let { addAll(it) } } }
 
     Scaffold(
@@ -244,6 +248,44 @@ private fun EditHostScreen(
                 }
             }
 
+            if (otherHosts.isNotEmpty()) {
+                ExposedDropdownMenuBox(
+                    expanded = jumpMenuOpen,
+                    onExpandedChange = { jumpMenuOpen = it }
+                ) {
+                    OutlinedTextField(
+                        value = otherHosts.firstOrNull {
+                            it.id == jumpHostId
+                        }?.let { "${it.alias.ifBlank { it.hostname }} (jump)" } ?: "Direct (no jump host)",
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Connect via") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = jumpMenuOpen) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    )
+                    ExposedDropdownMenu(expanded = jumpMenuOpen, onDismissRequest = { jumpMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Direct (no jump host)") },
+                            onClick = {
+                                jumpHostId = null
+                                jumpMenuOpen = false
+                            }
+                        )
+                        otherHosts.forEach { h ->
+                            DropdownMenuItem(
+                                text = { Text(h.alias.ifBlank { h.hostname }) },
+                                onClick = {
+                                    jumpHostId = h.id
+                                    jumpMenuOpen = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = fontSizeText,
                 onValueChange = { fontSizeText = it },
@@ -275,33 +317,38 @@ private fun EditHostScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Port forwarding (local tunnels)", fontSize = 15.sp)
+            Text("Port forwarding", fontSize = 15.sp)
             tunnels.forEachIndexed { idx, t ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState())
                 ) {
+                    FilterChip(
+                        selected = t.remote,
+                        onClick = { tunnels[idx] = t.copy(remote = !t.remote) },
+                        label = { Text(if (t.remote) "-R" else "-L") }
+                    )
                     OutlinedTextField(
                         value = if (t.localPort == 0) "" else t.localPort.toString(),
                         onValueChange = { v -> tunnels[idx] = t.copy(localPort = v.toIntOrNull() ?: 0) },
-                        label = { Text("Local port") },
+                        label = { Text(if (t.remote) "Server port" else "Phone port") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.padding(vertical = 8.dp).weight(1f, fill = false)
                     )
-                    Text("→")
+                    Text(if (t.remote) "⇤" else "→")
                     OutlinedTextField(
                         value = t.host,
                         onValueChange = { v -> tunnels[idx] = t.copy(host = v) },
-                        label = { Text("Target host") },
+                        label = { Text(if (t.remote) "Phone host" else "Target host") },
                         singleLine = true,
                         modifier = Modifier.weight(1.4f, fill = false)
                     )
                     OutlinedTextField(
                         value = if (t.port == 0) "" else t.port.toString(),
                         onValueChange = { v -> tunnels[idx] = t.copy(port = v.toIntOrNull() ?: 0) },
-                        label = { Text("Target port") },
+                        label = { Text(if (t.remote) "Phone port" else "Target port") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f, fill = false)
@@ -341,6 +388,7 @@ private fun EditHostScreen(
                             keepAlive = keepAlive,
                             tmuxAutoAttach = tmux,
                             socksPort = socksPortText.toIntOrNull() ?: 0,
+                            jumpHostId = jumpHostId,
                             tunnels = tunnels.toMutableList(),
                         ),
                         password

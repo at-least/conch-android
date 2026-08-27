@@ -106,6 +106,7 @@ class MainActivity : FragmentActivity() {
                     } else {
                         val all = store.load()
                         var added = 0
+                        val imported = mutableListOf<Pair<OpenSshConfigParser.ParsedHost, Host>>()
                         for (p in parsed) {
                             if (p.hostname.isBlank()) continue
                             val host = Host(
@@ -115,7 +116,19 @@ class MainActivity : FragmentActivity() {
                                 username = p.user,
                             )
                             all.add(host)
+                            imported.add(p to host)
                             added++
+                        }
+                        // auto-link ProxyJump aliases that refer to hosts in
+                        // this same import (first hop only)
+                        var jumpLinks = 0
+                        for ((p, host) in imported) {
+                            if (p.proxyJump.isBlank()) continue
+                            val jump = imported.firstOrNull { it.first.alias == p.proxyJump.split(",").first().trim() }
+                            if (jump != null) {
+                                host.jumpHostId = jump.second.id
+                                jumpLinks++
+                            }
                         }
                         store.save(all)
                         hosts.clear()
@@ -124,6 +137,11 @@ class MainActivity : FragmentActivity() {
                             .mapNotNull { p -> p.identityFile.takeIf { it.isNotBlank() } }
                             .distinct()
                         importResult = "Imported $added hosts" +
+                            if (jumpLinks == 0) {
+                                ""
+                            } else {
+                                ". $jumpLinks host(s) auto-linked via ProxyJump"
+                            } +
                             if (identityRefs.isEmpty()) {
                                 ""
                             } else {

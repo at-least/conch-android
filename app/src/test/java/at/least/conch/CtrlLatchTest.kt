@@ -2,6 +2,7 @@ package at.least.conch
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -114,5 +115,26 @@ class CtrlComboTest {
     @Test
     fun `unknown code emits nothing`() {
         assertNull(KeyInput.keyBytes(9999))
+    }
+
+    @Test
+    fun `alt latch prefixes single chars with esc and consumes`() {
+        val (bytes, still) = KeyInput.applyAltLatch(true, "a".toByteArray())
+        assertEquals("\u001ba", String(bytes))
+        assertFalse(still)
+    }
+
+    @Test
+    fun `alt latch passes multi-char input through and stays armed`() {
+        val (bytes, still) = KeyInput.applyAltLatch(true, "abc".toByteArray())
+        assertEquals("abc", String(bytes))
+        assertTrue(still)
+    }
+
+    @Test
+    fun `alt latch inactive is a no-op`() {
+        val (bytes, still) = KeyInput.applyAltLatch(false, "a".toByteArray())
+        assertEquals("a", String(bytes))
+        assertFalse(still)
     }
 }

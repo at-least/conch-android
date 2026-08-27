@@ -39,24 +39,44 @@ internal fun ExtraKeysEditor(current: List<String>, onSave: (List<String>) -> Un
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
         Text(
-            "Tap to add or remove. Long-press ⚙ row keys later to reorder (drag support coming).",
+            "Tap to add or remove; use ◀ ▶ on a selected key to reorder.",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        // selected chips (tap to remove)
+        // selected chips (◀ id ▶ to reorder, ✕ to remove)
         androidx.compose.foundation.layout.FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            selected.forEach { id ->
+            selected.forEachIndexed { idx, id ->
                 androidx.compose.material3.FilterChip(
                     selected = true,
                     onClick = { selected.remove(id) },
                     label = { Text(ExtraKeysConfig.labelFor(id)) }
                 )
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        if (idx > 0) {
+                            val moved = selected.removeAt(idx)
+                            selected.add(idx - 1, moved)
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) { Text("◀", fontSize = 11.sp) }
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        if (idx < selected.size - 1) {
+                            val moved = selected.removeAt(idx)
+                            selected.add(idx + 1, moved)
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) { Text("▶", fontSize = 11.sp) }
             }
         }
         // available chips (tap to append)

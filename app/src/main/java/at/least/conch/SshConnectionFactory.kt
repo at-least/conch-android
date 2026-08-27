@@ -29,18 +29,28 @@ object SshConnectionFactory {
         context: Context,
         host: Host,
         prompt: KeyPrompt? = null,
-    ): SSHClient = connect(
-        host = host,
-        prompt = prompt,
-        store = KnownHostsStore(context.filesDir),
-        keyProvider = { ssh, keyId -> KeyManager(context).loadKeyProvider(ssh, keyId) },
-        password = { SecretsStore.get("host-pw:${host.id}") },
-        mainHandler = mainHandler,
-    )
+    ): SSHClient {
+        val jumpHost = host.jumpHostId?.let { id ->
+            HostStore(context).load().firstOrNull { it.id == id }
+                ?: error("Jump host not found — edit this host and reselect a jump host")
+        }
+        return connect(
+            host = host,
+            jumpHost = jumpHost,
+            prompt = prompt,
+            store = KnownHostsStore(context.filesDir),
+            keyProvider = { ssh, keyId -> KeyManager(context).loadKeyProvider(ssh, keyId) },
+            password = { h -> SecretsStore.get("host-pw:${h.id}") },
+            mainHandler = mainHandler,
+        )
+    }
 
     /**
      * JVM-testable core: same wiring, with storage/auth sources injected.
      * A null [mainHandler] runs the TOFU prompt synchronously.
+     *
+     * @param jumpHost optional saved host to ProxyJump through (single hop);
+     *                 its own jumpHostId is ignored. Both host keys get TOFU.
      */
     fun connect(
         host: Host,
@@ -49,13 +59,43 @@ object SshConnectionFactory {
         keyProvider: (SSHClient, String) -> KeyProvider,
         password: (Host) -> String?,
         mainHandler: Handler? = null,
+        jumpHost: Host? = null,
     ): SSHClient {
-        val ssh = SSHClient()
+        val jump = jumpHost?.let { buildClient(it, prompt, store, keyProvider, password, mainHandler) }
+        return buildClient(host, prompt, store, keyProvider, password, mainHandler, jump)
+    }
+
+    /**
+     * Target client that owns its jump client: any disconnect() (clean,
+     * failed auth, session teardown) tears the jump transport down too, so
+     * SshSession's existing single-client lifecycle needs no changes.
+     */
+    private class JumpedClient(private val jump: SSHClient) : SSHClient() {
+        override fun disconnect() {
+            try { super.disconnect() } catch (_: Exception) {}
+            try { jump.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    private fun buildClient(
+        host: Host,
+        prompt: KeyPrompt?,
+        store: KnownHostsStore,
+        keyProvider: (SSHClient, String) -> KeyProvider,
+        password: (Host) -> String?,
+        mainHandler: Handler?,
+        jump: SSHClient? = null,
+    ): SSHClient {
+        val ssh = if (jump != null) JumpedClient(jump) else SSHClient()
         ssh.addHostKeyVerifier(TofuHostKeyVerifier(store, prompt, mainHandler))
         ssh.connectTimeout = 10_000
         ssh.timeout = 0
         ssh.useCompression()
-        ssh.connect(host.hostname, host.port)
+        if (jump != null) {
+            ssh.connectVia(jump.newDirectConnection(host.hostname, host.port))
+        } else {
+            ssh.connect(host.hostname, host.port)
+        }
 
         try {
             when (host.authType) {

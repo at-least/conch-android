@@ -29,6 +29,18 @@ object KeyInput {
         return text.toByteArray(Charsets.UTF_8) to armed
     }
 
+    /**
+     * Alt-latch transform (xterm meta): a single-character input while
+     * armed is prefixed with ESC and consumes the latch; anything else
+     * passes through with the latch preserved (same shape as Ctrl).
+     */
+    fun applyAltLatch(armed: Boolean, bytes: ByteArray): Pair<ByteArray, Boolean> {
+        if (armed && String(bytes, Charsets.UTF_8).length == 1) {
+            return byteArrayOf(0x1B) + bytes to false
+        }
+        return bytes to armed
+    }
+
     /** Wire bytes for a special key code; null when the code is unknown. */
     fun keyBytes(code: Int): ByteArray? = when (code) {
         TerminalView.KEY_ESCAPE -> byteArrayOf(0x1B)

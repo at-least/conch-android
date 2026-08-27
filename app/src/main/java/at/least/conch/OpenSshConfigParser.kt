@@ -17,6 +17,9 @@ object OpenSshConfigParser {
          * loaded — surfaced so the import UI can point the user at the key
          * manager. */
         var identityFile: String = "",
+        /** ProxyJump target (first hop; multi-hop unsupported). Matched
+         * against imported aliases to auto-link jumpHostId. */
+        var proxyJump: String = "",
     )
 
     fun parse(text: String): List<ParsedHost> {
@@ -31,21 +34,29 @@ object OpenSshConfigParser {
             if (value.isEmpty()) continue
             when (key) {
                 "host" -> {
-                    current = null
-                    val tokens = value.split(Regex("\\s+"))
-                    val alias = tokens.firstOrNull { it.none { c -> c == '*' || c == '?' || c == '!' } }
-                    if (alias != null) {
-                        current = ParsedHost(alias = alias)
-                        hosts.add(current)
+                    current = hostBlockOrNull(value)?.also {
+                        hosts.add(it)
                     }
                 }
                 "hostname" -> current?.hostname = value
                 "user" -> current?.user = value
                 "port" -> current?.port = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: 22
                 "identityfile" -> current?.identityFile = value.trim('"')
+                "proxyjump" -> current?.proxyJump = firstProxyHop(value)
                 else -> { /* ignored directive */ }
             }
         }
         return hosts
     }
+
+    /** First non-wildcard alias token, or null for wildcard-only blocks. */
+    private fun hostBlockOrNull(value: String): ParsedHost? {
+        val tokens = value.split(Regex("\\s+"))
+        val alias = tokens.firstOrNull { it.none { c -> c == '*' || c == '?' || c == '!' } }
+        return alias?.let { ParsedHost(alias = it) }
+    }
+
+    /** Multi-hop ProxyJump lists are unsupported: take the first hop. */
+    private fun firstProxyHop(value: String): String =
+        value.split(Regex("[\\s,]+")).firstOrNull { it.isNotBlank() } ?: ""
 }

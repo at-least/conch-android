@@ -53,6 +53,9 @@ class TerminalView @JvmOverloads constructor(
             onCtrlStateChanged?.invoke(value)
         }
 
+    /** Alt latch (xterm meta): next single-char input gets an ESC prefix. */
+    var altArmed = false
+
     /**
      * Per-instance colors. Start as a copy of the shared defaults so themes
      * never mutate the companion [PALETTE]. Indices 256/257/258 are the
@@ -559,6 +562,7 @@ class TerminalView @JvmOverloads constructor(
     fun pasteText(text: String) {
         if (text.isEmpty()) return
         ctrlArmed = false
+        altArmed = false
         if (emulator?.bracketedPasteMode == true) {
             sendRaw(BracketedPaste.wrap(text).toByteArray(Charsets.UTF_8))
         } else {
@@ -569,8 +573,10 @@ class TerminalView @JvmOverloads constructor(
     fun sendText(text: String) {
         if (text.isEmpty()) return
         resetScrollOnInput()
-        val (bytes, stillArmed) = KeyInput.applyCtrlLatch(ctrlArmed, text)
-        ctrlArmed = stillArmed
+        val (ctrlBytes, ctrlStill) = KeyInput.applyCtrlLatch(ctrlArmed, text)
+        ctrlArmed = ctrlStill
+        val (bytes, altStill) = KeyInput.applyAltLatch(altArmed, ctrlBytes)
+        altArmed = altStill
         onData?.invoke(bytes)
     }
 

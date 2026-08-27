@@ -83,6 +83,7 @@ class TerminalActivity : FragmentActivity() {
     private val subtitle = mutableStateOf("")
     private val keyboardRowVisible = mutableStateOf(true)
     private val ctrlArmed = mutableStateOf(false)
+    private val altArmed = mutableStateOf(false)
     private val finishRequested = mutableStateOf(false)
     private val keyPromptState = mutableStateOf<Pair<KeyPromptRequest, (Boolean) -> Unit>?>(null)
     private val snippetsSheetVisible = mutableStateOf(false)
@@ -772,6 +773,8 @@ class TerminalActivity : FragmentActivity() {
                 keys.value.forEach { id ->
                     if (id == "CTRL") {
                         KeyButton("CTRL", armed = ctrlArmed.value) { toggleCtrl() }
+                    } else if (id == "ALT") {
+                        KeyButton("ALT", armed = altArmed.value) { toggleAlt() }
                     } else {
                         KeyButton(ExtraKeysConfig.labelFor(id)) {
                             ExtraKeysConfig.bytesFor(id)?.let { bytes -> terminalView?.sendRaw(bytes) }
@@ -799,6 +802,12 @@ class TerminalActivity : FragmentActivity() {
         val tv = terminalView ?: return
         tv.ctrlArmed = !tv.ctrlArmed
         ctrlArmed.value = tv.ctrlArmed
+    }
+
+    private fun toggleAlt() {
+        val tv = terminalView ?: return
+        tv.altArmed = !tv.altArmed
+        altArmed.value = tv.altArmed
     }
 
     /** Sessions-switcher target: bring this terminal's own task to the front. */

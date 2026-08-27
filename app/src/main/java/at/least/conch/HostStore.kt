@@ -9,9 +9,12 @@ import java.io.File
 import java.util.UUID
 
 data class Tunnel(
+    /** Local tunnel: phone listens here. Remote (-R): SERVER listens here. */
     val localPort: Int,
+    /** Local: remote-side target. Remote: phone-side target (resolved on this device). */
     val host: String,
     val port: Int,
+    val remote: Boolean = false,
 )
 
 @Serializable
@@ -19,11 +22,13 @@ data class TunnelWire(
     val localPort: Int = 0,
     val host: String = "",
     val port: Int = 0,
+    /** Remote (-R) forward; omitted when false for byte-compatible JSON. */
+    @EncodeDefault(Mode.NEVER) val remote: Boolean = false,
 ) {
-    fun toTunnel() = Tunnel(localPort, host, port)
+    fun toTunnel() = Tunnel(localPort, host, port, remote)
 
     companion object {
-        fun from(t: Tunnel) = TunnelWire(t.localPort, t.host, t.port)
+        fun from(t: Tunnel) = TunnelWire(t.localPort, t.host, t.port, t.remote)
     }
 }
 
@@ -48,6 +53,8 @@ data class HostWire(
     val tmuxAutoAttach: Boolean = false,
     val socksPort: Int = 0,
     val tunnels: List<TunnelWire> = emptyList(),
+    /** Other host id to connect through (ProxyJump). Omitted when null so the JSON stays byte-compatible. */
+    @EncodeDefault(Mode.NEVER) val jumpHostId: String? = null,
     @EncodeDefault(Mode.NEVER) val password: String? = null,
 ) {
     fun toHost(): Host {
@@ -63,6 +70,7 @@ data class HostWire(
             keepAlive = keepAlive,
             tmuxAutoAttach = tmuxAutoAttach,
             socksPort = socksPort,
+            jumpHostId = jumpHostId,
         )
         host.tunnels.addAll(tunnels.map { it.toTunnel() })
         return host
@@ -82,6 +90,7 @@ data class HostWire(
             tmuxAutoAttach = h.tmuxAutoAttach,
             socksPort = h.socksPort,
             tunnels = h.tunnels.map { TunnelWire.from(it) },
+            jumpHostId = h.jumpHostId,
         )
     }
 }
@@ -101,6 +110,8 @@ data class Host(
     // false so pre-feature backups and saved hosts stay exactly as they were.
     var tmuxAutoAttach: Boolean = true,
     var socksPort: Int = 0, // local SOCKS5 proxy (0 = off)
+    /** ProxyJump: id of another saved host to tunnel this connection through (null = direct). */
+    var jumpHostId: String? = null,
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
     companion object {

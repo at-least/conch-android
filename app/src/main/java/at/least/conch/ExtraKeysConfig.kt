@@ -16,8 +16,10 @@ object ExtraKeysConfig {
     /** All selectable keys and what they emit. */
     val ALL: List<KeyDef> = listOf(
         KeyDef("CTRL", "CTRL"),
+        KeyDef("ALT", "ALT"),
         KeyDef("ESC", "ESC"),
         KeyDef("TAB", "TAB"),
+        KeyDef("ENTER", "⏎"),
         KeyDef("UP", "↑"),
         KeyDef("DOWN", "↓"),
         KeyDef("LEFT", "←"),
@@ -61,11 +63,12 @@ object ExtraKeysConfig {
 
     fun labelFor(id: String): String = ALL.firstOrNull { it.id == id }?.label ?: id
 
-    /** Emits the key: returns bytes to send, or null for CTRL (state toggle). */
+    /** Emits the key: returns bytes to send, or null for CTRL/ALT (state toggles). */
     fun bytesFor(id: String): ByteArray? = when (id) {
-        "CTRL" -> null // handled as a toggle by the terminal
+        "CTRL", "ALT" -> null // handled as toggles by the terminal
         "ESC" -> byteArrayOf(0x1B)
         "TAB" -> byteArrayOf(0x09)
+        "ENTER" -> byteArrayOf(0x0D)
         "UP" -> "\u001b[A".toByteArray()
         "DOWN" -> "\u001b[B".toByteArray()
         "RIGHT" -> "\u001b[C".toByteArray()

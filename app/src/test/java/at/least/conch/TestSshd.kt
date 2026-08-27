@@ -107,7 +107,7 @@ class TestSshd(
     val hostPublicKey: PublicKey
         get() = hostKeyPair.public
 
-    private val server: SshServer = SshServer.setUpDefaultServer().apply {
+    internal val server: SshServer = SshServer.setUpDefaultServer().apply {
         host = "127.0.0.1"
         port = fixedPort ?: 0
         keyPairProvider = KeyPairProvider.wrap(hostKeyPair)

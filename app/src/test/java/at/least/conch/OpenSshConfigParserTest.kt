@@ -86,6 +86,21 @@ class OpenSshConfigParserTest {
     }
 
     @Test
+    fun `parses proxyjump taking only the first hop`() {
+        val config = """
+            Host web
+              ProxyJump bastion
+            Host db
+              proxyjump bastion.example.com:2222, second-hop
+            Host plain
+        """.trimIndent()
+        val hosts = OpenSshConfigParser.parse(config)
+        assertEquals("bastion", hosts[0].proxyJump)
+        assertEquals("bastion.example.com:2222", hosts[1].proxyJump)
+        assertEquals("", hosts[2].proxyJump)
+    }
+
+    @Test
     fun `directives before any host block are ignored`() {
         val config = """
             GlobalOption yes
