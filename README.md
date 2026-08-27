@@ -160,6 +160,22 @@ Tests run against a real in-process sshd (Apache MINA SSHD) — the same
 code paths the app drives, including connect/auth/PTY/SFTP/forwarding,
 TOFU accept/reject, and reconnect-after-drop.
 
+For real-OpenSSH wire behavior there is an opt-in Docker matrix
+(`tools/sshd-matrix/`, independent of the conch-ios harness — own image,
+container and ports): three sshd configs on 127.0.0.1 (password+pubkey on
+:2233, pubkey-only on :2234, forwarding-enabled on :2235) with fixed users,
+throwaway test keys, and real lrzsz/tmux/ssh-client binaries in the image. The
+integration tests cover auth scenarios, TOFU pinning, SFTP against
+internal-sftp, both tunnel directions, PTY semantics, tmux, ZMODEM
+downloads/uploads end-to-end through a real SSH PTY, and ssh-agent
+forwarding.
+
+```bash
+tools/sshd-matrix/run.sh    # idempotent: builds image, generates keys, starts container
+./gradlew testFossDebugUnitTest -Dconch.localSshdTest=true \
+    --tests '*.DockerSshdAuthTest' --tests '*.DockerOpenSshIntegrationTest'
+```
+
 ## Development roadmap
 
 Active work is gated by the hypotheses in [POC.md](POC.md) — each must run
