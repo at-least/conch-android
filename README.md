@@ -56,8 +56,10 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Monitor** — live CPU / memory / swap / disk / load / uptime dashboard
 - **Docker** — list containers, start/stop/restart, view logs
 - **Snippets** — save frequent commands, run them from the terminal menu
-- **ZMODEM downloads** — `sz <file>` in a session saves straight to your
-  Downloads (Termius's most-requested feature, free here)
+- **ZMODEM transfers** — `sz <file>` saves straight to your Downloads; `rz`
+  on the server pops a file picker and uploads. Both directions verified
+  byte-identical against real lrzsz (Termius's most-requested feature, free
+  here)
 - **Tunnel capsule** — a green `⇅ N` chip on the session toolbar shows
   active local port forwards; tap to stop all tunnels (session stays connected)
 - **Home-screen widget** — first four hosts, one tap deep-links into a terminal

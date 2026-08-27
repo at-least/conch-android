@@ -31,23 +31,21 @@ class ZmodemSender {
         const val ZCRCW = ZmodemReceiver.ZCRCW
         const val ZCRCQ = ZmodemReceiver.ZCRCQ
 
-        // Single-subpacket streaming: the whole file rides one ZCRCE packet.
-        // Multi-chunk ZCRCG/ZCRCW chains hit an unresolved lrzsz rz interop
-        // quirk (first 1024-byte chunk refused); the single-packet shape is
-        // verified live against rz ("Transfer complete"). The file is already
-        // fully in memory, so this only trades flow control for simplicity.
-        private const val CHUNK = 1 shl 24
+        // Subpacket size sz itself uses; lrzsz's receiver rejects larger
+        // single subpackets (its window buffer).
+        private const val CHUNK = 1024
 
         /**
-         * Escape the wire-hostile set: ZDLE, DLE, XON, XOFF, DEL (NULs,
-         * newlines and high-bit bytes go raw — all verified against live
-         * lrzsz traffic; an unescaped XON/XOFF corrupts the subpacket CRC).
+         * Payload escaping, byte-for-byte with live lrzsz traffic: ONLY the
+         * exact 7-bit values ZDLE/DLE/XON/XOFF — not 0x7F, not their
+         * parity variants (0x98 = ZDLE|0x80 goes raw), not NULs or
+         * newlines. Frame headers/CRCs use the wider [escape32] set.
          */
         fun escape(src: ByteArray, from: Int = 0, to: Int = src.size): ByteArray {
             val out = ByteArrayOutputStream(src.size + 16)
             for (i in from until to) {
                 val b = src[i].toInt() and 0xFF
-                if (b == ZDLE || b == 0x10 || b == 0x11 || b == 0x13 || b == 0x7F) {
+                if (isWireHostile(b)) {
                     out.write(ZDLE)
                     out.write(b xor 0x40)
                 } else {
@@ -57,15 +55,21 @@ class ZmodemSender {
             return out.toByteArray()
         }
 
+        /** sz.c's zsendline table: exact ZDLE/DLE/XON/XOFF + 0x90/0x91/0x93. */
+        private fun isWireHostile(b: Int): Boolean =
+            b == ZDLE || b == 0x10 || b == 0x11 || b == 0x13 ||
+                b == 0x90 || b == 0x91 || b == 0x93
+
         /**
-         * One data subpacket: escaped payload, ZDLE + terminator, CRC16.
-         * The CRC covers escaped-data + terminator byte ONLY — the ZDLE
-         * itself is not covered (mirrors the receiver's check; verified
-         * against live lrzsz wire bytes).
+         * One 16-bit data subpacket: escaped payload, ZDLE + terminator,
+         * CRC16. The CRC covers the RAW (unescaped) payload + terminator —
+         * brute-force-verified against live lrzsz wire bytes (the text-only
+         * tests passed before only because they contained no escapable
+         * bytes).
          */
         fun subpacket(payload: ByteArray, terminator: Int): ByteArray {
             val escaped = escape(payload)
-            val crc = ZmodemReceiver.crc16(escaped + byteArrayOf(terminator.toByte()))
+            val crc = ZmodemReceiver.crc16(payload + byteArrayOf(terminator.toByte()))
             return escaped + byteArrayOf(ZDLE.toByte(), terminator.toByte()) +
                 byteArrayOf(((crc shr 8) and 0xFF).toByte(), (crc and 0xFF).toByte())
         }
@@ -156,6 +160,16 @@ class ZmodemSender {
         return FeedResult(send.toByteArray(), events.toList(), phase == Phase.DONE)
     }
 
+    /**
+     * Adopts a ZRINIT the receiver already consumed (flags included), so the
+     * sender is immediately ready without waiting for a retransmit.
+     */
+    fun adoptRemoteZrinit(canFc32: Boolean) {
+        check(phase == Phase.WAIT_ZRINIT) { "sender already adopted" }
+        phase = Phase.WAIT_ZRPOS
+        useCrc32 = canFc32
+    }
+
     /** Bytes to send for an abort (also resets the engine). */
     fun cancel(): ByteArray {
         if (phase != Phase.DONE) fail("cancelled")
@@ -241,12 +255,9 @@ class ZmodemSender {
             }
             ZRPOS -> if (fileData.isNotEmpty()) {
                 offset = hdrToLongLE(f.hdr).toInt()
-                sendNextChunk(resetFrame = true)
+                streamAll()
             }
-            ZACK -> if (fileData.isNotEmpty()) {
-                offset = hdrToLongLE(f.hdr).toInt()
-                sendNextChunk(resetFrame = false)
-            }
+            ZACK -> {} // mid-blast acks are ignored, matching sz's windowed blast
             ZSKIP -> {
                 events.add(Event.Skipped)
                 finish()
@@ -262,11 +273,6 @@ class ZmodemSender {
         }
     }
 
-    /**
-     * ACK-driven streaming: one ZCRCW-terminated subpacket at a time, wait
-     * for the receiver's ZACK/ZRPOS before the next (lrzsz rejects long
-     * unacknowledged ZCRCG chains). ZDATA frame re-issued after a ZRPOS.
-     */
     /** True when the receiver's ZRINIT advertised 32-bit CRCs (CANFC32). */
     private var useCrc32 = false
 
@@ -304,10 +310,14 @@ class ZmodemSender {
         }
     }
 
-    /** Subpacket with a 4-byte little-endian escaped CRC32 (CANFC32 mode). */
+    /**
+     * Subpacket with a 4-byte little-endian escaped CRC32 (CANFC32 mode).
+     * Like the 16-bit variant, the CRC covers the RAW payload + terminator
+     * (verified: crc32(rawData+term) reproduces sz's emitted bytes).
+     */
     private fun subpacket32(payload: ByteArray, terminator: Int): ByteArray {
         val escaped = escape(payload)
-        val crc = crc32(escaped + byteArrayOf(terminator.toByte()))
+        val crc = crc32(payload + byteArrayOf(terminator.toByte()))
         val out = ByteArrayOutputStream()
         out.write(escaped)
         out.write(ZDLE)
@@ -322,24 +332,25 @@ class ZmodemSender {
     private fun subpacketFor(payload: ByteArray, terminator: Int): ByteArray =
         if (useCrc32) subpacket32(payload, terminator) else subpacket(payload, terminator)
 
-    private fun sendNextChunk(resetFrame: Boolean) {
-        if (offset >= fileData.size) {
-            offset = fileData.size
-            events.add(Event.Progress(fileData.size.toLong(), fileData.size.toLong()))
-            send.write(frameFor(ZEOF, pos4le(fileData.size.toLong())))
-            return
+    /**
+     * sz-style full blast (verified against a live 50KB sz-rz exchange):
+     * one ZDATA frame, then ZCRCG-chained 1024-byte subpackets ending
+     * ZCRCE, then ZEOF — no mid-stream waiting. The receiver ignores
+     * windowing acks until the end, then re-advertises ZRINIT, which the
+     * ZRINIT handler answers with ZFIN. Larger subpackets (single-packet
+     * streaming) are rejected by lrzsz's receive buffer — 1024 is the size
+     * sz itself uses.
+     */
+    private fun streamAll() {
+        send.write(frameFor(ZDATA, pos4le(offset.toLong())))
+        while (offset < fileData.size) {
+            val end = minOf(offset + CHUNK, fileData.size)
+            val term = if (end == fileData.size) ZCRCE else ZCRCG
+            send.write(subpacketFor(fileData.copyOfRange(offset, end), term))
+            offset = end
         }
-        if (resetFrame) {
-            send.write(frameFor(ZDATA, pos4le(offset.toLong())))
-        }
-        val end = minOf(offset + CHUNK, fileData.size)
-        val term = if (end == fileData.size) ZCRCE else ZCRCW
-        send.write(subpacketFor(fileData.copyOfRange(offset, end), term))
-        offset = end
-        events.add(Event.Progress(offset.toLong(), fileData.size.toLong()))
-        if (end == fileData.size) {
-            send.write(frameFor(ZEOF, pos4le(fileData.size.toLong())))
-        }
+        events.add(Event.Progress(fileData.size.toLong(), fileData.size.toLong()))
+        send.write(frameFor(ZEOF, pos4le(fileData.size.toLong())))
     }
 
     private fun finish() {

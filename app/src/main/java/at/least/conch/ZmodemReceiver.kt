@@ -98,6 +98,14 @@ class ZmodemReceiver {
         data class Complete(val name: String, val size: Long) : Event()
         data class Failed(val reason: String) : Event()
         data object Started : Event()
+
+        /**
+         * The remote ran `rz` and wants OUR files — the UI offers a file
+         * pick, then a ZmodemSender takes over the stream. Carries the
+         * receiver's CANFC32 capability so the sender adopts the right CRC
+         * mode without waiting for a ZRINIT retransmit.
+         */
+        data class UploadRequested(val canFc32: Boolean) : Event()
     }
 
     data class FeedResult(
@@ -457,6 +465,11 @@ class ZmodemReceiver {
     private fun handle(f: Frame) {
         when (f.type) {
             ZRQINIT -> send.write(zrinitBytes())
+            ZRINIT -> {
+                // hand the stream to a ZmodemSender; this receiver is done
+                events.add(Event.UploadRequested((f.hdr[3] and 0x20) != 0))
+                phase = Phase.DONE
+            }
             ZEOF -> {
                 events.add(Event.Complete(fileName, received))
                 send.write(zrinitBytes())

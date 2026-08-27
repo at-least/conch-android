@@ -320,11 +320,19 @@ class TerminalView @JvmOverloads constructor(
      * keeping bursts like `cat bigfile` smooth.
      */
     fun feedAndInvalidate(data: ByteArray) {
-        val zm = zmodem ?: ZmodemReceiver().also { zmodem = it }
-        val res = zm.feed(data)
-        if (res.send.isNotEmpty()) onData?.invoke(res.send)
-        for (e in res.events) zmodemEvent(e)
-        if (res.display.isNotEmpty()) emulator?.feed(res.display)
+        val tx = zmodemTx
+        if (tx != null) {
+            // upload in progress: all bytes belong to the sender engine
+            val res = tx.feed(data)
+            if (res.send.isNotEmpty()) onData?.invoke(res.send)
+            for (e in res.events) senderEvent(e)
+        } else {
+            val zm = zmodemRx ?: ZmodemReceiver().also { zmodemRx = it }
+            val res = zm.feed(data)
+            if (res.send.isNotEmpty()) onData?.invoke(res.send)
+            for (e in res.events) zmodemEvent(e)
+            if (res.display.isNotEmpty()) emulator?.feed(res.display)
+        }
         if (!repaintScheduled) {
             repaintScheduled = true
             postOnAnimation {
@@ -335,9 +343,10 @@ class TerminalView @JvmOverloads constructor(
     }
 
     /**
-     * ZMODEM downloads: `sz` on the remote is detected in the output stream
-     * (bytes are then routed to the receiver, not the screen); protocol
-     * replies go back over the SSH channel; file bytes go to the sink.
+     * ZMODEM both ways: `sz` on the remote is detected in the output stream
+     * and file bytes are routed to the sink; `rz` on the remote raises
+     * [ZmodemSink.onZmodemUploadRequested] and a picked file is pushed via
+     * [beginZmodemUpload]. Protocol replies go back over the SSH channel.
      * Parity driver: Termius's most-reacted feature request (rz/sz).
      */
     interface ZmodemSink {
@@ -345,14 +354,46 @@ class TerminalView @JvmOverloads constructor(
         fun onZmodemData(chunk: ByteArray)
         fun onZmodemComplete(name: String, size: Long)
         fun onZmodemFailed(reason: String)
+
+        /** Remote `rz` is waiting for us to pick a file to send. */
+        fun onZmodemUploadRequested()
     }
 
-    private var zmodem: ZmodemReceiver? = null
+    private var zmodemRx: ZmodemReceiver? = null
+    private var zmodemTx: ZmodemSender? = null
     var zmodemSink: ZmodemSink? = null
+
+    /** Pushes the SAF-picked file into a pending upload (after onZmodemUploadRequested). */
+    fun beginZmodemUpload(name: String, bytes: ByteArray) {
+        val tx = zmodemTx ?: return
+        onData?.invoke(tx.begin(name, bytes))
+    }
+
+    /** Aborts any in-flight transfer in either direction; harmless when idle. */
+    fun cancelZmodem() {
+        var had = false
+        zmodemRx?.let {
+            onData?.invoke(it.cancel())
+            had = true
+        }
+        zmodemTx?.let {
+            onData?.invoke(it.cancel())
+            had = true
+        }
+        zmodemRx = null
+        zmodemTx = null
+        if (had) emulator?.feed("\u001b[90m[zmodem] cancelled\u001b[0m\r\n")
+    }
 
     private fun zmodemEvent(e: ZmodemReceiver.Event) {
         when (e) {
             is ZmodemReceiver.Event.Started -> Unit
+            is ZmodemReceiver.Event.UploadRequested -> {
+                zmodemRx = null
+                zmodemTx = ZmodemSender().also { it.adoptRemoteZrinit(e.canFc32) }
+                emulator?.feed("\r\n\u001b[90m[zmodem] remote rz — pick a file to send\u001b[0m\r\n")
+                zmodemSink?.onZmodemUploadRequested()
+            }
             is ZmodemReceiver.Event.Offered -> {
                 emulator?.feed("\r\n\u001b[90m[zmodem] receiving ${e.name} (${e.size} bytes)\u001b[0m\r\n")
                 zmodemSink?.onZmodemOffer(e.name, e.size)
@@ -361,10 +402,29 @@ class TerminalView @JvmOverloads constructor(
             is ZmodemReceiver.Event.Complete -> {
                 emulator?.feed("\u001b[90m[zmodem] done — ${e.name} (${e.size} bytes)\u001b[0m\r\n")
                 zmodemSink?.onZmodemComplete(e.name, e.size)
+                zmodemRx = null
             }
             is ZmodemReceiver.Event.Failed -> {
                 emulator?.feed("\u001b[90m[zmodem] failed: ${e.reason}\u001b[0m\r\n")
                 zmodemSink?.onZmodemFailed(e.reason)
+                zmodemRx = null
+            }
+        }
+    }
+
+    private fun senderEvent(e: ZmodemSender.Event) {
+        when (e) {
+            is ZmodemSender.Event.Ready -> Unit
+            is ZmodemSender.Event.Progress ->
+                emulator?.feed("\u001b[90m[zmodem] sent ${e.sent}/${e.total} bytes\u001b[0m\r\n")
+            is ZmodemSender.Event.Complete -> {
+                emulator?.feed("\u001b[90m[zmodem] sent ${e.name} — done\u001b[0m\r\n")
+                zmodemTx = null
+            }
+            is ZmodemSender.Event.Skipped -> zmodemTx = null
+            is ZmodemSender.Event.Failed -> {
+                emulator?.feed("\u001b[90m[zmodem] send failed: ${e.reason}\u001b[0m\r\n")
+                zmodemTx = null
             }
         }
     }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
@@ -284,6 +285,26 @@ class TerminalActivity : FragmentActivity() {
     private fun TerminalScreen() {
         val host = this.host
         var menuOpen by remember { mutableStateOf(false) }
+        val zmodemPickLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            if (uri != null) {
+                try {
+                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: error("Cannot read file")
+                    val name = uri.lastPathSegment?.substringAfterLast('/') ?: "upload.bin"
+                    terminalView?.beginZmodemUpload(name, bytes)
+                } catch (e: Exception) {
+                    CrashReporting.report(e)
+                    android.widget.Toast.makeText(this, "Upload failed: ${e.message}", android.widget.Toast.LENGTH_LONG)
+                        .show()
+                    terminalView?.cancelZmodem()
+                }
+            } else {
+                terminalView?.cancelZmodem()
+            }
+        }
+        zmodemPickLauncherRef = { zmodemPickLauncher }
         var snippets by remember { mutableStateOf(listOf<Snippet>()) }
         var tab by remember { mutableStateOf(SessionTab.TERMINAL) }
 
@@ -403,6 +424,14 @@ class TerminalActivity : FragmentActivity() {
                                 onClick = {
                                     menuOpen = false
                                     pasteIntoTerminal()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Cancel file transfer") },
+                                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    terminalView?.cancelZmodem()
                                 }
                             )
                             DropdownMenuItem(
@@ -816,6 +845,9 @@ class TerminalActivity : FragmentActivity() {
      * (MediaStore on API 29+, no permission needed); older devices fall
      * back to the app's external files dir.
      */
+    /** Set from composition so the non-composable ZMODEM sink can launch the SAF picker. */
+    private var zmodemPickLauncherRef: (() -> androidx.activity.result.ActivityResultLauncher<Array<String>>)? = null
+
     private fun zmodemDownloadSink(): TerminalView.ZmodemSink {
         var uri: android.net.Uri? = null
         var out: java.io.OutputStream? = null
@@ -882,6 +914,10 @@ class TerminalActivity : FragmentActivity() {
                     out = null
                     uri = null
                 }
+            }
+
+            override fun onZmodemUploadRequested() {
+                zmodemPickLauncherRef?.invoke()?.launch(arrayOf("*/*"))
             }
 
             override fun onZmodemFailed(reason: String) {

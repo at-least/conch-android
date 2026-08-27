@@ -10,23 +10,32 @@ import java.util.concurrent.TimeUnit
 /**
  * ZMODEM sender vs the REAL lrzsz `rz` binary: rz runs in a temp cwd, our
  * ZmodemSender answers it over pipes, and the file rz writes must be
- * byte-identical to the fixture.
- *
- * KNOWN LIMITATION: binary/multi-KB transfers stall in the endgame handshake
- * (data delivered, rz re-issues ZRPOS). Plain small files complete — that
- * path is active here; do not widen scope until verified against lrzsz.
+ * byte-identical to the fixture. Covers both a plain text file and a
+ * ZDLE/XON/XOFF-hostile 50KB binary that exercises the full ZCRCG
+ * subpacket chain, ZEOF and the ZRINIT->ZFIN endgame. Wire contracts
+ * pinned by brute-force diffing against live sz traffic: payload escaping
+ * = exact 7-bit ZDLE/DLE/XON/XOFF + 0x90/0x91/0x93 (sz.c zsendline table);
+ * subpacket CRC covers the RAW payload + terminator, not the escaped form.
  */
 class ZmodemSendInteropTest {
 
+    private fun rzAvailable(): Boolean =
+        File("/opt/homebrew/bin/rz").exists() || File("/usr/local/bin/rz").exists()
+
     @Test
     fun `rz receives a small text file we send byte-identically`() {
-        org.junit.Assume.assumeTrue(
-            "rz not available",
-            File("/opt/homebrew/bin/rz").exists() || File("/usr/local/bin/rz").exists(),
-        )
+        driveRz(ByteArray(200) { i -> ('a' + (i % 26)).code.toByte() }, "text.txt")
+    }
+
+    @Test
+    fun `rz receives a hostile 50kb binary we send byte-identically`() {
+        driveRz(ByteArray(50_000) { i -> ((i * 37 + 11) and 0xFF).toByte() }, "binary.bin")
+    }
+
+    private fun driveRz(bytes: ByteArray, name: String) {
+        org.junit.Assume.assumeTrue("rz not available", rzAvailable())
         val dir = java.nio.file.Files.createTempDirectory("zmsend").toFile()
         try {
-            val bytes = ByteArray(200) { i -> ('a' + (i % 26)).code.toByte() }
             val sender = ZmodemSender()
             val proc = ProcessBuilder("rz").directory(dir).start()
             val w = proc.outputStream
@@ -45,7 +54,7 @@ class ZmodemSendInteropTest {
                         for (e in res.events) {
                             outcomes.add(e)
                             if (e is ZmodemSender.Event.Ready) {
-                                w.write(sender.begin("sent.txt", bytes))
+                                w.write(sender.begin(name, bytes))
                                 w.flush()
                             }
                         }
@@ -59,7 +68,7 @@ class ZmodemSendInteropTest {
             t.join(5_000)
             proc.destroy()
             assertEquals("expected Complete, got $outcomes", 1, outcomes.count { it is ZmodemSender.Event.Complete })
-            assertArrayEquals(bytes, File(dir, "sent.txt").readBytes())
+            assertArrayEquals(bytes, File(dir, name).readBytes())
         } finally {
             dir.deleteRecursively()
         }
