@@ -30,7 +30,9 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Multiple concurrent sessions** — "Connect (new session)" opens another terminal; each gets its own persistent notification
 - **Foreground service** keeps sessions alive when backgrounded (survives Android's task killers)
 - **tmux auto-attach on by default** for new hosts (`tmux new -A -s conch`) — a dropped connection never loses your work; existing hosts keep their saved setting
+- **Why no mosh?** tmux auto-attach + auto-reconnect already deliver mosh's core promise — work survives drops and network switches, and the client comes back on its own — over plain SSH with no extra server daemon. A native mosh client is not on the roadmap (no JVM implementation exists to build on)
 - **Port forwarding**: local tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
+- **ssh-agent forwarding** (`-A`) per host — offer your stored keys to the server's own `ssh`/`git` hops; off by default with an explicit trust warning
 - Keep-alive, per-host terminal font size, OSC window-title tracking
 
 ### Authentication & security
@@ -72,6 +74,12 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 Backups are portable and self-contained — you are never locked into Conch.
 The format is fully specified here so that other tools (or a future Conch
 version) can read what Conch writes today.
+
+**Account-free sync**: Settings can keep `conch-backup.til` continuously
+materialized in a folder of your choice (Syncthing, Dropbox, a cable —
+whatever moves files, no account needed). It refreshes while the app is
+open, at most hourly and only when data actually changed; the other device
+restores with Import, which merges and never overwrites.
 
 **File layout** (binary, plain byte concatenation):
 

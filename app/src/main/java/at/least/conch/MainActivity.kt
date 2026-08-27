@@ -76,6 +76,16 @@ class MainActivity : FragmentActivity() {
         hosts.clear()
         hosts.addAll(store.load())
         HostsWidget.update(this)
+        // account-free sync: data only changes while the app runs, so a
+        // foreground moment is the honest (and only needed) export trigger
+        Thread {
+            runCatching { ScheduledBackup(this).maybeExport() }
+                .onFailure { CrashReporting.report(it) }
+        }.apply {
+            isDaemon = true
+            name = "conch-sync-backup"
+            start()
+        }
     }
 
     override fun onStop() {

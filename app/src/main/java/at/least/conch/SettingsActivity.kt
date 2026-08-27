@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,6 +55,14 @@ class SettingsActivity : ComponentActivity() {
     private val busy = mutableStateOf(false)
     private val commandHistory = mutableStateOf(true)
 
+    // account-free sync (ScheduledBackup)
+    private val syncConfigured = mutableStateOf(false)
+    private val syncLastMs = mutableStateOf(0L)
+    private val syncBusy = mutableStateOf(false)
+    private val showSyncPass = mutableStateOf(false)
+    private val syncPassText = mutableStateOf("")
+    private var pendingSyncTree: Uri? = null
+
     /** Pending SAF target once the user confirms the passphrase. */
     private var pendingExport: Uri? = null
     private var pendingImport: Uri? = null
@@ -70,6 +79,8 @@ class SettingsActivity : ComponentActivity() {
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
     private val importLauncher =
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    private val syncFolderLauncher =
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,10 +88,12 @@ class SettingsActivity : ComponentActivity() {
         keepScreenOn.value = SettingsStore.keepScreenOn(this)
         commandHistory.value = SettingsStore.commandHistory(this)
         appLock.value = AppLock.isEnabled(this) && AppLock.canAuthenticate(this)
+        refreshSync()
         setContent {
             SettingsScreen(
                 exportLauncher = exportLauncher,
                 importLauncher = importLauncher,
+                syncFolderLauncher = syncFolderLauncher,
             )
         }
     }
@@ -174,6 +187,71 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
+    // ------------------------------------------------- account-free sync
+
+    private fun refreshSync() {
+        val sb = ScheduledBackup(this)
+        syncConfigured.value = sb.isConfigured()
+        syncLastMs.value = sb.lastExportMs()
+    }
+
+    private fun onSyncTarget(uri: Uri) {
+        pendingSyncTree = uri
+        syncPassText.value = ""
+        showSyncPass.value = true
+    }
+
+    private fun confirmSyncPass() {
+        val pass = syncPassText.value
+        showSyncPass.value = false
+        if (pass.length < 6) {
+            pendingSyncTree = null
+            Toast.makeText(this, "Passphrase must be at least 6 characters", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val tree = pendingSyncTree ?: return
+        pendingSyncTree = null
+        syncPassText.value = ""
+        syncBusy.value = true
+        executor.execute {
+            val sb = ScheduledBackup(this)
+            sb.configure(tree, pass)
+            val out = sb.exportNow()
+            runOnUiThread {
+                syncBusy.value = false
+                refreshSync()
+                syncToast(out)
+            }
+        }
+    }
+
+    private fun doSyncNow() {
+        syncBusy.value = true
+        executor.execute {
+            val out = ScheduledBackup(this).exportNow()
+            runOnUiThread {
+                syncBusy.value = false
+                refreshSync()
+                syncToast(out)
+            }
+        }
+    }
+
+    private fun doSyncStop() {
+        ScheduledBackup(this).disable()
+        refreshSync()
+        Toast.makeText(this, "Scheduled sync stopped", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun syncToast(out: ScheduledBackup.Outcome) {
+        val msg = when (out) {
+            is ScheduledBackup.Outcome.Exported -> "Synced (${out.bytes} bytes)"
+            is ScheduledBackup.Outcome.Failed -> "Sync failed: ${out.reason}"
+            else -> "Sync skipped"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+    }
+
     override fun onDestroy() {
         executor.shutdownNow()
         super.onDestroy()
@@ -186,9 +264,12 @@ class SettingsActivity : ComponentActivity() {
     private fun SettingsScreen(
         exportLauncher: androidx.activity.result.contract.ActivityResultContracts.CreateDocument,
         importLauncher: androidx.activity.result.contract.ActivityResultContracts.OpenDocument,
+        syncFolderLauncher: androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree,
     ) {
         val exportPicker = rememberLauncherForActivityResult(exportLauncher) { uri -> uri?.let { onExportTarget(it) } }
         val importPicker = rememberLauncherForActivityResult(importLauncher) { uri -> uri?.let { onImportTarget(it) } }
+        val syncFolderPicker =
+            rememberLauncherForActivityResult(syncFolderLauncher) { uri -> uri?.let { onSyncTarget(it) } }
 
         Scaffold(
             topBar = {
@@ -369,6 +450,52 @@ class SettingsActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Account-free sync", fontSize = 16.sp)
+                        Text(
+                            "Keeps an encrypted backup (conch-backup.til) in a folder you pick — " +
+                                "sync it with Syncthing, Dropbox or a cable. Refreshes while the app " +
+                                "is open, at most hourly and only when data changed; restore on any " +
+                                "device with Import (merge-only, never overwrites).",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                        )
+                        if (syncConfigured.value) {
+                            Text(
+                                if (syncLastMs.value > 0) {
+                                    "Last export " + android.text.format.DateUtils
+                                        .getRelativeTimeSpanString(syncLastMs.value)
+                                } else {
+                                    "Will export on next app open"
+                                },
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { doSyncNow() },
+                                    enabled = !syncBusy.value
+                                ) { Text("Export now") }
+                                OutlinedButton(onClick = { doSyncStop() }) { Text("Stop") }
+                            }
+                        } else {
+                            OutlinedButton(onClick = { syncFolderPicker.launch(null) }) {
+                                Icon(
+                                    Icons.Filled.FolderOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(end = 6.dp)
+                                )
+                                Text("Choose folder")
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -409,6 +536,43 @@ class SettingsActivity : ComponentActivity() {
                         passphraseText.value = ""
                         pendingExport = null
                         pendingImport = null
+                    }) { Text("Cancel") }
+                }
+            )
+        }
+
+        if (showSyncPass.value) {
+            AlertDialog(
+                onDismissRequest = {
+                    showSyncPass.value = false
+                    syncPassText.value = ""
+                    pendingSyncTree = null
+                },
+                title = { Text("Sync passphrase") },
+                text = {
+                    Column {
+                        Text(
+                            "Encrypts every synced backup. Stored in this device's " +
+                                "keystore vault; needed to restore on any device."
+                        )
+                        OutlinedTextField(
+                            value = syncPassText.value,
+                            onValueChange = { syncPassText.value = it },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp)
+                        )
+                    }
+                },
+                confirmButton = { TextButton(onClick = { confirmSyncPass() }) { Text("OK") } },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showSyncPass.value = false
+                        syncPassText.value = ""
+                        pendingSyncTree = null
                     }) { Text("Cancel") }
                 }
             )

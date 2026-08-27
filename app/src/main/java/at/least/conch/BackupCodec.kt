@@ -79,6 +79,17 @@ object BackupCodec {
 
     fun payloadToJson(p: BackupPayload): String = ConchJson.encodeToString(BackupPayload.serializer(), p)
 
+    /**
+     * SHA-256 of the plaintext JSON — the "did anything change" signal for
+     * scheduled exports. Over the PLAINTEXT, not the ciphertext: encrypt()
+     * salts and IVs freshly every call, so ciphertext comparison would see
+     * phantom changes on identical data.
+     */
+    fun fingerprint(p: BackupPayload): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(payloadToJson(p).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
     private fun payloadFromJson(json: String): BackupPayload {
         val payload = ConchJson.decodeFromString(BackupPayload.serializer(), json)
         require(payload.version == 1) { "Unsupported backup version" }
