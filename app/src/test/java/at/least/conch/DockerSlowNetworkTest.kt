@@ -35,7 +35,10 @@ class DockerSlowNetworkTest {
     }
 
     private fun shape(spec: String) {
-        val out = DockerMatrix.dockerExec("tc qdisc add dev eth0 root netem $spec 2>&1 && echo TC_OK", allowFailure = true)
+        val out = DockerMatrix.dockerExec(
+            "tc qdisc add dev eth0 root netem $spec 2>&1 && echo TC_OK",
+            allowFailure = true
+        )
         // a kernel without sch_netem is a fixture limit, not an app failure
         assumeTrue("tc netem unavailable on this docker host: $out", !out.contains("not supported", true))
         assertTrue("tc failed: $out", out.contains("TC_OK"))
@@ -43,7 +46,12 @@ class DockerSlowNetworkTest {
     }
 
     private fun connect() =
-        DockerMatrix.connect(KnownHostsStore(tmp.newFolder()), DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connect(
+            KnownHostsStore(tmp.newFolder()),
+            DockerMatrix.PW_AND_KEY_PORT,
+            "pwuser",
+            password = "conch-pw-1"
+        )
 
     @Test(timeout = 180_000)
     fun `sftp round-trip stays byte-exact over a lossy high-latency link`() {

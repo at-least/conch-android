@@ -165,34 +165,48 @@ TOFU accept/reject, and reconnect-after-drop.
 For real-OpenSSH wire behavior there is an opt-in Docker matrix
 (`tools/sshd-matrix/`, independent of the conch-ios harness — own image,
 container and ports). The default container (Debian bookworm, OpenSSH 9.2)
-runs five sshd configs on 127.0.0.1 with fixed users and throwaway test keys:
+runs many sshd configs on 127.0.0.1 with fixed users and throwaway test keys:
 
 | port | instance | exercised by |
 |---|---|---|
-| 2233 | password + pubkey | auth, TOFU, host-key change/RSA pin, SFTP, PTY, tmux, ZMODEM (real lrzsz), Monitor probe, Docker tab (host docker socket mounted) |
-| 2234 | pubkey only | key auth, refused password, unknown key, FIDO2 `sk-ssh-ed25519` authorized_keys entry |
+| 2233 | password + pubkey | auth, TOFU, host-key change/RSA pin, SFTP + stress (large / many / non-ASCII / symlink / disk-full / permission), PTY, tmux, ZMODEM (real lrzsz), Monitor probe, throughput + exit codes + SIGWINCH, Docker tab (host docker socket mounted); also on `[::1]` for IPv6 |
+| 2234 | pubkey only | key auth (ed25519 / RSA-3072 / ECDSA-P256), refused password, unknown key, FIDO2 `sk-ssh-ed25519` authorized_keys entry |
 | 2235 | forwarding allowed | -L/-R tunnels, ssh-agent forwarding, ProxyJump into the container's inner sshd, SOCKS5 |
 | 2236 | keyboard-interactive only (PAM) | the 2FA-prompt server shape through the plain password path |
 | 2237 | gated by knockd | port knocking: opens for 8 s after UDP 2260,2261,2262 |
+| 2238 | hardened | login `Banner`, CA-trusted certificate user, forced-command / `restrict` / `no-pty` authorized_keys keys, `MaxSessions 2`, `PermitOpen`, chrooted `internal-sftp` account |
+| 2239 | strict | `MaxAuthTries 1`, `ChannelTimeouts` idle-shell reaping |
+| 2240 / 2241 | ecdsa-only / rsa-only host key | host-key type pinned by TOFU and matched on promptless reconnect |
+| 2242 | legacy appliance | SHA-1 kex, CBC ciphers, `ssh-rsa` (skipped where OpenSSH 10 refuses them) |
+| 2270 / 2271 | silent accept / banner-then-stall | bounded handshake-timeout behaviour |
 
 The container also has `NET_ADMIN` so tests can shape its link with
-`tc netem` (latency/jitter/loss), and the reconnect tests kill session
-processes, `docker restart` and `docker pause` it to reproduce real
-outages (session kill, sshd host reboot with persisted host keys, silent
-network freeze detected only by keep-alive).
+`tc netem` (latency/jitter/loss), a 1 MB tmpfs at `/mnt/tiny` for the
+disk-full SFTP case, and the reconnect tests kill session processes,
+`docker restart` and `docker pause` it to reproduce real outages (session
+kill, sshd host reboot with persisted host keys, silent network freeze
+detected only by keep-alive).
 
 `run.sh --variants` adds the distro matrix — the same recipe on Ubuntu
 20.04 (OpenSSH 8.2), Ubuntu 24.04 (9.6), Alpine 3.20 (busybox userland),
 Debian trixie (OpenSSH 10) and Rocky 9 — and `DockerDistroMatrixTest` runs
-auth/SFTP/PTY/Monitor-probe rows against each. A variant that is not
-running skips unless `-Dconch.distroMatrix=true` demands it (CI does).
+auth/SFTP/PTY/Monitor-probe rows against each.
+
+`run.sh --servers` adds non-OpenSSH servers (their own images under
+`tools/sshd-matrix/servers/`), so conch is exercised against the SSH stacks
+real users actually meet — **Dropbear** (routers / OpenWrt / NAS, 2263-2265),
+**tinyssh** (ed25519-only, no password, 2266), **golang.org/x/crypto/ssh**
+(Gitea / gliderlabs / bespoke bastions, 2267) and **Paramiko** (Fabric /
+pysftp / network automation, 2268). `DockerAltServerTest` pins auth + a
+session channel against each. A variant or server that is not running skips
+unless `-Dconch.distroMatrix=true` demands it (CI does).
 
 ```bash
-tools/sshd-matrix/run.sh              # idempotent: builds image, generates keys, starts container
-tools/sshd-matrix/run.sh --variants   # + all distro variants (or --variant alpine)
+tools/sshd-matrix/run.sh                        # idempotent: builds image, generates keys, starts container
+tools/sshd-matrix/run.sh --variants --servers   # + distro variants and non-OpenSSH servers (or --variant alpine / --server dropbear)
 ./gradlew testFossDebugUnitTest -Dconch.localSshdTest=true --tests 'at.least.conch.Docker*'
 ./gradlew testFossDebugUnitTest -Dconch.localSshdTest=true -Dconch.distroMatrix=true \
-    --tests 'at.least.conch.Docker*'   # variants must be up
+    --tests 'at.least.conch.Docker*'   # variants + servers must be up
 tools/sshd-matrix/run.sh --stop
 ```
 

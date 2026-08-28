@@ -24,6 +24,8 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # 2223 pw+pubkey · 2224 pubkey-only · 2225 forwarding · 2226 keyboard-interactive
-# (PAM) · 2227 gated behind a UDP knock sequence on 2260-2262 (knockd)
-EXPOSE 2223 2224 2225 2226 2227 2260/udp 2261/udp 2262/udp
+# (PAM) · 2227 gated behind a UDP knock sequence on 2260-2262 (knockd) ·
+# 2228 hardened · 2229 strict · 2230 ecdsa-only · 2231 rsa-only · 2232 legacy
+# · 2270/2271 silent-accept and banner-stall fixtures
+EXPOSE 2223 2224 2225 2226 2227 2228 2229 2230 2231 2232 2270 2271 2260/udp 2261/udp 2262/udp
 ENTRYPOINT ["/entrypoint.sh"]

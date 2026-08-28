@@ -143,8 +143,15 @@ class DockerDistroMatrixTest(private val v: DockerMatrix.Variant) {
         if (v == DockerMatrix.DEFAULT_VARIANT) return // has the host socket; see DockerContainerListTest
         connectPw().use { ssh ->
             val raw = DockerMatrix.exec(ssh, "${DockerParser.LIST_COMMAND} 2>&1", 30_000)
-            assertTrue("[$v] expected a daemon error, got: $raw", raw.contains("docker daemon", true) || raw.contains("permission denied", true))
-            assertEquals("[$v] error text must not parse as containers", emptyList<DockerParser.Container>(), DockerParser.parse(raw))
+            assertTrue(
+                "[$v] expected a daemon error, got: $raw",
+                raw.contains("docker daemon", true) || raw.contains("permission denied", true)
+            )
+            assertEquals(
+                "[$v] error text must not parse as containers",
+                emptyList<DockerParser.Container>(),
+                DockerParser.parse(raw)
+            )
         }
     }
 }

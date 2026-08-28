@@ -33,7 +33,12 @@ class DockerContainerListTest {
     }
 
     private fun connect() =
-        DockerMatrix.connect(KnownHostsStore(tmp.newFolder()), DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connect(
+            KnownHostsStore(tmp.newFolder()),
+            DockerMatrix.PW_AND_KEY_PORT,
+            "pwuser",
+            password = "conch-pw-1"
+        )
 
     private fun requireSocket(ssh: net.schmizz.sshj.SSHClient) {
         val probe = DockerMatrix.exec(ssh, "test -S /var/run/docker.sock && echo SOCK || echo NO_SOCK").trim()
@@ -99,10 +104,17 @@ class DockerContainerListTest {
         connect().use { ssh ->
             requireSocket(ssh)
             // a bad flag: the CLI prints usage to stderr, which the tab merges
-            val raw = DockerMatrix.exec(ssh, "docker ps --format '{{json .}}' --no-such-flag 2>&1; ${DockerParser.LIST_COMMAND}", 30_000)
+            val raw = DockerMatrix.exec(
+                ssh,
+                "docker ps --format '{{json .}}' --no-such-flag 2>&1; ${DockerParser.LIST_COMMAND}",
+                30_000
+            )
             assertTrue(raw.contains("unknown flag", true))
             val parsed = DockerParser.parse(raw)
-            assertTrue("real rows must survive the error preamble", parsed.any { it.names == DockerMatrix.CONTAINER_NAME })
+            assertTrue(
+                "real rows must survive the error preamble",
+                parsed.any { it.names == DockerMatrix.CONTAINER_NAME }
+            )
         }
     }
 }

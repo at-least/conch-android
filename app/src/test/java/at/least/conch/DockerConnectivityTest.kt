@@ -102,12 +102,18 @@ class DockerConnectivityTest {
                 try {
                     val socks = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
                     // ATYP 1 (IPv4)
-                    assertEquals("SSH-2.0", bannerVia(socks, InetSocketAddress("127.0.0.1", DockerMatrix.CONTAINER_SSH_PORT)))
+                    assertEquals(
+                        "SSH-2.0",
+                        bannerVia(socks, InetSocketAddress("127.0.0.1", DockerMatrix.CONTAINER_SSH_PORT))
+                    )
                     // ATYP 3 (domain): the JDK sends unresolved names as-is, the
                     // container resolves "localhost" on its side
                     assertEquals(
                         "SSH-2.0",
-                        bannerVia(socks, InetSocketAddress.createUnresolved("localhost", DockerMatrix.CONTAINER_FWD_PORT)),
+                        bannerVia(
+                            socks,
+                            InetSocketAddress.createUnresolved("localhost", DockerMatrix.CONTAINER_FWD_PORT)
+                        ),
                     )
                 } finally {
                     proxy.stop()
@@ -143,7 +149,10 @@ class DockerConnectivityTest {
             .use { ssh ->
                 assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
                 // and the server really did not offer "password"
-                val methods = DockerMatrix.exec(ssh, "grep -c 'PasswordAuthentication no' /etc/ssh/sshd_config_kbd").trim()
+                val methods = DockerMatrix.exec(
+                    ssh,
+                    "grep -c 'PasswordAuthentication no' /etc/ssh/sshd_config_kbd"
+                ).trim()
                 assertEquals("1", methods)
             }
     }

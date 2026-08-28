@@ -60,11 +60,16 @@ jobs:
           if-no-files-found: ignore
 
   # Real OpenSSH in Docker (tools/sshd-matrix): the default bookworm
-  # container (auth, TOFU, SFTP, tunnels, PTY, tmux, ZMODEM, agent, jump,
-  # SOCKS, PAM keyboard-interactive, host-key change, knockd port knocking,
-  # docker-socket Docker tab, tc-netem slow links, kill/restart/pause
-  # reconnects) plus the distro matrix (Ubuntu 20.04/24.04, Alpine, Debian
-  # trixie/OpenSSH 10, Rocky 9). Both flags make a missing container FAIL.
+  # container (auth, TOFU, SFTP + stress, tunnels, PTY, tmux, ZMODEM, agent,
+  # jump, SOCKS, PAM keyboard-interactive, host-key change, ecdsa/rsa-only
+  # host keys, client RSA/ECDSA/cert keys, hardened-server policy — forced
+  # command / restrict / no-pty / chroot-sftp / PermitOpen / MaxSessions /
+  # login banner, knockd port knocking, docker-socket Docker tab, tc-netem
+  # slow links, kill/restart/pause reconnects, IPv6, handshake-timeout and
+  # connection-refused/resolve mapping, high-volume throughput) plus the
+  # distro matrix (Ubuntu 20.04/24.04, Alpine, Debian trixie/OpenSSH 10,
+  # Rocky 9) and the non-OpenSSH servers (Dropbear, tinyssh, x/crypto/ssh,
+  # Paramiko). Both flags make a missing container FAIL.
   docker-matrix:
     runs-on: ubuntu-latest
     steps:
@@ -79,8 +84,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Start sshd matrix (default + all distro variants)
-        run: tools/sshd-matrix/run.sh --variants
+      - name: Start sshd matrix (default + all distro variants + alt servers)
+        run: tools/sshd-matrix/run.sh --variants --servers
 
       - name: Docker matrix tests
         run: >

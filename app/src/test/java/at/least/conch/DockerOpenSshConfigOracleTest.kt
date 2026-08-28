@@ -80,7 +80,12 @@ class DockerOpenSshConfigOracleTest {
         val parsed = OpenSshConfigParser.parse(config)
         assertEquals(listOf("web", "bastion", "app", "db"), parsed.map { it.alias })
 
-        DockerMatrix.connect(KnownHostsStore(tmp.newFolder()), DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connect(
+            KnownHostsStore(tmp.newFolder()),
+            DockerMatrix.PW_AND_KEY_PORT,
+            "pwuser",
+            password = "conch-pw-1"
+        )
             .use { ssh ->
                 ssh.newSFTPClient().use { sftp ->
                     val local = tmp.newFile("oracle.cfg").apply { writeText(config + "\n") }

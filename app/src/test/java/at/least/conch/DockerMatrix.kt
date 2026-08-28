@@ -30,6 +30,33 @@ object DockerMatrix {
     /** host port → container 2227: only listens for 8 s after the UDP knock sequence. */
     const val GATED_PORT = 2237
 
+    /**
+     * host port → container 2228: hardened server — SSH banner, MaxSessions 2,
+     * PermitOpen 127.0.0.1:2223 only, a CA-trusted [certuser][CERT_PRINCIPAL],
+     * authorized_keys option users ([cmduser][CMD_USER] forced command,
+     * [restrictuser][RESTRICT_USER] restrict,pty, [noptyuser][NOPTY_USER]
+     * no-pty) and a chrooted SFTP-only account ([sftponly][SFTP_ONLY_USER]).
+     */
+    const val HARDENED_PORT = 2238
+
+    /** host port → container 2229: MaxAuthTries 1, idle shells reaped after 12 s (ChannelTimeouts). */
+    const val STRICT_PORT = 2239
+
+    /** host port → container 2230: only an ECDSA host key is offered. */
+    const val ECDSA_HOST_PORT = 2240
+
+    /** host port → container 2231: only an RSA host key is offered (SHA-2 rsa-sha2-* signatures). */
+    const val RSA_HOST_PORT = 2241
+
+    /** host port → container 2232: legacy appliance — SHA-1 kex, CBC ciphers, ssh-rsa. May be absent on OpenSSH 10. */
+    const val LEGACY_PORT = 2242
+
+    /** host port → container 2270: accepts TCP and never sends a byte (connect/handshake timeout fixture). */
+    const val SILENT_ACCEPT_PORT = 2270
+
+    /** host port → container 2271: sends an SSH banner, then stalls forever (handshake timeout fixture). */
+    const val BANNER_STALL_PORT = 2271
+
     /** UDP knock sequence knockd watches for (same numbers on host and in the container). */
     val KNOCK_PORTS = listOf(2260, 2261, 2262)
 
@@ -38,6 +65,17 @@ object DockerMatrix {
 
     /** Forwarding-enabled sshd port INSIDE the container. */
     const val CONTAINER_FWD_PORT = 2225
+
+    /** authorized_keys-option / certificate accounts on the hardened instance (:2238). */
+    const val CERT_PRINCIPAL = "certuser"
+    const val CMD_USER = "cmduser"
+    const val RESTRICT_USER = "restrictuser"
+    const val NOPTY_USER = "noptyuser"
+    const val SFTP_ONLY_USER = "sftponly"
+    const val SFTP_ONLY_PASSWORD = "conch-pw-3"
+
+    /** The forced command cmduser's authorized_keys pins (every exec/shell runs this). */
+    const val FORCED_COMMAND_OUTPUT = "FORCED_COMMAND_ONLY"
 
     /** Default matrix container, as named by tools/sshd-matrix/run.sh. */
     const val CONTAINER_NAME = "conch-android-sshd"
@@ -74,6 +112,29 @@ object DockerMatrix {
         Variant("trixie", "debian:trixie-slim", 2252),
         Variant("rocky9", "rockylinux:9", 2255),
     )
+
+    /**
+     * A non-OpenSSH server implementation (tools/sshd-matrix/servers/, brought
+     * up by run.sh --servers). Each pins that conch's handshake, auth and
+     * channel handling do not secretly assume OpenSSH. [pwPort] is the
+     * password/primary port; ports that a given server does not run are 0.
+     */
+    data class Server(
+        val name: String,
+        val pwPort: Int,
+        val keyOnlyPort: Int = 0,
+        val forwardingPort: Int = 0,
+        val container: String = "$CONTAINER_NAME-$name",
+    ) {
+        override fun toString() = name
+    }
+
+    /** Keep in step with SERVERS in run.sh. */
+    val DROPBEAR = Server("dropbear", pwPort = 2263, keyOnlyPort = 2264, forwardingPort = 2265)
+    val TINYSSH = Server("tinyssh", pwPort = 0, keyOnlyPort = 2266)
+    val GOSSH = Server("gossh", pwPort = 2267, forwardingPort = 2267)
+    val PARAMIKO = Server("paramiko", pwPort = 2268)
+    val SERVERS = listOf(DROPBEAR, TINYSSH, GOSSH, PARAMIKO)
 
     val keysDir: File = File(
         System.getenv("CONCH_ANDROID_MATRIX_KEYS")
@@ -141,6 +202,36 @@ object DockerMatrix {
         } else {
             assumeTrue("variant $v not running (tools/sshd-matrix/run.sh --variant ${v.name})", reachable(v.pwPort))
         }
+    }
+
+    /**
+     * Alternate-server gate (tools/sshd-matrix/run.sh --server NAME): same
+     * opt-in shape as [requireVariant]. [port] is the server port under test
+     * (a server does not run every role — 0 means "this server has no such
+     * instance", which always skips).
+     */
+    fun requireServer(s: Server, port: Int) {
+        assumeTrue("opt-in test: pass -D$FLAG=true", optedIn())
+        assumeTrue("server ${s.name} has no instance for this role", port != 0)
+        if (distroOptedIn()) {
+            assertTrue(
+                "server ${s.name} not reachable on 127.0.0.1:$port — start it: tools/sshd-matrix/run.sh --servers",
+                reachable(port),
+            )
+        } else {
+            assumeTrue("server ${s.name} not running (tools/sshd-matrix/run.sh --server ${s.name})", reachable(port))
+        }
+    }
+
+    /**
+     * A matrix port that is optional on some bases (the legacy SHA-1 instance
+     * is refused to start by OpenSSH 10; the PAM/knockd instances are absent
+     * where the package is): opted-in but unreachable SKIPS rather than fails,
+     * because the fixture itself documents "not available on this base".
+     */
+    fun requireOptionalInstance(port: Int, why: String) {
+        requireMatrix()
+        assumeTrue("optional instance on :$port not up ($why)", reachable(port))
     }
 
     /**
