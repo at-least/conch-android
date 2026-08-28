@@ -6,14 +6,15 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -24,26 +25,39 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SyncAlt
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -59,10 +73,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.Dispatchers
@@ -80,7 +94,6 @@ class TerminalActivity : FragmentActivity() {
     private var emulator: TerminalEmulator? = null
 
     private val statusText = mutableStateOf<String?>(null)
-    private val statusColor = mutableStateOf(Color(0xFFFFB74D))
     private val connState = mutableStateOf(ConnState.CONNECTING)
     private val subtitle = mutableStateOf("")
     private val keyboardRowVisible = mutableStateOf(true)
@@ -94,6 +107,9 @@ class TerminalActivity : FragmentActivity() {
     private val liveTunnelCount = mutableIntStateOf(0)
     private val connectionGen = mutableIntStateOf(0)
     private val scrollOffset = mutableIntStateOf(0)
+
+    /** One-shot user-facing message, rendered as a Snackbar (was Toast). */
+    private val message = mutableStateOf<String?>(null)
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -115,6 +131,7 @@ class TerminalActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         val hostId = intent.getStringExtra("hostId") ?: return finish()
         val host = HostStore(this).load().firstOrNull { it.id == hostId } ?: return finish()
@@ -132,7 +149,7 @@ class TerminalActivity : FragmentActivity() {
             emu.titleListener = { title -> runOnUiThread { subtitle.value = title } }
         }
 
-        setContent { TerminalScreen() }
+        setContent { ConchTheme(darkTheme = true) { TerminalScreen() } }
         connect(host)
     }
 
@@ -158,7 +175,6 @@ class TerminalActivity : FragmentActivity() {
     private fun connect(host: Host) {
         connState.value = ConnState.CONNECTING
         statusText.value = "Connecting to ${host.hostname}:${host.port} …"
-        statusColor.value = Color(0xFFFFB74D)
         val emu = emulator
         reconnector = SessionReconnector(
             newSession = { cb ->
@@ -189,7 +205,6 @@ class TerminalActivity : FragmentActivity() {
     private fun onSessionConnected() {
         connState.value = ConnState.CONNECTED
         statusText.value = "Connected ${host?.username}@${host?.hostname}"
-        statusColor.value = Color(0xFF4CAF50)
         liveTunnelCount.intValue = reconnector?.tunnelCount ?: 0
         connectionGen.intValue += 1
         val h = host
@@ -233,7 +248,6 @@ class TerminalActivity : FragmentActivity() {
         if (isFinishing) return
         connState.value = ConnState.RECONNECTING
         statusText.value = "Reconnecting ($attempt) in ${delayMs / 1000}s — $reason · tap to stop"
-        statusColor.value = Color(0xFFFFB74D)
         emulator?.feed("\r\u001b[90m── Connection lost: $reason — reconnecting ──\u001b[0m\r\n")
         terminalView?.invalidate()
     }
@@ -243,11 +257,10 @@ class TerminalActivity : FragmentActivity() {
         if (connState.value == ConnState.STOPPED) return
         connState.value = ConnState.STOPPED
         statusText.value = "Disconnected: $reason"
-        statusColor.value = Color(0xFFE53935)
         emulator?.feed("\r\u001b[90m── Connection closed: $reason ──\u001b[0m\r\n")
         terminalView?.invalidate()
         SessionService.stop(this, sessionId)
-        Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
+        message.value = reason
     }
 
     /** User tapped the reconnecting banner: give up and show the stopped state. */
@@ -270,7 +283,7 @@ class TerminalActivity : FragmentActivity() {
         val text = emulator?.getScreenText() ?: return
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("terminal", text))
-        Toast.makeText(this, "Screen copied", Toast.LENGTH_SHORT).show()
+        message.value = "Screen copied"
     }
 
     private fun pasteIntoTerminal() {
@@ -297,8 +310,7 @@ class TerminalActivity : FragmentActivity() {
                     terminalView?.beginZmodemUpload(name, bytes)
                 } catch (e: Exception) {
                     CrashReporting.report(e)
-                    android.widget.Toast.makeText(this, "Upload failed: ${e.message}", android.widget.Toast.LENGTH_LONG)
-                        .show()
+                    message.value = "Upload failed: ${e.message}"
                     terminalView?.cancelZmodem()
                 }
             } else {
@@ -308,6 +320,17 @@ class TerminalActivity : FragmentActivity() {
         zmodemPickLauncherRef = { zmodemPickLauncher }
         var snippets by remember { mutableStateOf(listOf<Snippet>()) }
         var tab by remember { mutableStateOf(SessionTab.TERMINAL) }
+        val snackbarHostState = remember { SnackbarHostState() }
+
+        // Transient feedback (copied, saved, disconnect reason) as a
+        // Snackbar: it belongs to this screen, respects insets and does not
+        // paint over the terminal the way a system Toast does.
+        LaunchedEffect(message.value) {
+            message.value?.let {
+                snackbarHostState.showSnackbar(it)
+                message.value = null
+            }
+        }
 
         // Snippets load off-main whenever the sheet opens — newly saved
         // snippets (history sheet → Save) appear on the next open too.
@@ -324,15 +347,21 @@ class TerminalActivity : FragmentActivity() {
             if (tab == SessionTab.TERMINAL) tv.requestFocus() else tv.clearFocus()
         }
 
+        // The chrome takes its background from the user's terminal theme, so
+        // the bar, the terminal and the key row read as one surface instead
+        // of three hardcoded near-blacks.
+        // remembered: reading it per recomposition would hit SharedPreferences
+        // on every frame the terminal repaints.
+        val terminalBg = remember {
+            Color(TerminalTheme.byName(SettingsStore.terminalTheme(this)).bg or 0xFF000000.toInt())
+        }
         Scaffold(
-            containerColor = Color(0xFF1A1B26),
+            containerColor = terminalBg,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF10151E),
-                        titleContentColor = Color(0xFFE0E0E0),
-                        navigationIconContentColor = Color(0xFFE0E0E0),
-                        actionIconContentColor = Color(0xFFE0E0E0),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     ),
                     navigationIcon = {
                         IconButton(onClick = { disconnectAndFinish() }) {
@@ -349,15 +378,27 @@ class TerminalActivity : FragmentActivity() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     subtitle.value,
-                                    fontSize = 12.sp,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
+                                // Scrolled-back-by-N: an icon plus the count,
+                                // where a bare "↕12" used to sit.
                                 if (scrollOffset.intValue > 0) {
+                                    Icon(
+                                        Icons.Filled.UnfoldMore,
+                                        contentDescription = "Scrolled back",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .padding(start = 8.dp)
+                                            .size(14.dp),
+                                    )
                                     Text(
-                                        "  ↕${scrollOffset.intValue}",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF80DEEA)
+                                        "${scrollOffset.intValue}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                             }
@@ -367,18 +408,18 @@ class TerminalActivity : FragmentActivity() {
                         if (TunnelCapsule.visible(liveTunnelCount.intValue)) {
                             AssistChip(
                                 onClick = { tunnelConfirmVisible.value = true },
-                                label = { Text(TunnelCapsule.chipText(liveTunnelCount.intValue), fontSize = 12.sp) },
+                                label = { Text(TunnelCapsule.chipText(liveTunnelCount.intValue)) },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Filled.SyncAlt,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
+                                        contentDescription = "Live tunnels",
+                                        modifier = Modifier.size(AssistChipDefaults.IconSize)
                                     )
                                 },
                                 colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = Color(0xFF1B5E20),
-                                    labelColor = Color(0xFFA5D6A7),
-                                    leadingIconContentColor = Color(0xFFA5D6A7),
+                                    containerColor = MaterialTheme.conch.successContainer,
+                                    labelColor = MaterialTheme.conch.onSuccessContainer,
+                                    leadingIconContentColor = MaterialTheme.conch.onSuccessContainer,
                                 ),
                                 modifier = Modifier.padding(end = 4.dp),
                             )
@@ -447,22 +488,48 @@ class TerminalActivity : FragmentActivity() {
                                     }
                                 }
                             )
+                            HorizontalDivider()
+                            // A stepper, not two menu entries: resizing text
+                            // is a repeated adjustment, and each old tap shut
+                            // the menu and made you reopen it.
                             DropdownMenuItem(
-                                text = { Text("Font size up") },
-                                onClick = {
-                                    menuOpen = false
-                                    terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) + 2f
-                                }
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Text size", Modifier.weight(1f))
+                                        IconButton(onClick = {
+                                            terminalView?.fontSizePx =
+                                                (terminalView?.fontSizePx ?: 0f) - 2f
+                                        }) {
+                                            Icon(
+                                                Icons.Filled.Remove,
+                                                contentDescription = "Smaller text",
+                                            )
+                                        }
+                                        IconButton(onClick = {
+                                            terminalView?.fontSizePx =
+                                                (terminalView?.fontSizePx ?: 0f) + 2f
+                                        }) {
+                                            Icon(Icons.Filled.Add, contentDescription = "Larger text")
+                                        }
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.FormatSize, contentDescription = null)
+                                },
+                                onClick = { },
                             )
+                            HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("Font size down") },
-                                onClick = {
-                                    menuOpen = false
-                                    terminalView?.fontSizePx = (terminalView?.fontSizePx ?: 0f) - 2f
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Disconnect") },
+                                text = {
+                                    Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.LinkOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
                                 onClick = {
                                     menuOpen = false
                                     finishRequested.value = true
@@ -477,35 +544,22 @@ class TerminalActivity : FragmentActivity() {
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(Color(0xFF1A1B26))
+                    // consume first: without it the IME inset would be added
+                    // on top of the navigation-bar inset Scaffold already paid.
+                    .consumeWindowInsets(padding)
+                    .background(terminalBg)
                     .imePadding()
             ) {
                 // Health banner lives on the terminal tab only (iOS parity:
                 // the dot+banner is terminal context, not Monitor/Docker/Files).
                 if (tab == SessionTab.TERMINAL) {
                     statusText.value?.let { text ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(statusColor.value)
-                                .clickable(
-                                    enabled = connState.value == ConnState.RECONNECTING,
-                                    onClick = { stopReconnecting() }
-                                )
-                                .padding(horizontal = 10.dp, vertical = 3.dp)
-                        ) {
-                            StatusDot(
-                                state = connState.value,
-                                keepAlive = host?.keepAlive ?: false,
-                            )
-                            Text(
-                                text,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 6.dp)
-                            )
-                        }
+                        ConnectionBanner(
+                            state = connState.value,
+                            text = text,
+                            keepAlive = host?.keepAlive ?: false,
+                            onStopRetrying = { stopReconnecting() },
+                        )
                     }
                 }
                 // Terminal stays mounted under everything (opacity swap, never
@@ -570,7 +624,18 @@ class TerminalActivity : FragmentActivity() {
         keyPromptState.value?.let { (request, answer) ->
             AlertDialog(
                 onDismissRequest = { },
-                title = { Text(if (request.isChange) "⚠ Host key changed!" else "Unknown host key") },
+                icon = {
+                    Icon(
+                        if (request.isChange) Icons.Filled.Warning else Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = if (request.isChange) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                },
+                title = { Text(if (request.isChange) "Host key changed" else "Unknown host key") },
                 text = {
                     Column {
                         Text(
@@ -583,7 +648,7 @@ class TerminalActivity : FragmentActivity() {
                         Text(
                             "Key type: ${request.keyType}\nFingerprint:\n${request.fingerprint}",
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 12.dp)
                         )
                     }
@@ -674,27 +739,26 @@ class TerminalActivity : FragmentActivity() {
                 }
                 LazyColumn(modifier = Modifier.padding(bottom = 24.dp)) {
                     items(snippets, key = { it.id }) { snip ->
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    snippetsSheetVisible.value = false
-                                    // sendRaw, not sendText: a single-char
-                                    // command must never be interpreted as
-                                    // an armed Ctrl-letter (parity with the
-                                    // palette + history sheet paths).
-                                    terminalView?.sendRaw((snip.command + "\r").toByteArray(Charsets.UTF_8))
-                                }
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                        ) {
-                            Text(snip.label, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            Text(
-                                snip.command,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        ListItem(
+                            leadingContent = { Icon(Icons.Filled.Code, contentDescription = null) },
+                            headlineContent = { Text(snip.label) },
+                            supportingContent = {
+                                Text(
+                                    snip.command,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                snippetsSheetVisible.value = false
+                                // sendRaw, not sendText: a single-char
+                                // command must never be interpreted as
+                                // an armed Ctrl-letter (parity with the
+                                // palette + history sheet paths).
+                                terminalView?.sendRaw((snip.command + "\r").toByteArray(Charsets.UTF_8))
+                            },
+                        )
                     }
                 }
             }
@@ -729,7 +793,8 @@ class TerminalActivity : FragmentActivity() {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                label = { Text("Search") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                placeholder = { Text("Search history") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -747,28 +812,30 @@ class TerminalActivity : FragmentActivity() {
             }
             LazyColumn(modifier = Modifier.padding(bottom = 24.dp)) {
                 items(results) { entry ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                historySheetVisible.value = false
-                                // sendRaw, not sendText: a single-char entry must
-                                // never be interpreted as an armed Ctrl-letter
-                                terminalView?.sendRaw((entry.text + "\r").toByteArray(Charsets.UTF_8))
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                entry.text.lineSequence().firstOrNull() ?: "",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        },
+                        trailingContent = {
+                            IconButton(onClick = { saveAsSnippet(entry.text) }) {
+                                Icon(
+                                    Icons.Filled.BookmarkAdd,
+                                    contentDescription = "Save as snippet",
+                                )
                             }
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            entry.text.lineSequence().firstOrNull() ?: "",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 13.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = { saveAsSnippet(entry.text) }) { Text("Save") }
-                    }
+                        },
+                        modifier = Modifier.clickable {
+                            historySheetVisible.value = false
+                            // sendRaw, not sendText: a single-char entry must
+                            // never be interpreted as an armed Ctrl-letter
+                            terminalView?.sendRaw((entry.text + "\r").toByteArray(Charsets.UTF_8))
+                        },
+                    )
                 }
             }
         }
@@ -782,7 +849,7 @@ class TerminalActivity : FragmentActivity() {
             list.add(Snippet(label = label, command = command))
             store.save(list)
         }
-        Toast.makeText(this, "Saved snippet: $label", Toast.LENGTH_SHORT).show()
+        message.value = "Saved snippet: $label"
     }
 
     @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -796,9 +863,9 @@ class TerminalActivity : FragmentActivity() {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF10151A))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
                     .horizontalScroll(rememberScrollState())
-                    .padding(4.dp),
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 keys.value.forEach { id ->
@@ -812,8 +879,8 @@ class TerminalActivity : FragmentActivity() {
                         }
                     }
                 }
-                KeyButton("⚙") {
-                    editing = true
+                IconButton(onClick = { editing = true }) {
+                    Icon(Icons.Filled.Tune, contentDescription = "Edit extra keys")
                 }
             }
         } else {
@@ -886,11 +953,7 @@ class TerminalActivity : FragmentActivity() {
                     if (out == null) throw IllegalStateException("cannot open download stream")
                 } catch (e: Exception) {
                     CrashReporting.report(e)
-                    android.widget.Toast.makeText(
-                        this@TerminalActivity,
-                        "Cannot save ${'$'}{e.message}",
-                        android.widget.Toast.LENGTH_LONG,
-                    ).show()
+                    runOnUiThread { message.value = "Cannot save ${'$'}{e.message}" }
                 }
             }
 
@@ -915,11 +978,7 @@ class TerminalActivity : FragmentActivity() {
                             null,
                         )
                     }
-                    android.widget.Toast.makeText(
-                        this@TerminalActivity,
-                        "Saved $name ($size bytes) to Downloads",
-                        android.widget.Toast.LENGTH_LONG,
-                    ).show()
+                    runOnUiThread { message.value = "Saved $name ($size bytes) to Downloads" }
                 } catch (e: Exception) {
                     CrashReporting.report(e)
                 } finally {
@@ -965,4 +1024,60 @@ class TerminalActivity : FragmentActivity() {
     }
 
     /** In-session tabs moved to SessionTabs.kt (SessionTab) so they are unit-testable. */
+}
+
+/**
+ * Connection health banner. Each state gets a Material container/on-container
+ * pair — success, warning, error — instead of the three raw hexes the states
+ * used to be painted with, so the text keeps its contrast in either mode and
+ * the amber "reconnecting" state is legible rather than white-on-orange.
+ */
+@Composable
+private fun ConnectionBanner(
+    state: ConnState,
+    text: String,
+    keepAlive: Boolean,
+    onStopRetrying: () -> Unit,
+) {
+    val container = when (state) {
+        ConnState.CONNECTED -> MaterialTheme.conch.successContainer
+        ConnState.CONNECTING, ConnState.RECONNECTING -> MaterialTheme.conch.warningContainer
+        ConnState.STOPPED -> MaterialTheme.colorScheme.errorContainer
+    }
+    val content = when (state) {
+        ConnState.CONNECTED -> MaterialTheme.conch.onSuccessContainer
+        ConnState.CONNECTING, ConnState.RECONNECTING -> MaterialTheme.conch.onWarningContainer
+        ConnState.STOPPED -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    val retrying = state == ConnState.RECONNECTING
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(container)
+            .then(
+                if (retrying) {
+                    Modifier.clickable(
+                        onClickLabel = "Stop reconnecting",
+                        role = Role.Button,
+                        onClick = onStopRetrying,
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        StatusDot(state = state, keepAlive = keepAlive, color = content)
+        Text(
+            text,
+            color = content,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 8.dp)
+        )
+    }
 }

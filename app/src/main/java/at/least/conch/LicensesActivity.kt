@@ -3,6 +3,7 @@ package at.least.conch
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,7 +22,8 @@ class LicensesActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { LicensesScreen() }
+        enableEdgeToEdge()
+        setContent { ConchTheme { LicensesScreen() } }
     }
 
     @OptIn(ExperimentalMaterial3Api::class)

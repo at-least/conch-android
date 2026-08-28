@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 
 /**
@@ -31,7 +32,7 @@ object HostsWidget {
 
         if (hosts.isEmpty()) {
             val empty = RemoteViews(context.packageName, R.layout.widget_host_row)
-            empty.setTextViewText(R.id.widget_host_name, "No hosts yet")
+            empty.setTextViewText(R.id.widget_host_name, context.getString(R.string.widget_empty))
             rv.addView(R.id.widget_hosts_list, empty)
         } else {
             for (host in hosts.take(4)) {
@@ -39,8 +40,13 @@ object HostsWidget {
                 row.setTextViewText(R.id.widget_host_name, displayName(host))
                 row.setTextViewText(
                     R.id.widget_host_detail,
-                    "${host.username}@${host.hostname}:${host.port}" +
-                        if (host.authType == Host.AUTH_KEY) " 🔑" else ""
+                    "${host.username}@${host.hostname}:${host.port}",
+                )
+                // A tinted vector, not a 🔑 in the text: emoji render
+                // per-font and per-launcher, and cannot follow the theme.
+                row.setViewVisibility(
+                    R.id.widget_host_key,
+                    if (host.authType == Host.AUTH_KEY) View.VISIBLE else View.GONE,
                 )
                 val intent = Intent(context, HostsWidgetReceiver::class.java).apply {
                     action = ACTION_CONNECT

@@ -2,6 +2,37 @@
 
 ## 0.9.1 (unreleased)
 
+- New: **dark mode, and Material You** — every screen ran on Compose's
+  default light palette regardless of the system setting, because the app
+  had no theme wrapper at all; there is now one Material 3 theme that
+  follows the system and, on Android 12+, takes its colors from the
+  device's own wallpaper palette. The terminal keeps its own theme
+  (Dracula, Nord, …) unchanged, and "connected" green / "reconnecting"
+  amber stay fixed across dynamic color so a status color never stops
+  meaning what it means
+- Changed: the UI is rebuilt on stock Material components — host, key,
+  snippet, file, container and session rows are list items; settings are
+  switch rows in labelled groups instead of one card each; the auth-type
+  and tunnel-direction pickers are segmented buttons; multi-action
+  dialogs became bottom sheets; transient feedback is a snackbar instead
+  of a toast that painted over the terminal. Every emoji standing in for
+  an icon (🔑 ⚙ ⇅ ↕ ● ⚠) is a real vector icon that follows the theme
+- Fixed: **the port-forwarding editor no longer scrolls sideways** — four
+  fields on one line hid inputs entirely on a 375 dp phone; each tunnel
+  is now a stacked card. Host-form validation errors appear on the field
+  they belong to instead of in a toast that is gone before you look
+- Fixed: the Files tab's sort control cycled blindly through six states
+  behind one button (picking "Modified, newest" took five taps, and the
+  options were never listed) — it is a menu with a checkmark now; and
+  deleting a remote file asks first, since SFTP cannot undo it
+- Fixed: **edge-to-edge insets**, mandatory from targetSdk 35 — content
+  is inset properly instead of running under the status and gesture bars,
+  the terminal's extra-keys row no longer double-pads when the keyboard
+  opens, and the per-host actions that were long-press-only got a visible
+  button. Extra-key buttons meet the 48 dp minimum touch target
+- Changed: the home-screen widget follows the system theme and Material
+  You (it was three hardcoded near-blacks that stayed dark on a light
+  home screen) and uses the launcher's own corner radius
 - New: **hosts in Android's system file pickers (SAF)** — opt in per host
   (Edit host → "Files in system picker") and every app can open/save remote
   files through Conch once you grant a folder; browse/mkdir/rename/delete,

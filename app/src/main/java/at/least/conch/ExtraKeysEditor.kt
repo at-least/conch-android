@@ -5,22 +5,29 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * Extra-keys row editor: the bottom sheet behind the ⚙ button — pick keys
@@ -39,63 +46,13 @@ internal fun ExtraKeysEditor(current: List<String>, onSave: (List<String>) -> Un
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
         Text(
-            "Tap to add or remove; use ◀ ▶ on a selected key to reorder.",
-            fontSize = 12.sp,
+            "Tap a key to add or remove it; use the arrows to reorder.",
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        // selected chips (◀ id ▶ to reorder, ✕ to remove)
-        androidx.compose.foundation.layout.FlowRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            selected.forEachIndexed { idx, id ->
-                androidx.compose.material3.FilterChip(
-                    selected = true,
-                    onClick = { selected.remove(id) },
-                    label = { Text(ExtraKeysConfig.labelFor(id)) }
-                )
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        if (idx > 0) {
-                            val moved = selected.removeAt(idx)
-                            selected.add(idx - 1, moved)
-                        }
-                    },
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) { Text("◀", fontSize = 11.sp) }
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        if (idx < selected.size - 1) {
-                            val moved = selected.removeAt(idx)
-                            selected.add(idx + 1, moved)
-                        }
-                    },
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) { Text("▶", fontSize = 11.sp) }
-            }
-        }
-        // available chips (tap to append)
-        androidx.compose.foundation.layout.FlowRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ExtraKeysConfig.ALL.forEach { def ->
-                if (def.id !in selected) {
-                    androidx.compose.material3.FilterChip(
-                        selected = false,
-                        onClick = { selected.add(def.id) },
-                        label = { Text(def.label) }
-                    )
-                }
-            }
-        }
+        SelectedKeyChips(selected)
+        AvailableKeyChips(selected)
         Row(
             Modifier
                 .fillMaxWidth()
@@ -108,21 +65,104 @@ internal fun ExtraKeysEditor(current: List<String>, onSave: (List<String>) -> Un
     }
 }
 
-/** One key of the extra-keys row. */
+/** The chosen keys, in order: tap a chip to drop it, arrows to reorder. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SelectedKeyChips(selected: SnapshotStateList<String>) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        selected.forEachIndexed { idx, id ->
+            androidx.compose.material3.FilterChip(
+                selected = true,
+                onClick = { selected.remove(id) },
+                label = { Text(ExtraKeysConfig.labelFor(id)) }
+            )
+            IconButton(
+                onClick = {
+                    if (idx > 0) {
+                        val moved = selected.removeAt(idx)
+                        selected.add(idx - 1, moved)
+                    }
+                },
+                enabled = idx > 0,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = "Move ${ExtraKeysConfig.labelFor(id)} left",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(
+                onClick = {
+                    if (idx < selected.size - 1) {
+                        val moved = selected.removeAt(idx)
+                        selected.add(idx + 1, moved)
+                    }
+                },
+                enabled = idx < selected.size - 1,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "Move ${ExtraKeysConfig.labelFor(id)} right",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/** The rest of the key pool; tapping one appends it to the row. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun AvailableKeyChips(selected: SnapshotStateList<String>) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ExtraKeysConfig.ALL.forEach { def ->
+            if (def.id !in selected) {
+                androidx.compose.material3.FilterChip(
+                    selected = false,
+                    onClick = { selected.add(def.id) },
+                    label = { Text(def.label) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One key of the extra-keys row. A tonal button: armed CTRL/ALT read as
+ * *selected* (primary container) rather than merely a different blue, and
+ * the 48 dp box meets Android's minimum touch target instead of the old
+ * 40 dp one.
+ */
 @Composable
 internal fun KeyButton(label: String, armed: Boolean = false, onClick: () -> Unit) {
-    Button(
+    FilledTonalButton(
         onClick = onClick,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (armed) Color(0xFF2196F3) else Color(0xFF263238),
-            contentColor = Color(0xFFE0E0E0)
-        ),
+        colors = if (armed) {
+            ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            ButtonDefaults.filledTonalButtonColors()
+        },
         modifier = Modifier
             .padding(horizontal = 2.dp)
-            .height(40.dp)
-            .defaultMinSize(minWidth = 48.dp)
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics { if (armed) stateDescription = "Armed" }
     ) {
-        Text(label, fontSize = 13.sp)
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }

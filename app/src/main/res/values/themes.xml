@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+      Launch/window theme only: every screen's actual colors come from
+      ConchTheme.kt (Material 3 in Compose, dynamic color on Android 12+).
+      android:statusBarColor / navigationBarColor are ignored from
+      targetSdk 35 on, so they are deliberately absent — the bar icon
+      appearance is set from ConchTheme instead.
+    -->
     <style name="Theme.Conch" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorSecondary">@color/accent</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
     </style>
 
+    <!-- The terminal's chrome is always dark, so its launch window is too. -->
     <style name="Theme.Conch.Terminal" parent="Theme.Conch">
-        <item name="android:statusBarColor">#10151E</item>
-        <item name="android:navigationBarColor">#10151A</item>
         <item name="android:windowBackground">#1A1B26</item>
     </style>
 </resources>

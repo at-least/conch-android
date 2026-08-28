@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,23 +16,47 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
@@ -55,9 +80,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -109,7 +134,8 @@ object TunnelCapsule {
     /** Capsule shows only when at least one tunnel is live. */
     fun visible(count: Int): Boolean = count > 0
 
-    fun chipText(count: Int): String = "⇅ $count"
+    /** The chip pairs this with a SyncAlt icon, so the count is the whole label. */
+    fun chipText(count: Int): String = "$count"
 
     fun stopDialogTitle(count: Int): String = "Stop $count tunnel(s)?"
 }
@@ -165,10 +191,15 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(MonitorCardSpacing)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Auto refresh (5s)", modifier = Modifier.weight(1f))
-            Switch(checked = autoRefresh, onCheckedChange = { autoRefresh = it })
-        }
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            headlineContent = { Text("Auto refresh") },
+            supportingContent = { Text("Re-reads the host's metrics every 5 seconds") },
+            trailingContent = {
+                Switch(checked = autoRefresh, onCheckedChange = { autoRefresh = it })
+            },
+            modifier = Modifier.clickable { autoRefresh = !autoRefresh },
+        )
 
         error?.let {
             Card(Modifier.fillMaxWidth()) {
@@ -178,7 +209,7 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
                         Text(
                             raw,
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 12,
                             overflow = TextOverflow.Ellipsis,
@@ -269,9 +300,19 @@ private fun MetricCard(
     historyMax: Double = 1.0,
 ) {
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Text(title, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, fontSize = 22.sp, fontFamily = FontFamily.Monospace)
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Tabular monospace figures: a changing CPU percentage must not
+            // reflow the row it sits in.
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontFamily = FontFamily.Monospace,
+            )
             progress?.let {
                 LinearProgressIndicator(
                     progress = { it.toFloat() },
@@ -290,9 +331,9 @@ private fun MetricCard(
             }
             Text(
                 footnote,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
@@ -389,11 +430,11 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             Text(
                 it,
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 11.sp,
+                style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 8,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -416,14 +457,15 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     logsFor?.let { c ->
         AlertDialog(
             onDismissRequest = { logsFor = null },
-            title = { Text("logs: ${c.names}") },
+            title = { Text("Logs — ${c.names}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             text = {
+                // Scrollable: 200 lines of logs never fit a dialog, and
+                // clipping them at 20 hid the end the user came for.
                 Text(
                     logsText,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    maxLines = 20,
-                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
                 )
             },
             confirmButton = { TextButton(onClick = { logsFor = null }) { Text("Close") } }
@@ -442,51 +484,79 @@ private fun ContainerRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val running = c.state == "running"
-    Card(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 3.dp)
-            .combinedClickable(onClick = { menuOpen = true }, onLongClick = { menuOpen = true })
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("●", color = if (running) Color(0xFF23D18B) else Color(0xFF666666))
-                Text(c.names, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+    Box {
+        ListItem(
+            leadingContent = {
+                // A tinted icon, not a "●" glyph: it scales with the type
+                // system and carries a content description for the state.
+                Icon(
+                    if (running) Icons.Filled.PlayCircle else Icons.Filled.StopCircle,
+                    contentDescription = if (running) "Running" else "Stopped",
+                    tint = if (running) {
+                        MaterialTheme.conch.success
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            },
+            headlineContent = {
+                Text(c.names, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
+                Column {
+                    Text(c.image, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(c.status, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            },
+            trailingContent = {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "Actions for ${c.names}")
+                }
+            },
+            modifier = Modifier.combinedClickable(
+                onClick = { menuOpen = true },
+                onLongClick = { menuOpen = true },
+            ),
+        )
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text("Logs") },
+                leadingIcon = { Icon(Icons.Filled.Description, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    onLogs()
+                }
+            )
+            if (running) {
+                DropdownMenuItem(
+                    text = { Text("Stop") },
+                    leadingIcon = { Icon(Icons.Filled.StopCircle, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onStop()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Restart") },
+                    leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onRestart()
+                    }
+                )
+            } else {
+                DropdownMenuItem(
+                    text = { Text("Start") },
+                    leadingIcon = { Icon(Icons.Filled.PlayCircle, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onStart()
+                    }
+                )
             }
-            Text(c.image, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(c.status, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-        androidx.compose.material3.DropdownMenuItem(text = { Text("Logs") }, onClick = {
-            menuOpen = false
-            onLogs()
-        })
-        if (running) {
-            androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Stop") },
-                onClick = {
-                    menuOpen = false
-                    onStop()
-                }
-            )
-            androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Restart") },
-                onClick = {
-                    menuOpen = false
-                    onRestart()
-                }
-            )
-        } else {
-            androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Start") },
-                onClick = {
-                    menuOpen = false
-                    onStart()
-                }
-            )
-        }
-    }
+    HorizontalDivider()
 }
 
 // =====================================================================
@@ -502,6 +572,7 @@ data class SftpEntry(
     val mtime: Long,
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SftpTab(
     session: SessionReconnector,
@@ -520,9 +591,11 @@ fun SftpTab(
     // sortMode: 0 name, 1 size, 2 time; sign stored separately
     var sortMode by remember { mutableIntStateOf(0) }
     var sortDescending by remember { mutableStateOf(false) }
-    var sortLabel by remember { mutableStateOf("Name ↑") }
+    var sortLabel by remember { mutableStateOf(SORT_OPTIONS.first()) }
+    var sortMenuOpen by remember { mutableStateOf(false) }
 
     var actionEntry by remember { mutableStateOf<SftpEntry?>(null) }
+    var confirmDelete by remember { mutableStateOf<SftpEntry?>(null) }
     var showMkdir by remember { mutableStateOf(false) }
     var showNewFile by remember { mutableStateOf(false) }
     var newFileText by remember { mutableStateOf("") }
@@ -598,39 +671,6 @@ fun SftpTab(
         val cur = path.trimEnd('/')
         if (cur.isEmpty()) return
         path = cur.substringBeforeLast('/').ifEmpty { "/" }
-    }
-
-    fun cycleSort() {
-        val next = when {
-            sortMode == 0 && !sortDescending -> {
-                sortDescending = true
-                "Name ↓"
-            }
-            sortMode == 0 -> {
-                sortMode = 1
-                sortDescending = false
-                "Size ↑"
-            }
-            sortMode == 1 && !sortDescending -> {
-                sortDescending = true
-                "Size ↓"
-            }
-            sortMode == 1 -> {
-                sortMode = 2
-                sortDescending = false
-                "Time ↑"
-            }
-            sortMode == 2 && !sortDescending -> {
-                sortDescending = true
-                "Time ↓"
-            }
-            else -> {
-                sortMode = 0
-                sortDescending = false
-                "Name ↑"
-            }
-        }
-        sortLabel = next
     }
 
     fun download(entry: SftpEntry) {
@@ -762,17 +802,48 @@ fun SftpTab(
     }
 
     if (sftpFailed) {
-        Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("SFTP unavailable", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { sftpFailed = false }) { Text("Retry") }
+        Column(
+            Modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                Icons.Filled.FolderOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(48.dp),
+            )
+            Text(
+                "SFTP unavailable",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            Text(
+                "This server refused the SFTP subsystem, or it is not enabled.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Button(onClick = { sftpFailed = false }, modifier = Modifier.padding(top = 16.dp)) {
+                Text("Retry")
+            }
         }
         return
     }
 
     if (sftp == null) {
-        Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text("Opening SFTP…", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(
+            Modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Text(
+                "Opening SFTP…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp),
+            )
         }
         return
     }
@@ -782,94 +853,200 @@ fun SftpTab(
     }
 
     Column(modifier.fillMaxSize()) {
-        // breadcrumb / sort / up / refresh
+        // Path + navigation. The sort control is an explicit menu now: the
+        // old single button cycled blindly through six states, so picking
+        // "Time ↓" could take five taps and the options were never listed.
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 path,
                 fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = { cycleSort() }) { Text(sortLabel, fontSize = 13.sp) }
-            androidx.compose.material3.IconButton(onClick = { goUp() }, enabled = path != "/") {
-                androidx.compose.material3.Icon(Icons.Filled.ArrowUpward, contentDescription = "Up one level")
+            IconButton(onClick = { goUp() }, enabled = path != "/") {
+                Icon(Icons.Filled.ArrowUpward, contentDescription = "Up one level")
             }
-            androidx.compose.material3.IconButton(onClick = { refresh() }) {
-                androidx.compose.material3.Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            Box {
+                IconButton(onClick = { sortMenuOpen = true }) {
+                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort ($sortLabel)")
+                }
+                DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                    SORT_OPTIONS.forEachIndexed { index, label ->
+                        val mode = index / 2
+                        val descending = index % 2 == 1
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            leadingIcon = {
+                                if (sortMode == mode && sortDescending == descending) {
+                                    Icon(Icons.Filled.Check, contentDescription = "Selected")
+                                }
+                            },
+                            onClick = {
+                                sortMode = mode
+                                sortDescending = descending
+                                sortLabel = label
+                                sortMenuOpen = false
+                            }
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = { refresh() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
         }
         status?.let {
             Text(
                 it,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
             )
         }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 2.dp)) {
-            TextButton(onClick = { uploadLauncher.launch(arrayOf("*/*")) }) { Text("Upload file") }
+        // Reserved height: the bar appearing and vanishing used to shove the
+        // whole list up and down on every refresh.
+        Box(Modifier.fillMaxWidth().height(4.dp)) {
+            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        Row(
+            Modifier.padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TextButton(onClick = { uploadLauncher.launch(arrayOf("*/*")) }) {
+                Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Upload", Modifier.padding(start = 6.dp))
+            }
             TextButton(onClick = {
                 newFileText = ""
                 showNewFile = true
-            }) { Text("New file") }
+            }) {
+                Icon(Icons.Filled.NoteAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("File", Modifier.padding(start = 6.dp))
+            }
             TextButton(onClick = {
                 mkdirText = ""
                 showMkdir = true
-            }) { Text("New folder") }
+            }) {
+                Icon(Icons.Filled.CreateNewFolder, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Folder", Modifier.padding(start = 6.dp))
+            }
         }
-        LazyColumn(Modifier.weight(1f)) {
-            items(entries, key = { it.path }) { entry ->
-                EntryRow(
-                    entry,
-                    onClick = { if (entry.isDir) navigate(entry) else { actionEntry = entry } },
-                    onLongClick = { actionEntry = entry }
+        if (entries.isEmpty() && !busy) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "Empty folder",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else {
+            LazyColumn(Modifier.weight(1f)) {
+                items(entries, key = { it.path }) { entry ->
+                    EntryRow(
+                        entry,
+                        onClick = { if (entry.isDir) navigate(entry) else actionEntry = entry },
+                        onLongClick = { actionEntry = entry }
+                    )
+                }
             }
         }
     }
 
     actionEntry?.let { entry ->
+        // A sheet, not a dialog: three actions crammed into a dialog's
+        // confirm slot overflow a narrow screen and gave Delete the same
+        // weight as Download.
+        ModalBottomSheet(onDismissRequest = { actionEntry = null }) {
+            Column(Modifier.padding(bottom = 24.dp)) {
+                ListItem(
+                    leadingContent = {
+                        Icon(
+                            if (entry.isDir) Icons.Filled.Folder else Icons.Filled.Description,
+                            contentDescription = null,
+                        )
+                    },
+                    headlineContent = {
+                        Text(
+                            entry.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            (if (entry.isDir) "Folder" else formatSize(entry.size)) + " · " +
+                                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                                    .format(Date(entry.mtime))
+                        )
+                    },
+                )
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                if (!entry.isDir) {
+                    ListItem(
+                        leadingContent = { Icon(Icons.Filled.Download, contentDescription = null) },
+                        headlineContent = { Text("Download") },
+                        modifier = Modifier.clickable {
+                            actionEntry = null
+                            download(entry)
+                        },
+                    )
+                }
+                ListItem(
+                    leadingContent = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                    headlineContent = { Text("Rename") },
+                    modifier = Modifier.clickable {
+                        actionEntry = null
+                        renameText = entry.name
+                        showRename = entry
+                    },
+                )
+                ListItem(
+                    leadingContent = {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    headlineContent = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable {
+                        actionEntry = null
+                        confirmDelete = entry
+                    },
+                )
+            }
+        }
+    }
+
+    // Deleting a remote file is not undoable over SFTP: confirm first.
+    confirmDelete?.let { entry ->
         AlertDialog(
-            onDismissRequest = { actionEntry = null },
-            title = { Text(entry.name) },
+            onDismissRequest = { confirmDelete = null },
+            icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+            title = { Text("Delete ${entry.name}?") },
             text = {
                 Text(
-                    buildString {
-                        append(if (entry.isDir) "Folder" else formatSize(entry.size))
-                        append("\nModified: ")
-                        append(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(entry.mtime)))
+                    if (entry.isDir) {
+                        "The folder is removed from the server. This cannot be undone."
+                    } else {
+                        "The file is removed from the server. This cannot be undone."
                     }
                 )
             },
             confirmButton = {
-                Row {
-                    if (!entry.isDir) {
-                        TextButton(onClick = {
-                            actionEntry = null
-                            download(entry)
-                        }) { Text("Download") }
-                    }
-                    TextButton(
-                        onClick = {
-                            actionEntry = null
-                            renameText = entry.name
-                            showRename = entry
-                        }
-                    ) { Text("Rename") }
-                    TextButton(onClick = {
-                        actionEntry = null
-                        delete(entry)
-                    }) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                    }
-                }
+                TextButton(onClick = {
+                    val target = entry
+                    confirmDelete = null
+                    delete(target)
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { actionEntry = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } }
         )
     }
 
@@ -877,7 +1054,15 @@ fun SftpTab(
         AlertDialog(
             onDismissRequest = { showRename = null },
             title = { Text("Rename") },
-            text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it }) },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("New name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showRename = null
@@ -892,7 +1077,15 @@ fun SftpTab(
         AlertDialog(
             onDismissRequest = { showNewFile = false },
             title = { Text("New file") },
-            text = { OutlinedTextField(value = newFileText, onValueChange = { newFileText = it }) },
+            text = {
+                OutlinedTextField(
+                    value = newFileText,
+                    onValueChange = { newFileText = it },
+                    label = { Text("File name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showNewFile = false
@@ -907,7 +1100,15 @@ fun SftpTab(
         AlertDialog(
             onDismissRequest = { showMkdir = false },
             title = { Text("New folder") },
-            text = { OutlinedTextField(value = mkdirText, onValueChange = { mkdirText = it }) },
+            text = {
+                OutlinedTextField(
+                    value = mkdirText,
+                    onValueChange = { mkdirText = it },
+                    label = { Text("Folder name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showMkdir = false
@@ -922,29 +1123,43 @@ fun SftpTab(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EntryRow(entry: SftpEntry, onClick: () -> Unit, onLongClick: () -> Unit) {
-    Card(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 3.dp)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.Icon(
+    ListItem(
+        leadingContent = {
+            Icon(
                 if (entry.isDir) Icons.Filled.Folder else Icons.Filled.Description,
-                contentDescription = null,
-                tint = if (entry.isDir) Color(0xFF3B8EEA) else MaterialTheme.colorScheme.onSurfaceVariant
+                contentDescription = if (entry.isDir) "Folder" else "File",
+                tint = if (entry.isDir) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
-            Column(Modifier.padding(start = 10.dp)) {
-                Text(entry.name, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    if (entry.isDir) "Directory" else formatSize(entry.size),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
+        },
+        headlineContent = {
+            Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = {
+            Text(if (entry.isDir) "Directory" else formatSize(entry.size))
+        },
+        trailingContent = if (entry.isDir) {
+            { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) }
+        } else {
+            null
+        },
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    )
+    HorizontalDivider()
 }
+
+/** Sort menu entries; index/2 is the sort key, index%2 the direction. */
+private val SORT_OPTIONS = listOf(
+    "Name (A–Z)",
+    "Name (Z–A)",
+    "Size (smallest)",
+    "Size (largest)",
+    "Modified (oldest)",
+    "Modified (newest)",
+)
 
 private fun sortEntries(raw: List<RemoteResourceInfo>, sortMode: Int, descending: Boolean): List<RemoteResourceInfo> {
     val key: (RemoteResourceInfo) -> Comparable<*> = when (sortMode) {
@@ -966,20 +1181,17 @@ private fun formatSize(bytes: Long): String = when {
 /** Bottom navigation between the four in-session tabs. */
 @Composable
 internal fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -> Unit) {
-    NavigationBar(containerColor = Color(0xFF10151E)) {
+    // Plain Material NavigationBar: the theme supplies the container, the
+    // selected indicator and the unselected contrast, all of which were
+    // hardcoded before.
+    NavigationBar {
         SessionTab.entries.forEach { t ->
             NavigationBarItem(
                 selected = tab == t,
                 onClick = { onTab(t) },
-                icon = { Icon(t.icon, contentDescription = t.title) },
-                label = { Text(t.title, fontSize = 11.sp) },
-                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFFE0E0E0),
-                    selectedTextColor = Color(0xFFE0E0E0),
-                    indicatorColor = Color(0xFF1E62B4),
-                    unselectedIconColor = Color(0xFF9E9E9E),
-                    unselectedTextColor = Color(0xFF9E9E9E),
-                ),
+                icon = { Icon(t.icon, contentDescription = null) },
+                label = { Text(t.title) },
+                alwaysShowLabel = true,
             )
         }
     }
@@ -990,12 +1202,12 @@ internal fun SessionTabBar(tab: SessionTab, onTab: (SessionTab) -> Unit) {
 internal fun LoadingTab(label: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LinearProgressIndicator(Modifier.fillMaxWidth(0.6f))
+            CircularProgressIndicator()
             Text(
                 "$label — connecting…",
-                fontSize = 13.sp,
-                color = Color(0xFF9E9E9E),
-                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp),
             )
         }
     }

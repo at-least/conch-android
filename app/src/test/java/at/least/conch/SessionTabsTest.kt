@@ -50,9 +50,9 @@ class TunnelCapsuleTest {
     }
 
     @Test
-    fun `chip text pins the count next to the arrows`() {
-        assertEquals("⇅ 1", TunnelCapsule.chipText(1))
-        assertEquals("⇅ 3", TunnelCapsule.chipText(3))
+    fun `chip text is the bare count — the chip's icon carries the arrows`() {
+        assertEquals("1", TunnelCapsule.chipText(1))
+        assertEquals("3", TunnelCapsule.chipText(3))
     }
 
     @Test

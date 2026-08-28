@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -31,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -103,7 +104,14 @@ fun CommandPaletteSheet(
                 onValueChange = { query = it },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                label = { Text("Search commands & snippets") },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                placeholder = { Text("Search commands & snippets") },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
             if (results.isEmpty()) {
@@ -117,6 +125,7 @@ fun CommandPaletteSheet(
                         } else {
                             "Nothing matches \"$query\"."
                         },
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
@@ -124,30 +133,28 @@ fun CommandPaletteSheet(
             }
             LazyColumn(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 items(results, key = { it.id }) { entry ->
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onDismiss()
-                                runCommand(entry.text + "\r")
-                            }
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        Text(
-                            entry.text,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 14.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        entry.label?.let { label ->
-                            Text(
-                                label,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ListItem(
+                        leadingContent = {
+                            // Which list a hit came from, at a glance.
+                            Icon(
+                                if (entry.label != null) Icons.Filled.Code else Icons.Filled.History,
+                                contentDescription = if (entry.label != null) "Snippet" else "History",
                             )
-                        }
-                    }
+                        },
+                        headlineContent = {
+                            Text(
+                                entry.text,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        supportingContent = entry.label?.let { label -> { Text(label) } },
+                        modifier = Modifier.clickable {
+                            onDismiss()
+                            runCommand(entry.text + "\r")
+                        },
+                    )
                 }
             }
         }

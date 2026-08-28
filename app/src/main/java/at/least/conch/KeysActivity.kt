@@ -4,53 +4,62 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** SSH key management: generate ed25519 keys, import, inspect, delete. */
 class KeysActivity : ComponentActivity() {
@@ -60,9 +69,13 @@ class KeysActivity : ComponentActivity() {
 
     private val keys = mutableStateListOf<SshKeyInfo>()
 
+    /** One-shot user-facing message, shown as a Snackbar (was Toast). */
+    private var message: String? by mutableStateOf(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { KeysScreen() }
+        enableEdgeToEdge()
+        setContent { ConchTheme { KeysScreen() } }
     }
 
     override fun onResume() {
@@ -80,7 +93,7 @@ class KeysActivity : ComponentActivity() {
             attemptImport(name, bytes, null)
         } catch (e: Exception) {
             CrashReporting.report(e)
-            Toast.makeText(this, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+            message = "Import failed: ${e.message}"
         }
     }
 
@@ -91,10 +104,10 @@ class KeysActivity : ComponentActivity() {
                 ?: error("${KeyManager.MISSING_KEY_PREFIX} '${key.name}' — re-import it first")
             contentResolver.openOutputStream(uri)?.use { it.write(pem.toByteArray()) }
                 ?: error("Cannot open file")
-            Toast.makeText(this, "Exported unencrypted — store it safely", Toast.LENGTH_LONG).show()
+            message = "Exported unencrypted — store it safely"
         } catch (e: Exception) {
             CrashReporting.report(e)
-            Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+            message = "Export failed: ${e.message}"
         }
     }
 
@@ -107,18 +120,21 @@ class KeysActivity : ComponentActivity() {
         onUnlock: () -> Unit,
         onDismiss: () -> Unit,
     ) {
+        val wrong = prompt.error!!.startsWith("Wrong")
         AlertDialog(
             onDismissRequest = onDismiss,
+            icon = { Icon(Icons.Filled.Key, contentDescription = null) },
             title = { Text("Passphrase required") },
             text = {
                 Column {
-                    val intro = if (prompt.error!!.startsWith("Wrong")) {
-                        prompt.error
-                    } else {
-                        "\"${prompt.name}\" is passphrase-protected. The key is stored " +
-                            "decrypted (device-encrypted at rest); this is only needed once."
-                    }
-                    Text(intro, fontSize = 13.sp)
+                    Text(
+                        if (wrong) {
+                            prompt.error
+                        } else {
+                            "\"${prompt.name}\" is passphrase-protected. The key is stored " +
+                                "decrypted (device-encrypted at rest); this is only needed once."
+                        }
+                    )
                     OutlinedTextField(
                         value = passphraseText,
                         onValueChange = onTextChange,
@@ -126,8 +142,10 @@ class KeysActivity : ComponentActivity() {
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        isError = prompt.error.startsWith("Wrong"),
-                        modifier = Modifier.padding(top = 10.dp)
+                        isError = wrong,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
                     )
                 }
             },
@@ -153,27 +171,35 @@ class KeysActivity : ComponentActivity() {
             keys.addAll(KeyManager(this).list())
             passphrasePrompt = null
             passphraseText = ""
-            Toast.makeText(this, "Imported", Toast.LENGTH_SHORT).show()
+            message = "Imported $name"
         } catch (e: EncryptedKeyException) {
             passphrasePrompt = PassphrasePrompt(name, bytes, e.message ?: "Passphrase required")
             passphraseText = ""
         } catch (e: Exception) {
             CrashReporting.report(e)
             passphrasePrompt = null
-            Toast.makeText(this, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+            message = "Import failed: ${e.message}"
         }
     }
 
     private var passphrasePrompt: PassphrasePrompt? by mutableStateOf(null)
     private var passphraseText: String by mutableStateOf("")
 
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun KeysScreen() {
         val context = LocalContext.current
         var showGenerate by remember { mutableStateOf(false) }
         var genName by remember { mutableStateOf("") }
         var detail by remember { mutableStateOf<SshKeyInfo?>(null) }
+        val snackbarHostState = remember { SnackbarHostState() }
+
+        LaunchedEffect(message) {
+            message?.let {
+                snackbarHostState.showSnackbar(it)
+                message = null
+            }
+        }
 
         val importLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.OpenDocument()
@@ -199,6 +225,7 @@ class KeysActivity : ComponentActivity() {
                     }
                 )
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
                 ExtendedFloatingActionButton(
                     onClick = {
@@ -222,6 +249,7 @@ class KeysActivity : ComponentActivity() {
                     keys.clear()
                     keys.addAll(KeyManager(this).list())
                     showGenerate = false
+                    message = "Generated ${genName.trim()}"
                 },
                 onDismiss = { showGenerate = false },
             )
@@ -254,49 +282,59 @@ class KeysActivity : ComponentActivity() {
         }
 
         detail?.let { k ->
-            KeyDetailDialog(
+            KeyDetailSheet(
                 key = k,
                 onCopy = {
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("pubkey", k.publicLine))
-                    Toast.makeText(context, "Public key copied", Toast.LENGTH_SHORT).show()
                     detail = null
+                    message = "Public key copied"
                 },
                 onDelete = {
                     KeyManager(this@KeysActivity).delete(k.id)
                     keys.removeAll { it.id == k.id }
                     detail = null
+                    message = "Deleted ${k.name}"
                 },
                 onExport = {
                     exportKey = k
                     detail = null
                     exportLauncher.launch("${k.name}.key")
                 },
-                onClose = { detail = null },
+                onDismiss = { detail = null },
             )
         }
     }
 
     /** Empty state + key list. */
-    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     private fun KeyListBody(padding: PaddingValues, onOpen: (SshKeyInfo) -> Unit) {
         if (keys.isEmpty()) {
             Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(padding).padding(24.dp),
-                verticalArrangement = Arrangement.Center
+                    .padding(padding)
+                    .padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
                     Icons.Filled.Key,
                     contentDescription = null,
+                    modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "No keys yet. Generate an ed25519 key, then add the public key to ~/.ssh/authorized_keys on your server.",
-                    modifier = Modifier.padding(top = 12.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "No keys yet",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                Text(
+                    "Generate an Ed25519 key, then add its public key to ~/.ssh/authorized_keys on your server.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         } else {
@@ -304,25 +342,22 @@ class KeysActivity : ComponentActivity() {
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(keys, key = { it.id }) { k ->
-                    Card(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .combinedClickable(onClick = { onOpen(k) }, onLongClick = { })
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(k.name, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
+                    ListItem(
+                        leadingContent = { Icon(Icons.Filled.Key, contentDescription = null) },
+                        headlineContent = { Text(k.name) },
+                        supportingContent = {
                             Text(
                                 "${k.algorithm} · ${k.fingerprint}",
-                                fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                        }
-                    }
+                        },
+                        modifier = Modifier.clickable { onOpen(k) },
+                    )
+                    HorizontalDivider()
                 }
             }
         }
@@ -338,65 +373,88 @@ class KeysActivity : ComponentActivity() {
     ) {
         AlertDialog(
             onDismissRequest = onDismiss,
+            icon = { Icon(Icons.Filled.Key, contentDescription = null) },
             title = { Text("Generate Ed25519 key") },
             text = {
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
-                    label = { Text("Name (e.g. my-phone)") },
-                    singleLine = true
+                    label = { Text("Name") },
+                    placeholder = { Text("my-phone") },
+                    isError = name.isBlank(),
+                    supportingText = { Text("Names the key in the picker and in authorized_keys") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    if (name.isBlank()) {
-                        Toast.makeText(this@KeysActivity, "Enter a name", Toast.LENGTH_SHORT).show()
-                        return@TextButton
-                    }
-                    onGenerate()
-                }) { Text("Generate") }
+                TextButton(enabled = name.isNotBlank(), onClick = onGenerate) { Text("Generate") }
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
         )
     }
 
-    /** Fingerprint + public-key inspection with copy / export / delete. */
+    /**
+     * Fingerprint + public key with copy / export / delete.
+     *
+     * A bottom sheet, not a dialog: the old version crammed three actions
+     * into the dialog's dismiss slot, where they overflowed narrow screens
+     * and gave "Delete" the visual weight of "Cancel".
+     */
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    private fun KeyDetailDialog(
+    private fun KeyDetailSheet(
         key: SshKeyInfo,
         onCopy: () -> Unit,
         onDelete: () -> Unit,
         onExport: () -> Unit,
-        onClose: () -> Unit,
+        onDismiss: () -> Unit,
     ) {
-        AlertDialog(
-            onDismissRequest = onClose,
-            title = { Text(key.name) },
-            text = {
-                Column {
-                    Text("Fingerprint: ${key.fingerprint}", fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-                    Text(
-                        "Public key (authorized_keys):",
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-                    Text(
-                        key.publicLine,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = onCopy) { Text("Copy public key") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                    TextButton(onClick = onExport) { Text("Export") }
-                    TextButton(onClick = onClose) { Text("Close") }
-                }
+        ModalBottomSheet(onDismissRequest = onDismiss) {
+            Column(Modifier.padding(bottom = 24.dp)) {
+                ListItem(
+                    leadingContent = { Icon(Icons.Filled.Key, contentDescription = null) },
+                    headlineContent = { Text(key.name, style = MaterialTheme.typography.titleMedium) },
+                    supportingContent = {
+                        Text(key.fingerprint, fontFamily = FontFamily.Monospace)
+                    },
+                )
+                Text(
+                    "Public key (authorized_keys)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                )
+                Text(
+                    key.publicLine,
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                ListItem(
+                    leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                    headlineContent = { Text("Copy public key") },
+                    modifier = Modifier.clickable(onClick = onCopy),
+                )
+                ListItem(
+                    leadingContent = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
+                    headlineContent = { Text("Export private key") },
+                    supportingContent = { Text("Unencrypted PEM — store it somewhere safe") },
+                    modifier = Modifier.clickable(onClick = onExport),
+                )
+                ListItem(
+                    leadingContent = {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    headlineContent = { Text("Delete key", color = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable(onClick = onDelete),
+                )
             }
-        )
+        }
     }
 }

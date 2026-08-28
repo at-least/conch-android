@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -26,16 +27,22 @@ import androidx.compose.ui.unit.dp
  *   per-reply callback, so this is the cadence, not the reply)
  * - CONNECTED without keep-alive: solid
  * - CONNECTING/RECONNECTING: blinking
- * - STOPPED: dim grey
+ * - STOPPED: dimmed
+ *
+ * The color comes from the banner's own content color, so the dot always
+ * contrasts with whichever state container it sits on.
  */
 @Composable
-internal fun StatusDot(state: ConnState, keepAlive: Boolean) {
+internal fun StatusDot(
+    state: ConnState,
+    keepAlive: Boolean,
+    color: Color = LocalContentColor.current,
+) {
     val alpha = when (state) {
         ConnState.CONNECTED -> if (keepAlive) heartbeatAlpha() else 1f
         ConnState.CONNECTING, ConnState.RECONNECTING -> blinkAlpha()
         ConnState.STOPPED -> 0.35f
     }
-    val color = if (state == ConnState.STOPPED) Color(0xFF37474F) else Color.White
     Box(
         Modifier
             .size(8.dp)

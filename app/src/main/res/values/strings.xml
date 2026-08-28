@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The UI is Compose-only; user-facing strings live at their call sites.
-         Keep this file to what the platform reads from the manifest. -->
+         Keep this file to what the platform reads from the manifest, plus the
+         RemoteViews widget, which cannot take strings from Kotlin literals. -->
     <string name="app_name">Conch</string>
+    <string name="widget_key_auth">Key authentication</string>
+    <string name="widget_description">Connect to a saved SSH host in one tap.</string>
+    <string name="widget_empty">No hosts yet</string>
 </resources>

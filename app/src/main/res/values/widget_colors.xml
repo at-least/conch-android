@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget palette, light fallback (pre-Android 12). values-v31 overrides
+  these with the device's own Material You colors, and values-night /
+  values-night-v31 carry the dark variants — the widget used to be three
+  hardcoded near-blacks that stayed dark on a light home screen.
+-->
+<resources>
+    <color name="widget_background">#F1F4F8</color>
+    <color name="widget_row_background">#FFFFFF</color>
+    <color name="widget_text_primary">#1A1C1E</color>
+    <color name="widget_text_secondary">#43474E</color>
+    <color name="widget_accent">#0B61A4</color>
+</resources>

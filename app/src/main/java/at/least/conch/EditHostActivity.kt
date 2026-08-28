@@ -1,10 +1,10 @@
 package at.least.conch
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.horizontalScroll
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,22 +17,36 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,11 +55,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 class EditHostActivity : ComponentActivity() {
 
@@ -54,27 +69,26 @@ class EditHostActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         store = HostStore(this)
         existing = intent.getStringExtra("hostId")?.let { id ->
             store.load().firstOrNull { it.id == id }
         }
         val initial = existing
         setContent {
-            EditHostScreen(
-                isEdit = initial != null,
-                initial = initial,
-                otherHosts = store.load().filter { it.id != initial?.id },
-                onBack = { finish() },
-                onSave = { host, password -> save(host, password) }
-            )
+            ConchTheme {
+                EditHostScreen(
+                    isEdit = initial != null,
+                    initial = initial,
+                    otherHosts = store.load().filter { it.id != initial?.id },
+                    onBack = { finish() },
+                    onSave = { host, password -> save(host, password) }
+                )
+            }
         }
     }
 
     private fun save(host: Host, password: String) {
-        if (host.hostname.isBlank()) return toast("Enter a host address")
-        if (host.username.isBlank()) return toast("Enter a username")
-        if (host.port !in 1..65535) return toast("Invalid port")
-        if (host.authType == Host.AUTH_KEY && host.keyId == null) return toast("Select an auth key")
         if (password.isNotEmpty()) {
             SecretsStore.put("host-pw:${host.id}", password)
         }
@@ -88,10 +102,51 @@ class EditHostActivity : ComponentActivity() {
         store.save(hosts)
         finish()
     }
-
-    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 }
 
+/** A settings-style group heading — the Material pattern for sectioned forms. */
+@Composable
+private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(top = 8.dp),
+    )
+}
+
+/**
+ * A boolean host option. `ListItem` + `Switch` is the native Material row:
+ * the whole row toggles, the label and explanation get the right type
+ * styles, and the touch target is a full list-item high.
+ */
+@Composable
+private fun SwitchRow(
+    title: String,
+    supporting: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    supportingColor: Color = Color.Unspecified,
+) {
+    ListItem(
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        headlineContent = { Text(title) },
+        supportingContent = {
+            Text(
+                supporting,
+                color = if (supportingColor == Color.Unspecified) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    supportingColor
+                },
+            )
+        },
+        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        modifier = Modifier.clickable { onCheckedChange(!checked) },
+    )
+}
+
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditHostScreen(
@@ -112,6 +167,7 @@ private fun EditHostScreen(
     var username by rememberSaveable { mutableStateOf(initial?.username.orEmpty()) }
     var authType by rememberSaveable { mutableStateOf(initial?.authType ?: Host.AUTH_PASSWORD) }
     var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var fontSizeText by rememberSaveable {
         mutableStateOf(if ((initial?.fontSizeSp ?: 0f) > 0f) initial!!.fontSizeSp.toInt().toString() else "")
     }
@@ -130,6 +186,24 @@ private fun EditHostScreen(
     var jumpMenuOpen by rememberSaveable { mutableStateOf(false) }
     val tunnels = remember { mutableStateListOf<Tunnel>().apply { initial?.tunnels?.let { addAll(it) } } }
 
+    // Inline validation (Material: the error belongs on the field, not in a
+    // toast that has vanished by the time the user looks for the problem).
+    var showErrors by rememberSaveable { mutableStateOf(false) }
+    val hostnameError = showErrors && hostname.isBlank()
+    val usernameError = showErrors && username.isBlank()
+    val port = if (portText.isBlank()) 22 else portText.toIntOrNull()
+    val portError = showErrors && (port == null || port !in 1..65535)
+    val keyError = showErrors && authType == Host.AUTH_KEY && selectedKeyId == null
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            message = null
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -140,6 +214,48 @@ private fun EditHostScreen(
                     }
                 }
             )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            // The primary action stays reachable instead of living at the
+            // bottom of a long scroll.
+            BottomAppBar {
+                Button(
+                    onClick = {
+                        showErrors = true
+                        val valid = hostname.isNotBlank() && username.isNotBlank() &&
+                            port != null && port in 1..65535 &&
+                            (authType != Host.AUTH_KEY || selectedKeyId != null)
+                        if (!valid) {
+                            message = "Check the highlighted fields"
+                            return@Button
+                        }
+                        onSave(
+                            Host(
+                                id = initial?.id ?: java.util.UUID.randomUUID().toString(),
+                                alias = alias.trim(),
+                                hostname = hostname.trim(),
+                                port = port,
+                                username = username.trim(),
+                                authType = authType,
+                                keyId = selectedKeyId,
+                                fontSizeSp = fontSizeText.toFloatOrNull() ?: 0f,
+                                keepAlive = keepAlive,
+                                tmuxAutoAttach = tmux,
+                                socksPort = socksPortText.toIntOrNull() ?: 0,
+                                jumpHostId = jumpHostId,
+                                forwardAgent = forwardAgent,
+                                safExpose = safExpose,
+                                tunnels = tunnels.toMutableList(),
+                            ),
+                            password
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) { Text("Save") }
+            }
         }
     ) { padding ->
         Column(
@@ -147,104 +263,163 @@ private fun EditHostScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ListItem supplies its own 16 dp inset, so the switch rows go
+            // full-bleed and everything else is inset to match them.
+            val field = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+            SectionHeader("Connection", Modifier.padding(horizontal = 16.dp))
             OutlinedTextField(
                 value = alias,
                 onValueChange = { alias = it },
-                label = { Text("Name (optional)") },
+                label = { Text("Name") },
+                supportingText = { Text("Optional — shown instead of user@host") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = field
             )
             OutlinedTextField(
                 value = hostname,
                 onValueChange = { hostname = it },
                 label = { Text("Host") },
+                isError = hostnameError,
+                supportingText = if (hostnameError) {
+                    { Text("Enter a host address") }
+                } else {
+                    null
+                },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = field
             )
-            OutlinedTextField(
-                value = portText,
-                onValueChange = { portText = it },
-                label = { Text("Port (default 22)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Username") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = authType == Host.AUTH_PASSWORD,
-                    onClick = { authType = Host.AUTH_PASSWORD },
-                    label = { Text("Password") }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username") },
+                    isError = usernameError,
+                    supportingText = if (usernameError) {
+                        { Text("Required") }
+                    } else {
+                        null
+                    },
+                    singleLine = true,
+                    modifier = Modifier.weight(2f)
                 )
-                FilterChip(
-                    selected = authType == Host.AUTH_KEY,
-                    onClick = { authType = Host.AUTH_KEY },
-                    label = { Text("Key") }
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = { portText = it },
+                    label = { Text("Port") },
+                    placeholder = { Text("22") },
+                    isError = portError,
+                    supportingText = if (portError) {
+                        { Text("1–65535") }
+                    } else {
+                        null
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
                 )
             }
 
+            HorizontalDivider()
+            SectionHeader("Authentication", Modifier.padding(horizontal = 16.dp))
+            // Exclusive choice → segmented buttons, the Material control for
+            // exactly this (two filter chips only look mutually exclusive).
+            SingleChoiceSegmentedButtonRow(field) {
+                SegmentedButton(
+                    selected = authType == Host.AUTH_PASSWORD,
+                    onClick = { authType = Host.AUTH_PASSWORD },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                ) { Text("Password") }
+                SegmentedButton(
+                    selected = authType == Host.AUTH_KEY,
+                    onClick = { authType = Host.AUTH_KEY },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                ) { Text("Key") }
+            }
+
             if (authType == Host.AUTH_PASSWORD) {
+                val keepsCurrent = isEdit && SecretsStore.get("host-pw:${initial?.id}") != null
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = {
-                        Text(
-                            if (isEdit && SecretsStore.get("host-pw:${initial?.id}") != null) "Password (blank = keep current)" else "Password"
-                        )
+                    label = { Text("Password") },
+                    supportingText = if (keepsCurrent) {
+                        { Text("Leave blank to keep the saved password") }
+                    } else {
+                        null
                     },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                            )
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth()
                 )
+            } else if (keys.isEmpty()) {
+                Text(
+                    "No keys yet. Generate or import one in the main menu → Key manager first.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             } else {
-                if (keys.isEmpty()) {
-                    Text(
-                        "No keys yet. Generate or import one from the main menu → Key manager first.",
-                        color = MaterialTheme.colorScheme.error
+                ExposedDropdownMenuBox(
+                    expanded = keysMenuOpen,
+                    onExpandedChange = { keysMenuOpen = it },
+                ) {
+                    OutlinedTextField(
+                        value = keys.firstOrNull {
+                            it.id == selectedKeyId
+                        }?.let { "${it.name} (${it.fingerprint.takeLast(12)})" } ?: "",
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Auth key") },
+                        placeholder = { Text("Select key") },
+                        isError = keyError,
+                        supportingText = if (keyError) {
+                            { Text("Pick the key this host authenticates with") }
+                        } else {
+                            null
+                        },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = keysMenuOpen) },
+                        modifier = field.menuAnchor(MenuAnchorType.PrimaryNotEditable)
                     )
-                } else {
-                    ExposedDropdownMenuBox(
-                        expanded = keysMenuOpen,
-                        onExpandedChange = { keysMenuOpen = it }
-                    ) {
-                        OutlinedTextField(
-                            value = keys.firstOrNull {
-                                it.id == selectedKeyId
-                            }?.let { "${it.name} (${it.fingerprint.takeLast(12)})" } ?: "Select key",
-                            onValueChange = { },
-                            readOnly = true,
-                            label = { Text("Auth key") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = keysMenuOpen) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        )
-                        ExposedDropdownMenu(expanded = keysMenuOpen, onDismissRequest = { keysMenuOpen = false }) {
-                            keys.forEach { k ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(k.name)
-                                            Text(k.fingerprint, fontSize = 11.sp)
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedKeyId = k.id
-                                        keysMenuOpen = false
+                    ExposedDropdownMenu(expanded = keysMenuOpen, onDismissRequest = { keysMenuOpen = false }) {
+                        keys.forEach { k ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(k.name)
+                                        Text(
+                                            k.fingerprint,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
-                                )
-                            }
+                                },
+                                onClick = {
+                                    selectedKeyId = k.id
+                                    keysMenuOpen = false
+                                }
+                            )
                         }
                     }
                 }
@@ -258,14 +433,12 @@ private fun EditHostScreen(
                     OutlinedTextField(
                         value = otherHosts.firstOrNull {
                             it.id == jumpHostId
-                        }?.let { "${it.alias.ifBlank { it.hostname }} (jump)" } ?: "Direct (no jump host)",
+                        }?.let { it.alias.ifBlank { it.hostname } } ?: "Direct (no jump host)",
                         onValueChange = { },
                         readOnly = true,
                         label = { Text("Connect via") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = jumpMenuOpen) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        modifier = field.menuAnchor(MenuAnchorType.PrimaryNotEditable)
                     )
                     ExposedDropdownMenu(expanded = jumpMenuOpen, onDismissRequest = { jumpMenuOpen = false }) {
                         DropdownMenuItem(
@@ -288,150 +461,139 @@ private fun EditHostScreen(
                 }
             }
 
+            HorizontalDivider()
+            SectionHeader("Session", Modifier.padding(horizontal = 16.dp))
+            SwitchRow(
+                title = "Keep-alive",
+                supporting = "Send a heartbeat every 15 seconds so idle firewalls don't drop the connection.",
+                checked = keepAlive,
+                onCheckedChange = { keepAlive = it },
+            )
+            SwitchRow(
+                title = "Auto-attach tmux",
+                supporting = "Runs tmux new -A -s conch on connect, so a dropped session resumes where it left off.",
+                checked = tmux,
+                onCheckedChange = { tmux = it },
+            )
+            SwitchRow(
+                title = "Agent forwarding",
+                supporting = if (forwardAgent) {
+                    "This server can ask your device to sign with EVERY stored key — enable only on servers you trust."
+                } else {
+                    "Offer your stored keys to this server's own ssh/git hops."
+                },
+                supportingColor = if (forwardAgent) MaterialTheme.colorScheme.error else Color.Unspecified,
+                checked = forwardAgent,
+                onCheckedChange = { forwardAgent = it },
+            )
+            SwitchRow(
+                title = "Files in system picker",
+                supporting = "Shows this host's files in Android's file pickers. Other apps see them only after " +
+                    "you grant access to a folder.",
+                checked = safExpose,
+                onCheckedChange = { safExpose = it },
+            )
             OutlinedTextField(
                 value = fontSizeText,
                 onValueChange = { fontSizeText = it },
-                label = { Text("Terminal font size sp (blank = 15)") },
+                label = { Text("Terminal font size") },
+                placeholder = { Text("15") },
+                suffix = { Text("sp") },
+                supportingText = { Text("Blank uses the default of 15 sp") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = field
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = keepAlive,
-                    onClick = { keepAlive = !keepAlive },
-                    label = { Text("Keep-alive (15s)") }
-                )
-                FilterChip(
-                    selected = tmux,
-                    onClick = { tmux = !tmux },
-                    label = { Text("Auto-attach tmux") }
-                )
-                FilterChip(
-                    selected = forwardAgent,
-                    onClick = { forwardAgent = !forwardAgent },
-                    label = { Text("Agent forwarding") }
-                )
-            }
-            if (forwardAgent) {
-                Text(
-                    "Agent forwarding lets this server ask your device to sign " +
-                        "with EVERY stored key — enable only on servers you trust.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = safExpose,
-                    onClick = { safExpose = !safExpose },
-                    label = { Text("Files in system picker") }
-                )
-            }
-            if (safExpose) {
-                Text(
-                    "Shows this host's files in Android's file pickers. Other apps " +
-                        "see them only after you grant access to a folder.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
+            HorizontalDivider()
+            SectionHeader("Port forwarding", Modifier.padding(horizontal = 16.dp))
             OutlinedTextField(
                 value = socksPortText,
                 onValueChange = { socksPortText = it },
-                label = { Text("SOCKS5 proxy port (blank = off)") },
+                label = { Text("SOCKS5 proxy port") },
+                supportingText = { Text("Blank = off. Point socks5-aware apps at 127.0.0.1:<port>.") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = field
+            )
+            tunnels.forEachIndexed { idx, t ->
+                TunnelCard(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    tunnel = t,
+                    onChange = { tunnels[idx] = it },
+                    onRemove = { tunnels.removeAt(idx) },
+                )
+            }
+            TextButton(
+                onClick = { tunnels.add(Tunnel(0, "", 22)) },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Text("Add tunnel", modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+    }
+}
+
+/**
+ * One port forward. Stacked, not a horizontally scrolling row: the old
+ * layout put four fields on one line behind a side-scroll, which hid
+ * inputs on a 375 dp phone.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TunnelCard(
+    tunnel: Tunnel,
+    onChange: (Tunnel) -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedCard(modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
+                    SegmentedButton(
+                        selected = !tunnel.remote,
+                        onClick = { onChange(tunnel.copy(remote = false)) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    ) { Text("Local (-L)") }
+                    SegmentedButton(
+                        selected = tunnel.remote,
+                        onClick = { onChange(tunnel.copy(remote = true)) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    ) { Text("Remote (-R)") }
+                }
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Remove tunnel")
+                }
+            }
+            OutlinedTextField(
+                value = if (tunnel.localPort == 0) "" else tunnel.localPort.toString(),
+                onValueChange = { v -> onChange(tunnel.copy(localPort = v.toIntOrNull() ?: 0)) },
+                label = { Text(if (tunnel.remote) "Listen on server port" else "Listen on phone port") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
-
-            Text("Port forwarding", fontSize = 15.sp)
-            tunnels.forEachIndexed { idx, t ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                ) {
-                    FilterChip(
-                        selected = t.remote,
-                        onClick = { tunnels[idx] = t.copy(remote = !t.remote) },
-                        label = { Text(if (t.remote) "-R" else "-L") }
-                    )
-                    OutlinedTextField(
-                        value = if (t.localPort == 0) "" else t.localPort.toString(),
-                        onValueChange = { v -> tunnels[idx] = t.copy(localPort = v.toIntOrNull() ?: 0) },
-                        label = { Text(if (t.remote) "Server port" else "Phone port") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.padding(vertical = 8.dp).weight(1f, fill = false)
-                    )
-                    Text(if (t.remote) "⇤" else "→")
-                    OutlinedTextField(
-                        value = t.host,
-                        onValueChange = { v -> tunnels[idx] = t.copy(host = v) },
-                        label = { Text(if (t.remote) "Phone host" else "Target host") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1.4f, fill = false)
-                    )
-                    OutlinedTextField(
-                        value = if (t.port == 0) "" else t.port.toString(),
-                        onValueChange = { v -> tunnels[idx] = t.copy(port = v.toIntOrNull() ?: 0) },
-                        label = { Text(if (t.remote) "Phone port" else "Target port") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    IconButton(onClick = { tunnels.removeAt(idx) }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Remove")
-                    }
-                }
-            }
-            Button(onClick = { tunnels.add(Tunnel(0, "", 22)) }) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text(" Add tunnel")
-            }
-
-            Button(
-                onClick = {
-                    val port = if (portText.isBlank()) 22 else portText.toIntOrNull()
-                    val fs = fontSizeText.toFloatOrNull() ?: 0f
-                    if (port == null || port !in 1..65535) {
-                        android.widget.Toast.makeText(
-                            ctx,
-                            "Invalid port",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                        return@Button
-                    }
-                    onSave(
-                        Host(
-                            id = initial?.id ?: java.util.UUID.randomUUID().toString(),
-                            alias = alias.trim(),
-                            hostname = hostname.trim(),
-                            port = port,
-                            username = username.trim(),
-                            authType = authType,
-                            keyId = selectedKeyId,
-                            fontSizeSp = fs,
-                            keepAlive = keepAlive,
-                            tmuxAutoAttach = tmux,
-                            socksPort = socksPortText.toIntOrNull() ?: 0,
-                            jumpHostId = jumpHostId,
-                            forwardAgent = forwardAgent,
-                            safExpose = safExpose,
-                            tunnels = tunnels.toMutableList(),
-                        ),
-                        password
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            ) {
-                Text("Save", fontSize = 16.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = tunnel.host,
+                    onValueChange = { v -> onChange(tunnel.copy(host = v)) },
+                    label = { Text(if (tunnel.remote) "Forward to phone host" else "Forward to host") },
+                    singleLine = true,
+                    modifier = Modifier.weight(2f)
+                )
+                OutlinedTextField(
+                    value = if (tunnel.port == 0) "" else tunnel.port.toString(),
+                    onValueChange = { v -> onChange(tunnel.copy(port = v.toIntOrNull() ?: 0)) },
+                    label = { Text("Port") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
