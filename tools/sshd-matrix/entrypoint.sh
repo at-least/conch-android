@@ -188,22 +188,26 @@ HostKey /etc/ssh/ssh_host_rsa_key
 
 # Strict: one auth attempt, idle shells reaped by the server, idle
 # transports closed. ChannelTimeouts / UnusedConnectionTimeout need
-# OpenSSH 9.2; on older bases the instance runs without them.
+# OpenSSH 9.2; on older bases the instance runs without them. Support is
+# probed by validating the FULL config with `sshd -t` (host keys already
+# exist from ssh-keygen -A above) — `sshd -T -f /dev/null` is unreliable
+# because it fails for reasons unrelated to the option under test.
 {
     echo 'Port 2229'
     echo 'PasswordAuthentication yes'
     echo 'KbdInteractiveAuthentication no'
     echo 'MaxAuthTries 1'
-    if sshd -T -f /dev/null -o ChannelTimeouts=session:shell=12s >/dev/null 2>&1; then
-        echo 'ChannelTimeouts session:shell=12s session:command=12s'
-        echo 'UnusedConnectionTimeout 5s'
-    else
-        echo "# ChannelTimeouts unsupported by $(sshd -V 2>&1 | head -1)" >&2
-    fi
+    echo 'ChannelTimeout session:shell=12s session:command=12s'
+    echo 'UnusedConnectionTimeout 5s'
     echo "$hostkeys_all"
     echo "$common_cfg"
     echo 'PidFile /run/sshd_strict.pid'
 } > /etc/ssh/sshd_config_strict
+if ! /usr/sbin/sshd -t -f /etc/ssh/sshd_config_strict >/dev/null 2>&1; then
+    echo "strict: ChannelTimeout/UnusedConnectionTimeout unsupported by $(sshd -V 2>&1 | head -1) — dropped"
+    grep -vE 'ChannelTimeout|UnusedConnectionTimeout' /etc/ssh/sshd_config_strict > /etc/ssh/sshd_config_strict.tmp
+    mv /etc/ssh/sshd_config_strict.tmp /etc/ssh/sshd_config_strict
+fi
 
 {
     echo 'Port 2230'

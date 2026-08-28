@@ -172,15 +172,43 @@ object SshConnectionFactory {
             Host.AUTH_KEY -> {
                 val keyId = host.keyId
                     ?: error("${HOST_CONFIG_PREFIX}key auth is selected but no key is chosen")
-                ssh.authPublickey(host.username, keyProvider(ssh, keyId))
+                // keyProvider (missing-key / host-config errors) stays outside
+                // the mapper so its actionable message survives verbatim.
+                val provider = keyProvider(ssh, keyId)
+                authMappingTransportDrop { ssh.authPublickey(host.username, provider) }
             }
             else -> {
                 val pw = password(host)
                 if (pw.isNullOrEmpty()) {
                     error("${HOST_CONFIG_PREFIX}no stored password — save a password")
                 }
-                ssh.authPassword(host.username, pw)
+                authMappingTransportDrop { ssh.authPassword(host.username, pw) }
             }
+        }
+    }
+
+    /**
+     * Runs an auth method, remapping a transport drop DURING authentication to
+     * an auth failure. A hardened server (e.g. `MaxAuthTries 1`) closes the
+     * socket the instant it rejects a credential, so sshj surfaces a bare
+     * "Socket closed" [net.schmizz.sshj.transport.TransportException] with no
+     * auth context — the user would read "Socket closed" instead of "check the
+     * password", and the reconnect loop would retry a bad credential forever.
+     * Mapping it to [net.schmizz.sshj.userauth.UserAuthException] makes
+     * describeError say "Authentication failed" and [SshSession.isTerminalFailure]
+     * stop the loop. A UserAuthException (the server that stays up and just
+     * refuses) already carries auth context and passes straight through; a
+     * genuine network blip inside the sub-second auth window is a rare, benign
+     * false positive that a manual retry resolves. Mirrors conch-ios C100.
+     */
+    private inline fun authMappingTransportDrop(auth: () -> Unit) {
+        try {
+            auth()
+        } catch (e: net.schmizz.sshj.transport.TransportException) {
+            throw net.schmizz.sshj.userauth.UserAuthException(
+                "server closed the connection during authentication (wrong credentials or too many attempts)",
+                e,
+            )
         }
     }
 
