@@ -191,6 +191,13 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    // Compose UI end-to-end tests (add-host form, terminal activity)
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Espresso 3.6+ — the compose-bom's transitive Espresso calls the removed
+    // InputManager.getInstance() and crashes onIdle on recent Android (API 34+).
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 tasks.withType<Test>().configureEach {

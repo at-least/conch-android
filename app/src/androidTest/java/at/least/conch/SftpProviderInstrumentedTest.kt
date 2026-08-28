@@ -57,7 +57,7 @@ class SftpProviderInstrumentedTest {
     }
 
     @Test
-    fun `picker flow over content resolver round-trips a file on real openssh`() {
+    fun `picker_flow_over_content_resolver_round-trips_a_file_on_real_openssh`() {
         val rootsUri = DocumentsContract.buildRootsUri(SftpDocumentsProvider.AUTHORITY)
         val rootDoc = resolver.query(rootsUri, null, null, null, null).use { c ->
             checkNotNull(c)

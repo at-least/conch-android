@@ -33,7 +33,10 @@ class SessionServiceInstrumentedTest {
 
     private val nm get() = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    private fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
+    // inline: a non-inline lambda passed from a spaced-backtick @Test method
+    // is synthesized into a class whose SimpleName carries the method's spaces,
+    // which DEX < 040 (minSdk 26) rejects. Inlining emits no such class.
+    private inline fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
@@ -50,7 +53,7 @@ class SessionServiceInstrumentedTest {
     }
 
     @Test
-    fun `starting two sessions posts two ongoing notifications and stopping removes them`() {
+    fun `starting_two_sessions_posts_two_ongoing_notifications_and_stopping_removes_them`() {
         SessionService.start(context, "dev-a", "alpha")
         SessionService.start(context, "dev-b", "beta")
         awaitTrue("session notifications not posted: ${nm.activeNotifications.map { it.id }}") {

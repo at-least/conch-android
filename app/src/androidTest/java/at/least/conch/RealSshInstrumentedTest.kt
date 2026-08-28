@@ -32,6 +32,10 @@ class RealSshInstrumentedTest {
     @Before
     fun setUp() {
         SecretsStore.init(context)
+        // known_hosts persists in the app's filesDir across runs on a device;
+        // clearing it makes the "TOFU grew known_hosts" assertion hermetic
+        // instead of only passing on the very first connect to this endpoint.
+        KnownHostsStore(context.filesDir).file.delete()
         host = MatrixDevice.passwordHost()
         HostStore(context).save(HostStore(context).load().filterNot { it.alias == host.alias } + host)
         SecretsStore.put("host-pw:${host.id}", "conch-pw-1")
@@ -44,7 +48,7 @@ class RealSshInstrumentedTest {
     }
 
     @Test
-    fun `keystore password and tofu known_hosts connect to real openssh`() {
+    fun `keystore_password_and_tofu_known_hosts_connect_to_real_openssh`() {
         MatrixDevice.requireMatrix()
         val store = KnownHostsStore(context.filesDir)
         val before = store.file.takeIf { it.exists() }?.readLines().orEmpty().size
@@ -66,41 +70,49 @@ class RealSshInstrumentedTest {
     }
 
     @Test
-    fun `sshsession on the main looper delivers connected data and disconnect callbacks`() {
+    fun `sshsession_on_the_main_looper_delivers_connected_data_and_disconnect_callbacks`() {
         MatrixDevice.requireMatrix()
         KnownHostsStore(context.filesDir).let { store ->
             SshConnectionFactory.connect(context, host, MatrixDevice.acceptPrompt).disconnect()
             assertTrue(store.file.exists())
         }
-        val connected = CountDownLatch(1)
-        val gotEcho = CountDownLatch(1)
-        val disconnected = CountDownLatch(1)
-        val reason = AtomicReference<String>()
-        val text = StringBuilder()
+        // NB: a NAMED callbacks class, not an anonymous `object :` — Kotlin
+        // embeds the enclosing (backtick, spaced) method name into an
+        // anonymous class's SimpleName, which DEX < 040 (minSdk 26) rejects
+        // with "Space characters in SimpleName not allowed".
+        val cb = RecordingCallbacks()
         val session = SshSession(
             context = context,
             host = host,
             initialCols = 80,
             initialRows = 24,
-            callbacks = object : SshSession.Callbacks {
-                override fun onConnected() = connected.countDown()
-                override fun onData(data: ByteArray) {
-                    synchronized(text) { text.append(String(data)) }
-                    if (synchronized(text) { text.contains("ECHO_OK") }) gotEcho.countDown()
-                }
-                override fun onDisconnected(r: String) {
-                    reason.set(r)
-                    disconnected.countDown()
-                }
-            },
+            callbacks = cb,
         )
         session.connect()
-        assertTrue("never connected", connected.await(30, TimeUnit.SECONDS))
+        assertTrue("never connected", cb.connected.await(30, TimeUnit.SECONDS))
         session.write("echo ECHO_'OK'\r".toByteArray())
-        assertTrue("shell never echoed", gotEcho.await(20, TimeUnit.SECONDS))
+        assertTrue("shell never echoed", cb.gotEcho.await(20, TimeUnit.SECONDS))
         assertNotNull(session.exec("echo EXEC_OK"))
         session.disconnect("user closed")
-        assertTrue("no disconnect callback", disconnected.await(20, TimeUnit.SECONDS))
-        assertEquals("user closed", reason.get())
+        assertTrue("no disconnect callback", cb.disconnected.await(20, TimeUnit.SECONDS))
+        assertEquals("user closed", cb.reason.get())
+    }
+
+    private class RecordingCallbacks : SshSession.Callbacks {
+        val connected = CountDownLatch(1)
+        val gotEcho = CountDownLatch(1)
+        val disconnected = CountDownLatch(1)
+        val reason = AtomicReference<String>()
+        private val text = StringBuilder()
+
+        override fun onConnected() = connected.countDown()
+        override fun onData(data: ByteArray) {
+            synchronized(text) { text.append(String(data)) }
+            if (synchronized(text) { text.contains("ECHO_OK") }) gotEcho.countDown()
+        }
+        override fun onDisconnected(r: String) {
+            reason.set(r)
+            disconnected.countDown()
+        }
     }
 }
