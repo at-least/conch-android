@@ -1,11 +1,13 @@
 package at.least.conch
 
+import android.content.Context
 import net.schmizz.sshj.SSHClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 import java.util.Base64
 
 /**
@@ -224,5 +226,84 @@ class CorruptedKeyTest {
         val mutated = raw.copyOf()
         mutated[13] = 'X'.code.toByte() // break "openssh-key-v1\0"
         loadExpectFailure(pemFor(mutated), "bad magic")
+    }
+
+    // ----------------------------------- stored-key loss at connect (plan 1.4)
+
+    /** KeyManager over a temp filesDir, optionally seeded with keys.json. */
+    private fun keyManager(keysJson: String? = null): Pair<KeyManager, File> {
+        val dir = Files.createTempDirectory("conch-keys").toFile()
+        dir.deleteOnExit()
+        val context = io.mockk.mockk<Context>()
+        io.mockk.every { context.filesDir } returns dir
+        io.mockk.every { context.cacheDir } returns dir
+        keysJson?.let {
+            val metaDir = File(dir, "keys").apply { mkdirs() }
+            File(metaDir, "keys.json").writeText(it)
+        }
+        return KeyManager(context) to dir
+    }
+
+    /** keys.json as written after importing "prod-ed25519". */
+    private val storedKeyJson = """
+        [{"id":"11111111-2222-3333-4444-555555555555","name":"prod-ed25519",
+          "algorithm":"ssh-ed25519","createdAt":1750000000000,
+          "publicLine":"ssh-ed25519 AAAA prod-ed25519","fingerprint":"SHA256:x"}]
+    """.trimIndent()
+
+    @Test
+    fun `missing keystore secret fails with actionable message and stops reconnect`() {
+        // the Keystore-reset scenario: keys.json still lists the key, but
+        // the encrypted blob no longer decrypts — get() reads as absent
+        val (km, _) = keyManager(storedKeyJson)
+        io.mockk.mockkObject(SecretsStore) {
+            io.mockk.every { SecretsStore.get(any()) } returns null
+            try {
+                km.loadKeyProvider(SSHClient(), "11111111-2222-3333-4444-555555555555")
+                fail("missing secret must throw")
+            } catch (e: IllegalStateException) {
+                val msg = SshConnectionFactory.describeError(e)
+                assertTrue(msg.startsWith(KeyManager.MISSING_KEY_PREFIX))
+                assertTrue("key name must appear: $msg", msg.contains("prod-ed25519"))
+                assertTrue("must say what to do: $msg", msg.contains("re-import"))
+                assertTrue(
+                    "must be terminal — no retry can restore key material",
+                    SshSession.isTerminalFailure(msg),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `unreadable stored pem fails with actionable message`() {
+        val (km, _) = keyManager(storedKeyJson)
+        io.mockk.mockkObject(SecretsStore) {
+            io.mockk.every { SecretsStore.get(any()) } returns "definitely not a pem"
+            try {
+                km.loadKeyProvider(SSHClient(), "11111111-2222-3333-4444-555555555555")
+                fail("garbage material must throw")
+            } catch (e: IllegalStateException) {
+                val msg = SshConnectionFactory.describeError(e)
+                assertTrue(msg.startsWith(KeyManager.MISSING_KEY_PREFIX))
+                assertTrue("key name must appear: $msg", msg.contains("prod-ed25519"))
+                assertTrue(SshSession.isTerminalFailure(msg))
+            }
+        }
+    }
+
+    @Test
+    fun `key gone from metadata too still identifies which key failed`() {
+        val (km, _) = keyManager() // no keys.json at all
+        io.mockk.mockkObject(SecretsStore) {
+            io.mockk.every { SecretsStore.get(any()) } returns null
+            try {
+                km.loadKeyProvider(SSHClient(), "9999888877776666")
+                fail("missing secret must throw")
+            } catch (e: IllegalStateException) {
+                val msg = SshConnectionFactory.describeError(e)
+                assertTrue("id prefix must appear: $msg", msg.contains("99998888"))
+                assertTrue(SshSession.isTerminalFailure(msg))
+            }
+        }
     }
 }

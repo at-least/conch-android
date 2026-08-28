@@ -19,13 +19,19 @@ import java.util.concurrent.TimeUnit
  */
 class ZmodemInteropTest {
 
-    private fun szPath(): String =
-        ProcessBuilder("sz", "--version").start().let { p ->
-            val ok = p.waitFor(5, TimeUnit.SECONDS) && p.inputStream.readBytes().isNotEmpty()
-            p.destroy()
-            if (!ok) org.junit.Assume.assumeTrue("sz not available", false)
-            "sz"
-        }
+    /** "sz" when a working lrzsz is on PATH; otherwise assume-skip the test. */
+    private fun szPath(): String {
+        val ok = runCatching {
+            ProcessBuilder("sz", "--version").start().let { p ->
+                val finished = p.waitFor(5, TimeUnit.SECONDS)
+                val hasOutput = p.inputStream.readBytes().isNotEmpty()
+                p.destroy()
+                finished && hasOutput
+            }
+        }.getOrDefault(false) // ProcessBuilder.start() throws when sz is absent
+        if (!ok) org.junit.Assume.assumeTrue("sz not available", false)
+        return "sz"
+    }
 
     private fun runSz(vararg files: File): Transfer {
         val engine = ZmodemReceiver()

@@ -87,7 +87,8 @@ class KeysActivity : ComponentActivity() {
     /** Writes the stored PEM of [key] to the SAF-picked location. */
     private fun writeExport(uri: android.net.Uri, key: SshKeyInfo) {
         try {
-            val pem = KeyManager(this).exportPem(key.id) ?: error("Key data not found")
+            val pem = KeyManager(this).exportPem(key.id)
+                ?: error("${KeyManager.MISSING_KEY_PREFIX} '${key.name}' — re-import it first")
             contentResolver.openOutputStream(uri)?.use { it.write(pem.toByteArray()) }
                 ?: error("Cannot open file")
             Toast.makeText(this, "Exported unencrypted — store it safely", Toast.LENGTH_LONG).show()

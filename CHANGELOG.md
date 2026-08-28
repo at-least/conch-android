@@ -21,6 +21,12 @@
   poll; failed probes leave honest gaps instead of a fake flat line)
 - New: key export (`ssh -i`-compatible OpenSSH/PKCS#8), public-key
   one-tap copy, passphrase-protected key import with retry
+- Fixed: connecting with a key whose stored material is gone (a Keystore
+  reset invalidates device-encrypted blobs) or unreadable now fails with
+  a named, actionable error ("re-import the key, then edit the host to
+  use it") instead of the cryptic "Key data not found", and the reconnect
+  loop stops — no retry can bring key material back (previously it
+  retried forever)
 - Fixed: sessions left running past Android 15's 6-hour dataSync
   foreground-service cap no longer crash the app — the limit now ends
   background protection gracefully with a notification (tmux sessions

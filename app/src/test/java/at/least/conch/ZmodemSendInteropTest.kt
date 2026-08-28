@@ -20,7 +20,9 @@ import java.util.concurrent.TimeUnit
 class ZmodemSendInteropTest {
 
     private fun rzAvailable(): Boolean =
-        File("/opt/homebrew/bin/rz").exists() || File("/usr/local/bin/rz").exists()
+        File("/opt/homebrew/bin/rz").exists() || // macOS homebrew
+            File("/usr/local/bin/rz").exists() || // macOS intel / manual
+            File("/usr/bin/rz").exists() // Linux (apt lrzsz — CI installs it)
 
     @Test
     fun `rz receives a small text file we send byte-identically`() {

@@ -75,13 +75,16 @@ class SshSession(
 
         /**
          * Reasons that must NOT trigger a reconnect: the user ended the
-         * session, or authentication was rejected (retrying a bad password
+         * session, authentication was rejected (retrying a bad password
          * forever spams the server and can trip lockouts — let the user fix
-         * the credentials instead). Matches the prefixes SshConnectionFactory
-         * .describeError emits for auth failures.
+         * the credentials instead), or the stored key material is gone
+         * (no retry can restore it — re-import is the only fix). Matches the
+         * prefixes SshConnectionFactory.describeError emits for those cases.
          */
         fun isTerminalFailure(reason: String): Boolean =
-            reason == REASON_SESSION_ENDED || reason.startsWith("Authentication failed")
+            reason == REASON_SESSION_ENDED ||
+                reason.startsWith("Authentication failed") ||
+                reason.startsWith(KeyManager.MISSING_KEY_PREFIX)
     }
 
     interface Callbacks {

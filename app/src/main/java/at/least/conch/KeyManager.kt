@@ -228,24 +228,57 @@ class KeyManager(private val context: Context) {
 
     fun byId(id: String): SshKeyInfo? = list().firstOrNull { it.id == id }
 
-    /** Loads the private key (decrypting at rest) into an sshj KeyProvider. */
+    /**
+     * Loads the private key (decrypting at rest) into an sshj KeyProvider.
+     *
+     * Failure paths are user-actionable by design (ConnectBot #2066 lesson):
+     * a missing secret (Keystore reset invalidated the encrypted blobs —
+     * decryption failure reads as absent) and unparseable stored material
+     * both throw [IllegalStateException] whose message starts with
+     * [MISSING_KEY_PREFIX] so describeError surfaces it verbatim and the
+     * reconnect loop treats it as terminal — no retry can bring the key
+     * material back. Backup restores re-import key material, so a healthy
+     * backup on a new device is NOT a missing-secret scenario.
+     */
     fun loadKeyProvider(client: SSHClient, id: String): KeyProvider {
+        val keyName = byId(id)?.name ?: id.take(8)
         val pem = SecretsStore.get("key-priv:$id")
-            ?: error("Key data not found")
+            ?: error(
+                "$MISSING_KEY_PREFIX '$keyName' has no private key on this device " +
+                    "(a Keystore reset invalidates stored key material) — " +
+                    "re-import the key, then edit the host to use it",
+            )
         val tmp = File.createTempFile("conch", ".key", context.cacheDir)
         try {
             tmp.writeText(pem)
-            val provider = client.loadKeys(tmp.absolutePath)
-            // FileKeyProvider parses lazily — force it now while the file exists
-            provider.public
-            provider.private
-            return provider
+            try {
+                val provider = client.loadKeys(tmp.absolutePath)
+                // FileKeyProvider parses lazily — force it now while the file
+                // exists, inside the wrap so garbage throws the clear message
+                provider.public
+                provider.private
+                return provider
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    "$MISSING_KEY_PREFIX '$keyName' could not be read (${e.message}) — " +
+                        "re-import the key, then edit the host to use it",
+                    e,
+                )
+            }
         } finally {
             tmp.delete()
         }
     }
 
     companion object {
+        /**
+         * Prefix of the connect-time errors [loadKeyProvider] throws when the
+         * key material is missing or unreadable. describeError passes the
+         * message through and SshSession.isTerminalFailure matches the prefix
+         * to stop the reconnect loop — retries cannot restore key material.
+         */
+        const val MISSING_KEY_PREFIX = "Stored key unavailable:"
+
         /**
          * Cheap sniff for passphrase-protected key material, before handing
          * it to sshj: legacy PEM (`Proc-Type: 4,ENCRYPTED`), PKCS#8 encrypted
