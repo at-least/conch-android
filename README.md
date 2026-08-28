@@ -217,9 +217,18 @@ CI runs the whole Docker matrix on every push/PR (`docker-matrix` job).
 `app/src/androidTest` holds instrumented tests for what neither the JVM
 nor Robolectric can reach: the Android-Keystore-backed `SecretsStore`
 feeding a real connect, the SAF provider driven through `ContentResolver`
-(real `ParcelFileDescriptor` pipes), and the foreground `SessionService`
-posting real notifications. They talk to the same sshd matrix via the
-emulator gateway (`10.0.2.2`; `-Pconch.matrixHost=` for a device):
+(real `ParcelFileDescriptor` pipes), the foreground `SessionService`
+posting real notifications, and two UI end-to-end flows — the add-host
+Compose form persisting to `HostStore`/`SecretsStore`, and opening
+`TerminalActivity` for a saved host so the real `SshSession` connects and a
+live session appears in `LiveSessions`. They talk to the same sshd matrix
+via the emulator gateway (`10.0.2.2`; `-Pconch.matrixHost=` for a device).
+
+Two constraints keep this suite green: `@Test` method names use underscores
+(a spaced backtick name is embedded into a synthesized SimpleName, which
+D8 rejects at `minSdk 26` / DEX < 040), and the Compose-form test is gated
+to API ≤ 34 (Espresso's `onIdle` calls the `InputManager.getInstance()`
+hidden method removed on API 35+). CI's instrumented job runs API 34.
 
 ```bash
 tools/sshd-matrix/run.sh
