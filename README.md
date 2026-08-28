@@ -175,7 +175,7 @@ runs many sshd configs on 127.0.0.1 with fixed users and throwaway test keys:
 | 2236 | keyboard-interactive only (PAM) | the 2FA-prompt server shape through the plain password path |
 | 2237 | gated by knockd | port knocking: opens for 8 s after UDP 2260,2261,2262 |
 | 2238 | hardened | login `Banner`, CA-trusted certificate user, forced-command / `restrict` / `no-pty` authorized_keys keys, `MaxSessions 2`, `PermitOpen`, chrooted `internal-sftp` account |
-| 2239 | strict | `MaxAuthTries 1`, `ChannelTimeouts` idle-shell reaping |
+| 2239 | strict | `MaxAuthTries 1`, `ChannelTimeout` idle-shell reaping |
 | 2240 / 2241 | ecdsa-only / rsa-only host key | host-key type pinned by TOFU and matched on promptless reconnect |
 | 2242 | legacy appliance | SHA-1 kex, CBC ciphers, `ssh-rsa` (skipped where OpenSSH 10 refuses them) |
 | 2270 / 2271 | silent accept / banner-then-stall | bounded handshake-timeout behaviour |

@@ -39,7 +39,7 @@ object DockerMatrix {
      */
     const val HARDENED_PORT = 2238
 
-    /** host port → container 2229: MaxAuthTries 1, idle shells reaped after 12 s (ChannelTimeouts). */
+    /** host port → container 2229: MaxAuthTries 1, idle shells reaped after 12 s (ChannelTimeout). */
     const val STRICT_PORT = 2239
 
     /** host port → container 2230: only an ECDSA host key is offered. */
