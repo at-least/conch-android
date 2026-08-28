@@ -26,10 +26,13 @@ class DockerOpenSshConfigOracleTest {
     val tmp = TemporaryFolder()
 
     private val config = """
-        # global defaults the importer ignores
+        # global defaults the importer ignores. NB: a global ProxyCommand
+        # would change ssh -G's per-host proxyjump (a set ProxyCommand
+        # suppresses a later ProxyJump), which the importer deliberately does
+        # not model — that intentional divergence has its own test below, so
+        # it is kept out of this oracle's Host * block.
         Host *
             ServerAliveInterval 30
-            ProxyCommand none
 
         Host web
             HostName web.example.com
@@ -125,5 +128,53 @@ class DockerOpenSshConfigOracleTest {
                 assertEquals("22", db.one("port"))
                 DockerMatrix.exec(ssh, "rm -f /tmp/conch-oracle.cfg")
             }
+    }
+
+    /**
+     * A documented, intentional divergence from `ssh -G`: OpenSSH is
+     * first-match-wins, so a global `Host * ProxyCommand none` is obtained
+     * before a per-host `ProxyJump` and suppresses it — `ssh -G host` then
+     * prints no proxyjump. conch's importer does NOT model cross-block
+     * ProxyCommand/ProxyJump precedence (it ignores `Host *` wildcard blocks
+     * entirely, per this class's contract); it keeps the explicit per-host
+     * `ProxyJump` the user wrote. This pins that intended behaviour with the
+     * container's real `ssh -G` as the oracle for the divergence itself.
+     */
+    @Test(timeout = 60_000)
+    fun `a global ProxyCommand suppresses proxyjump in ssh -G but the importer keeps the explicit hop`() {
+        DockerMatrix.requireMatrix()
+        val cfg = """
+            Host *
+                ProxyCommand none
+
+            Host app
+                HostName 10.0.0.5
+                ProxyJump bastion
+        """.trimIndent()
+        // the importer keeps the explicit per-host hop
+        val app = OpenSshConfigParser.parse(cfg).first { it.alias == "app" }
+        assertEquals("bastion", app.proxyJump)
+
+        // real ssh -G, however, drops it because the global ProxyCommand wins
+        DockerMatrix.connect(
+            KnownHostsStore(tmp.newFolder()),
+            DockerMatrix.PW_AND_KEY_PORT,
+            "pwuser",
+            password = "conch-pw-1",
+        ).use { ssh ->
+            ssh.newSFTPClient().use { sftp ->
+                val local = tmp.newFile("suppress.cfg").apply { writeText(cfg + "\n") }
+                sftp.getFileTransfer().upload(local.absolutePath, "/tmp/conch-suppress.cfg")
+            }
+            val ref = DockerMatrix.exec(ssh, "ssh -G -F /tmp/conch-suppress.cfg app 2>&1")
+            val proxyjump = ref.lineSequence()
+                .firstOrNull { it.startsWith("proxyjump ") }
+                ?.substringAfter(' ')?.trim()
+            assertTrue(
+                "ssh -G unexpectedly kept proxyjump ('$proxyjump') — the documented divergence no longer holds",
+                proxyjump == null || proxyjump == "none",
+            )
+            DockerMatrix.exec(ssh, "rm -f /tmp/conch-suppress.cfg")
+        }
     }
 }
