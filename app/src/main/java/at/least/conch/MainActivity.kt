@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material.icons.filled.Terminal
@@ -47,6 +49,7 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -59,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -170,8 +174,12 @@ class MainActivity : FragmentActivity() {
         var mainMenuOpen by remember { mutableStateOf(false) }
         var showSessions by remember { mutableStateOf(false) }
         var message by remember { mutableStateOf<String?>(null) }
+        var search by rememberSaveable { mutableStateOf("") }
         val snackbarHostState = remember { SnackbarHostState() }
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        val filtered = HostGrouping.filter(hosts, search)
+        val sections = HostGrouping.sections(filtered)
+        val grouped = sections.any { it.title != null }
 
         // Snackbar, not a dialog: an import summary is feedback on a finished
         // action, and it must not block the list it just changed.
@@ -285,21 +293,44 @@ class MainActivity : FragmentActivity() {
                 if (hosts.isEmpty()) {
                     EmptyHosts(Modifier.weight(1f))
                 } else {
-                    LazyColumn(
-                        Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(hosts, key = { it.id }) { host ->
-                            HostCard(
-                                host = host,
-                                onClick = { openTerminal(host) },
-                                onNewSession = { openTerminal(host) },
-                                onEdit = { editHost(host) },
-                                onDelete = { confirmDelete = host }
-                            )
+                    // Search only once there is something to search — the
+                    // empty state's guidance would otherwise sit under a
+                    // pointless field.
+                    HostSearchField(
+                        query = search,
+                        onQueryChange = { search = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                    if (filtered.isEmpty()) {
+                        NoSearchResults(search, Modifier.weight(1f))
+                    } else {
+                        LazyColumn(
+                            Modifier
+                                .fillMaxSize()
+                                .weight(1f),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            sections.forEach { section ->
+                                // Ungrouped hosts get a heading only once a
+                                // named group exists to tell them apart from.
+                                if (grouped) {
+                                    item(key = "section:${section.title ?: ""}") {
+                                        GroupHeader(section.title ?: "Ungrouped")
+                                    }
+                                }
+                                items(section.hosts, key = { it.id }) { host ->
+                                    HostCard(
+                                        host = host,
+                                        onClick = { openTerminal(host) },
+                                        onNewSession = { openTerminal(host) },
+                                        onEdit = { editHost(host) },
+                                        onDelete = { confirmDelete = host }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -383,6 +414,64 @@ class MainActivity : FragmentActivity() {
         val intent = Intent(this, EditHostActivity::class.java)
         intent.putExtra("hostId", host.id)
         startActivity(intent)
+    }
+}
+
+/** Host search (iOS `.searchable` parity): filters alias, host, user and group. */
+@Composable
+private fun HostSearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = { Text("Search hosts") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Clear, contentDescription = "Clear search")
+                }
+            }
+        } else {
+            null
+        },
+        singleLine = true,
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = modifier,
+    )
+}
+
+/** Section heading of one host group (Material list subheader). */
+@Composable
+private fun GroupHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp, bottom = 0.dp),
+    )
+}
+
+@Composable
+private fun NoSearchResults(query: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            Icons.Filled.Search,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "No hosts match \"$query\"",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 16.dp),
+        )
     }
 }
 

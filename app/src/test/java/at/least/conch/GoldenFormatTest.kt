@@ -136,6 +136,59 @@ class GoldenFormatTest {
     }
 
     @Test
+    @Suppress("MaxLineLength")
+    fun `golden host json - group knockPorts bindHost omitted at default, written when set`() {
+        // Shared-format fields (docs/backup-format.md): absent == default,
+        // so the goldens above stay byte-identical for hosts without them.
+        val host = Host(id = "g-1", hostname = "h", username = "u")
+        val off = canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host)))
+        assertFalse(off.contains("group"))
+        assertFalse(off.contains("knockPorts"))
+        host.group = " Prod "
+        host.knockPorts = listOf(7000, 8000)
+        host.tunnels.add(Tunnel(9000, "127.0.0.1", 9001, remote = true, bindHost = "0.0.0.0"))
+        // a LOCAL tunnel never carries bindHost, whatever the object holds
+        host.tunnels.add(Tunnel(8080, "db", 5432, remote = false, bindHost = "ignored"))
+        assertEquals(
+            """{"alias":"","authType":"PASSWORD","fontSizeSp":0,"group":"Prod","hostname":"h","id":"g-1","keepAlive":true,"keyId":null,"knockPorts":[7000,8000],"port":22,"socksPort":0,"tmuxAutoAttach":true,"tunnels":[{"bindHost":"0.0.0.0","host":"127.0.0.1","localPort":9000,"port":9001,"remote":true},{"host":"db","localPort":8080,"port":5432}],"username":"u"}""",
+            canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host))),
+        )
+    }
+
+    @Test
+    @Suppress("MaxLineLength")
+    fun `golden host decode - ios-written tunnel with redundant direction decodes by remote flag`() {
+        val back = ConchJson.decodeFromString(
+            HostWire.serializer(),
+            """{"id":"x","hostname":"h","username":"u","group":"G","knockPorts":[1,70000,2],"tunnels":[{"direction":"REMOTE","remote":true,"localPort":9000,"host":"127.0.0.1","port":9001,"bindHost":"0.0.0.0"},{"direction":"LOCAL","localPort":1,"host":"a","port":2}]}""",
+        ).toHost()
+        assertEquals("G", back.group)
+        assertEquals(listOf(1, 2), back.knockPorts) // out-of-range knocks dropped on decode
+        assertEquals(
+            listOf(Tunnel(9000, "127.0.0.1", 9001, remote = true, bindHost = "0.0.0.0"), Tunnel(1, "a", 2)),
+            back.tunnels,
+        )
+    }
+
+    @Test
+    @Suppress("MaxLineLength")
+    fun `golden key decode - fractional createdAt is truncated, integer is written`() {
+        val k = ConchJson.decodeFromString(
+            KeyWire.serializer(),
+            """{"id":"k","name":"n","algorithm":"ssh-ed25519","createdAt":1735689600123.456,"publicLine":"p","fingerprint":"f"}""",
+        )
+        assertEquals(1735689600123L, k.createdAt)
+        assertTrue(ConchJson.encodeToString(KeyWire.serializer(), k).contains("\"createdAt\":1735689600123"))
+        assertEquals(
+            7L,
+            ConchJson.decodeFromString(
+                KeyWire.serializer(),
+                """{"id":"k","name":"n","algorithm":"a","createdAt":7,"publicLine":"p","fingerprint":"f"}""",
+            ).createdAt,
+        )
+    }
+
+    @Test
     fun `golden host decode - decode fallback defaults differ from in-memory defaults`() {
         // THE tmux trap: absent field decodes to FALSE (pre-feature backups),
         // while Host() in memory defaults to TRUE. Pinned by HostStoreJsonTest

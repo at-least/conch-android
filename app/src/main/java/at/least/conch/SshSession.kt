@@ -267,7 +267,7 @@ class SshSession(
                     // -R: server binds the port; arriving connections are
                     // bridged to host:port resolved on THIS device
                     val bound = ssh.remotePortForwarder.bind(
-                        RemotePortForwarder.Forward("127.0.0.1", t.localPort),
+                        RemotePortForwarder.Forward(t.bindHost.ifBlank { "127.0.0.1" }, t.localPort),
                         SocketForwardingConnectListener(InetSocketAddress(t.host, t.port)),
                     )
                     remoteForwards.add(bound)

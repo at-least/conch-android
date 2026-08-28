@@ -7,6 +7,8 @@ A free, open-source SSH client for Android — no subscription, no tracking, no 
 This is the original Conch codebase. An iOS sibling lives at
 [at-least/conch-ios](https://github.com/at-least/conch-ios) — same feature
 set and byte-compatible backups (`TILDBAK1`), built with Citadel/SwiftTerm.
+Feature parity is tracked in [docs/parity.md](docs/parity.md); the shared
+backup format is specified in [docs/backup-format.md](docs/backup-format.md).
 
 Built for people who manage servers from their phone: ops, devs, and anyone left stranded by abandoned SSH apps.
 
@@ -31,7 +33,8 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Foreground service** keeps sessions alive when backgrounded (survives Android's task killers)
 - **tmux auto-attach on by default** for new hosts (`tmux new -A -s conch`) — a dropped connection never loses your work; existing hosts keep their saved setting
 - **Why no mosh?** tmux auto-attach + auto-reconnect already deliver mosh's core promise — work survives drops and network switches, and the client comes back on its own — over plain SSH with no extra server daemon. A native mosh client is not on the roadmap (no JVM implementation exists to build on)
-- **Port forwarding**: local tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
+- **Port forwarding**: local (-L) and remote (-R, with server bind address) tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
+- **UDP port knocking** — an ordered knock sequence sent before every dial, for firewalls that hide the SSH port
 - **ssh-agent forwarding** (`-A`) per host — offer your stored keys to the server's own `ssh`/`git` hops; off by default with an explicit trust warning
 - Keep-alive, per-host terminal font size, OSC window-title tracking
 
@@ -71,40 +74,24 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Tunnel capsule** — a green `⇅ N` chip on the session toolbar shows
   active local port forwards; tap to stop all tunnels (session stays connected)
 - **Home-screen widget** — first four hosts, one tap deep-links into a terminal
+- **Host groups & search** — group hosts into sections, filter by name/host/user/group
 - **OpenSSH config import** — pull `Host` blocks from your `~/.ssh/config`
 - **Encrypted backup & restore** — single-file export of everything (hosts, passwords, keys, snippets, known hosts), passphrase-protected (AES-256-GCM + PBKDF2), restores on any device
 
 ## Backup format
 
 Backups are portable and self-contained — you are never locked into Conch.
-The format is fully specified here so that other tools (or a future Conch
-version) can read what Conch writes today.
+The format (`TILDBAK1`: PBKDF2-HMAC-SHA256 600k + AES-256-GCM over a JSON
+payload) is **shared with Conch iOS** and fully specified in
+[docs/backup-format.md](docs/backup-format.md); two cross-platform fixtures
+are decoded by both apps' test suites so a backup written on either phone
+restores on the other with nothing lost.
 
 **Account-free sync**: Settings can keep `conch-backup.til` continuously
 materialized in a folder of your choice (Syncthing, Dropbox, a cable —
 whatever moves files, no account needed). It refreshes while the app is
 open, at most hourly and only when data actually changed; the other device
 restores with Import, which merges and never overwrites.
-
-**File layout** (binary, plain byte concatenation):
-
-| Offset | Field | Size |
-|---|---|---|
-| 0 | Magic `TILDBAK1` | 8 bytes |
-| 8 | Random salt | 16 bytes |
-| 24 | Random IV (nonce) | 12 bytes |
-| 36 | Ciphertext + GCM tag | rest of file |
-
-**Crypto:**
-- Payload encryption: **AES-256-GCM** (128-bit tag). A fresh random salt and a fresh random IV are generated for **every export** — no two backups share key material or nonce.
-- Key derivation: **PBKDF2-HMAC-SHA256, 600,000 iterations** over your passphrase with the 16-byte salt, producing a 256-bit key.
-- The key is derived from the passphrase only — not from the Android Keystore — so a backup restores on any device. Wrong passphrase = GCM tag verification failure (nothing decrypts, no oracle).
-
-**Contents** (AES-GCM plaintext is a JSON object, `version: 1`):
-- `hosts` + `hostSecrets` — all host entries including their passwords
-- `keys` + `keySecrets` — SSH keys (Ed25519, PEM private keys included)
-- `snippets` — command snippets
-- `knownHosts` — your TOFU `known_hosts` file
 
 **Import semantics:** merging, never destructive — importing a backup adds
 hosts, keys and snippets that are new; existing entries are never overwritten
@@ -161,7 +148,8 @@ app/src/main/java/at/least/conch/
   SessionsSheet.kt         # live-sessions switcher (tap switch, swipe disconnect)
   LiveSessions.kt          # process-level live-session registry
   HostCardStatus.kt        # pure host-card live badge derivation
-  SftpActivity.kt          # SFTP browser (standalone entry point)
+  HostGrouping.kt          # pure host-list grouping/search (iOS parity)
+  PortKnocker.kt           # UDP port-knock sequence before dial
   MonitorActivity.kt       # metrics dashboard (standalone entry point; pure parser unit-tested)
   DockerActivity.kt        # container management (standalone entry point; docker CLI over SSH)
   SessionService.kt        # foreground service keeping sessions alive

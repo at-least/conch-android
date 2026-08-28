@@ -15,6 +15,12 @@ data class Tunnel(
     val host: String,
     val port: Int,
     val remote: Boolean = false,
+    /**
+     * Remote (-R) only: address the SERVER binds the listen port to
+     * ("" = loopback, "0.0.0.0" = all interfaces; needs GatewayPorts on the
+     * server). Shared wire field with iOS.
+     */
+    val bindHost: String = "",
 )
 
 @Serializable
@@ -24,11 +30,24 @@ data class TunnelWire(
     val port: Int = 0,
     /** Remote (-R) forward; omitted when false for byte-compatible JSON. */
     @EncodeDefault(Mode.NEVER) val remote: Boolean = false,
+    /**
+     * Remote (-R) server-side bind address; omitted when empty
+     * (docs/backup-format.md). iOS additionally writes a redundant
+     * `direction` ("LOCAL"/"REMOTE") next to `remote`; `remote` is the
+     * authoritative flag and `direction` is skipped as an unknown key.
+     */
+    @EncodeDefault(Mode.NEVER) val bindHost: String = "",
 ) {
-    fun toTunnel() = Tunnel(localPort, host, port, remote)
+    fun toTunnel() = Tunnel(localPort, host, port, remote, bindHost)
 
     companion object {
-        fun from(t: Tunnel) = TunnelWire(t.localPort, t.host, t.port, t.remote)
+        fun from(t: Tunnel) = TunnelWire(
+            localPort = t.localPort,
+            host = t.host,
+            port = t.port,
+            remote = t.remote,
+            bindHost = if (t.remote) t.bindHost else "",
+        )
     }
 }
 
@@ -60,6 +79,10 @@ data class HostWire(
     @EncodeDefault(Mode.NEVER) val forwardAgent: Boolean = false,
     /** Expose this host to system file pickers via the SAF DocumentsProvider. */
     @EncodeDefault(Mode.NEVER) val safExpose: Boolean = false,
+    /** Host-list group ("" = ungrouped). Shared with iOS; omitted when empty. */
+    @EncodeDefault(Mode.NEVER) val group: String = "",
+    /** UDP port-knock sequence sent before dialing (empty = off). Shared with iOS; omitted when empty. */
+    @EncodeDefault(Mode.NEVER) val knockPorts: List<Int> = emptyList(),
 ) {
     fun toHost(): Host {
         val host = Host(
@@ -77,6 +100,8 @@ data class HostWire(
             jumpHostId = jumpHostId,
             forwardAgent = forwardAgent,
             safExpose = safExpose,
+            group = group.trim(),
+            knockPorts = knockPorts.filter { it in 1..65535 },
         )
         host.tunnels.addAll(tunnels.map { it.toTunnel() })
         return host
@@ -99,6 +124,8 @@ data class HostWire(
             jumpHostId = h.jumpHostId,
             forwardAgent = h.forwardAgent,
             safExpose = h.safExpose,
+            group = h.group.trim(),
+            knockPorts = h.knockPorts,
         )
     }
 }
@@ -124,6 +151,10 @@ data class Host(
     var forwardAgent: Boolean = false,
     /** Expose this host's files to system file pickers (SAF DocumentsProvider). */
     var safExpose: Boolean = false,
+    /** Optional host-list group; blank = the ungrouped section (see [HostGrouping]). */
+    var group: String = "",
+    /** UDP port-knock sequence fired before dialing, in order (see [PortKnocker]); empty = off. */
+    var knockPorts: List<Int> = emptyList(),
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
     companion object {

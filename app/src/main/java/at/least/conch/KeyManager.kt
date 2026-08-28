@@ -1,8 +1,16 @@
 package at.least.conch
 
 import android.content.Context
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.jsonPrimitive
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.common.KeyType
@@ -33,6 +41,13 @@ data class KeyWire(
     val id: String,
     val name: String,
     val algorithm: String,
+    /**
+     * Epoch milliseconds. Written as an integer; read leniently — iOS
+     * builds before the shared-format spec wrote a fractional double
+     * (`1.7e12 + 0.123`), and a strict Long decode rejected the whole
+     * backup. Truncation is the spec'd reading (docs/backup-format.md).
+     */
+    @Serializable(with = LenientEpochMillisSerializer::class)
     val createdAt: Long,
     val publicLine: String,
     val fingerprint: String,
@@ -41,6 +56,24 @@ data class KeyWire(
 
     companion object {
         fun from(k: SshKeyInfo) = KeyWire(k.id, k.name, k.algorithm, k.createdAt, k.publicLine, k.fingerprint)
+    }
+}
+
+/**
+ * Long that also accepts a JSON double (or numeric string) on input,
+ * truncating toward zero; always writes a plain integer.
+ */
+object LenientEpochMillisSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("EpochMillis", PrimitiveKind.LONG)
+
+    override fun serialize(encoder: Encoder, value: Long) = encoder.encodeLong(value)
+
+    override fun deserialize(decoder: Decoder): Long {
+        val json = decoder as? JsonDecoder ?: return decoder.decodeLong()
+        val text = json.decodeJsonElement().jsonPrimitive.content
+        return text.toLongOrNull()
+            ?: text.toDoubleOrNull()?.takeIf { it.isFinite() }?.toLong()
+            ?: throw IllegalArgumentException("createdAt is not a number: $text")
     }
 }
 

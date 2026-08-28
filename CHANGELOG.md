@@ -2,6 +2,27 @@
 
 ## 0.9.1 (unreleased)
 
+- **Shared backup format with Conch iOS** — `TILDBAK1` is now specified in
+  one document ([docs/backup-format.md](docs/backup-format.md)) that both
+  apps implement, with the same two fixture backups decoded by both test
+  suites. Fixed: a backup written by iOS that contained any SSH key failed
+  to restore on Android ("corrupt or wrong passphrase") because iOS wrote
+  the key's `createdAt` as a fractional number; it is read leniently now
+  and both apps write an integer. Fixed: an iOS host's group, port-knock
+  sequence and remote-tunnel bind address were silently dropped by an
+  Android restore (and by the next Android export); they are kept and
+  round-trip. iOS in turn now keeps Android's agent-forwarding and
+  file-picker flags
+- New: **host groups** (section headers in the host list, picker of
+  existing groups in the editor) and **host search** (name / host / user /
+  group) — iOS parity, shared `group` field
+- New: **UDP port knocking** per host — an ordered knock sequence fired
+  before every dial (not for hosts reached through a jump host, which the
+  jump dials). iOS parity, shared `knockPorts` field
+- New: remote (-R) tunnels can set the **server bind address** (blank =
+  loopback, `0.0.0.0` with `GatewayPorts`); previously always loopback
+- Docs: [docs/parity.md](docs/parity.md) — the Android ↔ iOS feature
+  matrix and the open gaps on each side
 - Fixed: **Disconnect actually disconnected nothing** — the SSH teardown
   ran on the main thread, where Android forbids socket writes; the
   exception was swallowed, the UI said "Disconnected", and the socket,

@@ -133,6 +133,10 @@ object SshConnectionFactory {
                 // already-authenticated jump transport (one per retry).
                 ssh.connectVia(jump.newDirectConnection(host.hostname, host.port))
             } else {
+                // Port knocking (iOS parity): the firewall opens the SSH
+                // port on seeing the UDP sequence from THIS device, so a
+                // jumped target (dialed by the jump host) is not knocked.
+                if (host.knockPorts.isNotEmpty()) PortKnocker.knock(host.hostname, host.knockPorts)
                 ssh.connect(host.hostname, host.port)
             }
             authenticate(ssh, host, keyProvider, password)

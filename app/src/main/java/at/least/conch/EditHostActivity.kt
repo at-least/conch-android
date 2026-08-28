@@ -176,6 +176,10 @@ private fun EditHostScreen(
     var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
     var forwardAgent by rememberSaveable { mutableStateOf(initial?.forwardAgent ?: false) }
     var safExpose by rememberSaveable { mutableStateOf(initial?.safExpose ?: false) }
+    var group by rememberSaveable { mutableStateOf(initial?.group.orEmpty()) }
+    var groupMenuOpen by rememberSaveable { mutableStateOf(false) }
+    val existingGroups = remember(otherHosts) { HostGrouping.groupNames(otherHosts) }
+    var knockText by rememberSaveable { mutableStateOf(PortKnocker.format(initial?.knockPorts.orEmpty())) }
     var socksPortText by rememberSaveable {
         mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "")
     }
@@ -261,6 +265,8 @@ private fun EditHostScreen(
                                 jumpHostId = jumpHostId,
                                 forwardAgent = forwardAgent,
                                 safExpose = safExpose,
+                                group = group.trim(),
+                                knockPorts = PortKnocker.parse(knockText),
                                 tunnels = tunnels.toMutableList(),
                             ),
                             password
@@ -341,6 +347,41 @@ private fun EditHostScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
                 )
+            }
+            // Free text plus a picker of existing groups (iOS parity): a
+            // typo would otherwise silently create a second, near-duplicate
+            // section in the host list.
+            ExposedDropdownMenuBox(
+                expanded = groupMenuOpen && existingGroups.isNotEmpty(),
+                onExpandedChange = { groupMenuOpen = it },
+            ) {
+                OutlinedTextField(
+                    value = group,
+                    onValueChange = { group = it },
+                    label = { Text("Group") },
+                    supportingText = { Text("Optional — hosts with the same group are listed together") },
+                    singleLine = true,
+                    trailingIcon = if (existingGroups.isNotEmpty()) {
+                        { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupMenuOpen) }
+                    } else {
+                        null
+                    },
+                    modifier = field.menuAnchor(MenuAnchorType.PrimaryEditable)
+                )
+                ExposedDropdownMenu(
+                    expanded = groupMenuOpen && existingGroups.isNotEmpty(),
+                    onDismissRequest = { groupMenuOpen = false },
+                ) {
+                    existingGroups.forEach { name ->
+                        DropdownMenuItem(
+                            text = { Text(name) },
+                            onClick = {
+                                group = name
+                                groupMenuOpen = false
+                            }
+                        )
+                    }
+                }
             }
 
             HorizontalDivider()
@@ -521,6 +562,24 @@ private fun EditHostScreen(
             )
 
             HorizontalDivider()
+            SectionHeader("Port knocking (UDP)", Modifier.padding(horizontal = 16.dp))
+            OutlinedTextField(
+                value = knockText,
+                onValueChange = { knockText = it },
+                label = { Text("Knock sequence") },
+                placeholder = { Text("7000, 8000, 9000") },
+                supportingText = {
+                    Text(
+                        "Sent before connecting, in order. Your firewall/knock daemon opens the SSH port " +
+                            "after seeing the sequence. Blank = off."
+                    )
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = field
+            )
+
+            HorizontalDivider()
             SectionHeader("Port forwarding", Modifier.padding(horizontal = 16.dp))
             OutlinedTextField(
                 value = socksPortText,
@@ -597,6 +656,18 @@ private fun TunnelCard(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
+            if (tunnel.remote) {
+                OutlinedTextField(
+                    value = tunnel.bindHost,
+                    onValueChange = { v -> onChange(tunnel.copy(bindHost = v.trim())) },
+                    label = { Text("Server bind address") },
+                    placeholder = { Text("127.0.0.1") },
+                    supportingText = { Text("Blank = loopback only. 0.0.0.0 needs GatewayPorts on the server.") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = tunnel.host,
@@ -623,12 +694,24 @@ private fun Tunnel.isValid(): Boolean = localPort in 1..65535 && host.isNotBlank
 
 /** Tunnels as saveable strings — one per tunnel, fields NUL-separated. */
 private val TunnelListSaver = androidx.compose.runtime.saveable.listSaver<SnapshotStateList<Tunnel>, String>(
-    save = { list -> list.map { "${it.localPort}\u0000${it.host}\u0000${it.port}\u0000${it.remote}" } },
+    save = { list ->
+        list.map { "${it.localPort}\u0000${it.host}\u0000${it.port}\u0000${it.remote}\u0000${it.bindHost}" }
+    },
     restore = { saved ->
         mutableStateListOf<Tunnel>().apply {
             for (s in saved) {
                 val f = s.split('\u0000')
-                if (f.size == 4) add(Tunnel(f[0].toIntOrNull() ?: 0, f[1], f[2].toIntOrNull() ?: 0, f[3].toBoolean()))
+                if (f.size >= 4) {
+                    add(
+                        Tunnel(
+                            f[0].toIntOrNull() ?: 0,
+                            f[1],
+                            f[2].toIntOrNull() ?: 0,
+                            f[3].toBoolean(),
+                            f.getOrElse(4) { "" },
+                        )
+                    )
+                }
             }
         }
     },
