@@ -81,6 +81,22 @@ android {
     }
 }
 
+/**
+ * One gate for every variant's lint, with the flavor list DERIVED rather than
+ * transcribed into CI: adding a flavor must not silently shrink the gate.
+ * Wired into `check` so a local build catches what CI would.
+ */
+val lintAll = tasks.register("lintAll") {
+    group = "verification"
+    description = "Runs Android lint on every debug variant."
+}
+androidComponents.onVariants { variant ->
+    if (variant.buildType == "debug") {
+        lintAll.configure { dependsOn("lint${variant.name.replaceFirstChar(Char::uppercase)}") }
+    }
+}
+tasks.named("check") { dependsOn(lintAll) }
+
 detekt {
     buildUponDefaultConfig = true
     config.setFrom(files("$rootDir/config/detekt/detekt.yml"))

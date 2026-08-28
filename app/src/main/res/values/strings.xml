@@ -1,18 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The UI is Compose-only; user-facing strings live at their call sites.
+         Keep this file to what the platform reads from the manifest. -->
     <string name="app_name">Conch</string>
-    <string name="add_host">Add host</string>
-    <string name="edit_host">Edit host</string>
-    <string name="save">Save</string>
-    <string name="no_hosts">No hosts yet</string>
-    <string name="hint_alias">Name (optional)</string>
-    <string name="hint_hostname">Host</string>
-    <string name="hint_port">Port (default 22)</string>
-    <string name="hint_username">Username</string>
-    <string name="hint_password">Password</string>
-    <string name="action_about">About</string>
-    <string name="action_keyboard">Keyboard</string>
-    <string name="action_font_inc">Font size up</string>
-    <string name="action_font_dec">Font size down</string>
-    <string name="action_disconnect">Disconnect</string>
 </resources>

@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -162,7 +163,7 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MonitorCardSpacing)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Auto refresh (5s)", modifier = Modifier.weight(1f))
@@ -215,8 +216,20 @@ fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     }
 }
 
+/** Gap between the Monitor cards, shared by the tab's own column and [MetricCards]. */
+private val MonitorCardSpacing = 10.dp
+
+/**
+ * The four live cards, in their own Column rather than as four siblings
+ * emitted straight into the caller's: a Composable that emits more than one
+ * thing at its top level cannot be reused inside another layout without
+ * surprises (compose-lints ComposeMultipleContentEmitters).
+ */
 @Composable
-private fun MetricCards(s: MonitorParser.Snapshot, history: MetricHistory) {
+private fun MetricCards(
+    s: MonitorParser.Snapshot,
+    history: MetricHistory,
+) = Column(verticalArrangement = Arrangement.spacedBy(MonitorCardSpacing)) {
     MetricCard(
         "CPU",
         "%.1f%%".format(s.cpuPercent),
@@ -505,7 +518,7 @@ fun SftpTab(
     var status by remember { mutableStateOf<String?>(null) }
 
     // sortMode: 0 name, 1 size, 2 time; sign stored separately
-    var sortMode by remember { mutableStateOf(0) }
+    var sortMode by remember { mutableIntStateOf(0) }
     var sortDescending by remember { mutableStateOf(false) }
     var sortLabel by remember { mutableStateOf("Name ↑") }
 

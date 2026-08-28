@@ -73,7 +73,7 @@
              are per-host opt-in (Host.safExpose). -->
         <provider
             android:name=".SftpDocumentsProvider"
-            android:authorities="at.least.conch.sftp"
+            android:authorities="${applicationId}.sftp"
             android:exported="true"
             android:grantUriPermissions="true"
             android:permission="android.permission.MANAGE_DOCUMENTS">

@@ -51,6 +51,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -90,9 +91,9 @@ class TerminalActivity : FragmentActivity() {
     private val snippetsSheetVisible = mutableStateOf(false)
     private val paletteSheetVisible = mutableStateOf(false)
     private val tunnelConfirmVisible = mutableStateOf(false)
-    private val liveTunnelCount = mutableStateOf(0)
-    private val connectionGen = mutableStateOf(0)
-    private val scrollOffset = mutableStateOf(0)
+    private val liveTunnelCount = mutableIntStateOf(0)
+    private val connectionGen = mutableIntStateOf(0)
+    private val scrollOffset = mutableIntStateOf(0)
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -189,8 +190,8 @@ class TerminalActivity : FragmentActivity() {
         connState.value = ConnState.CONNECTED
         statusText.value = "Connected ${host?.username}@${host?.hostname}"
         statusColor.value = Color(0xFF4CAF50)
-        liveTunnelCount.value = reconnector?.tunnelCount ?: 0
-        connectionGen.value += 1
+        liveTunnelCount.intValue = reconnector?.tunnelCount ?: 0
+        connectionGen.intValue += 1
         val h = host
         if (h != null) {
             LiveSessions.register(
@@ -352,9 +353,9 @@ class TerminalActivity : FragmentActivity() {
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                if (scrollOffset.value > 0) {
+                                if (scrollOffset.intValue > 0) {
                                     Text(
-                                        "  ↕${scrollOffset.value}",
+                                        "  ↕${scrollOffset.intValue}",
                                         fontSize = 12.sp,
                                         color = Color(0xFF80DEEA)
                                     )
@@ -363,10 +364,10 @@ class TerminalActivity : FragmentActivity() {
                         }
                     },
                     actions = {
-                        if (TunnelCapsule.visible(liveTunnelCount.value)) {
+                        if (TunnelCapsule.visible(liveTunnelCount.intValue)) {
                             AssistChip(
                                 onClick = { tunnelConfirmVisible.value = true },
-                                label = { Text(TunnelCapsule.chipText(liveTunnelCount.value), fontSize = 12.sp) },
+                                label = { Text(TunnelCapsule.chipText(liveTunnelCount.intValue), fontSize = 12.sp) },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Filled.SyncAlt,
@@ -535,7 +536,7 @@ class TerminalActivity : FragmentActivity() {
                                     }
                                     onPtyResize = { c, r -> reconnector?.resizePty(c, r) }
                                     onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
-                                    onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.value = off }
+                                    onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.intValue = off }
                                     if (host?.fontSizeSp ?: 0f > 0f) {
                                         fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
                                     }
@@ -559,7 +560,7 @@ class TerminalActivity : FragmentActivity() {
                         SessionTab.TERMINAL -> {}
                         SessionTab.MONITOR -> if (rc != null) MonitorTab(rc) else LoadingTab("Monitor")
                         SessionTab.DOCKER -> if (rc != null) DockerTab(rc) else LoadingTab("Docker")
-                        SessionTab.FILES -> if (rc != null) SftpTab(rc, connectionGen.value) else LoadingTab("Files")
+                        SessionTab.FILES -> if (rc != null) SftpTab(rc, connectionGen.intValue) else LoadingTab("Files")
                     }
                 }
                 SessionTabBar(tab = tab, onTab = { tab = it })
@@ -623,12 +624,12 @@ class TerminalActivity : FragmentActivity() {
         if (tunnelConfirmVisible.value) {
             AlertDialog(
                 onDismissRequest = { tunnelConfirmVisible.value = false },
-                title = { Text(TunnelCapsule.stopDialogTitle(liveTunnelCount.value)) },
+                title = { Text(TunnelCapsule.stopDialogTitle(liveTunnelCount.intValue)) },
                 text = { Text("This tears down all local port forwards. The SSH session stays connected.") },
                 confirmButton = {
                     TextButton(onClick = {
                         reconnector?.stopTunnels()
-                        liveTunnelCount.value = 0
+                        liveTunnelCount.intValue = 0
                         tunnelConfirmVisible.value = false
                     }) { Text("Stop all tunnels", color = MaterialTheme.colorScheme.error) }
                 },
@@ -852,7 +853,18 @@ class TerminalActivity : FragmentActivity() {
         var uri: android.net.Uri? = null
         var out: java.io.OutputStream? = null
         return object : TerminalView.ZmodemSink {
+            // The download stream deliberately outlives this call: ZMODEM
+            // delivers a file as offer → many data chunks → complete, and
+            // every exit path (complete, failure, a restarted offer) closes
+            // it. Lint cannot follow a stream held in a field across
+            // callbacks.
+            @android.annotation.SuppressLint("Recycle")
             override fun onZmodemOffer(name: String, size: Long) {
+                // A restarted transfer can offer a new file without ever
+                // closing the last one; dropping the reference would leak the
+                // stream and strand its MediaStore row as permanently pending
+                // (invisible in Downloads).
+                closePartial()
                 try {
                     if (android.os.Build.VERSION.SDK_INT >= 29) {
                         val values = android.content.ContentValues().apply {
@@ -921,6 +933,11 @@ class TerminalActivity : FragmentActivity() {
             }
 
             override fun onZmodemFailed(reason: String) {
+                closePartial()
+            }
+
+            /** Close and discard a half-written download; safe to call twice. */
+            fun closePartial() {
                 try {
                     out?.close()
                     if (uri != null) {

@@ -248,25 +248,24 @@ class KeyManager(private val context: Context) {
                     "(a Keystore reset invalidates stored key material) — " +
                     "re-import the key, then edit the host to use it",
             )
-        val tmp = File.createTempFile("conch", ".key", context.cacheDir)
-        try {
-            tmp.writeText(pem)
-            try {
-                val provider = client.loadKeys(tmp.absolutePath)
-                // FileKeyProvider parses lazily — force it now while the file
-                // exists, inside the wrap so garbage throws the clear message
-                provider.public
-                provider.private
-                return provider
-            } catch (e: Exception) {
-                throw IllegalStateException(
-                    "$MISSING_KEY_PREFIX '$keyName' could not be read (${e.message}) — " +
-                        "re-import the key, then edit the host to use it",
-                    e,
-                )
-            }
-        } finally {
-            tmp.delete()
+        // Parsed straight from the decrypted string: sshj's 3-arg loadKeys
+        // reads the PEM from memory, so the private key never lands on the
+        // filesystem in the clear. (Stored material is always PKCS#8 or
+        // OpenSSH v1 — see persist() — both of which sshj detects from
+        // content exactly as it would from a file.)
+        return try {
+            val provider = client.loadKeys(pem, null, null)
+            // FileKeyProvider parses lazily — force it now, inside the wrap,
+            // so garbage throws the clear message instead of failing at auth
+            provider.public
+            provider.private
+            provider
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                "$MISSING_KEY_PREFIX '$keyName' could not be read (${e.message}) — " +
+                    "re-import the key, then edit the host to use it",
+                e,
+            )
         }
     }
 

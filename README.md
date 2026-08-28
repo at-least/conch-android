@@ -25,7 +25,7 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - 64 KB read buffer + per-frame repaint throttling — `cat` a huge file without stutter
 
 ### Connectivity
-- **Auto-reconnect with exponential backoff** (1s → 2s → … → 30s, unlimited retries) — mobile networks drop; conch comes back on its own. Typing `exit` / CTRL+D on a healthy session ends it cleanly instead of looping back in
+- **Auto-reconnect with exponential backoff** (1s → 2s → … → 30s, unlimited retries) — mobile networks drop; conch comes back on its own. A Wi-Fi↔cellular handover doesn't wait out the backoff: the moment the device has a network again, the pending retry fires immediately. Typing `exit` / CTRL+D on a healthy session ends it cleanly instead of looping back in
 - **Connection health banner** — four states (connecting / connected / reconnecting(n) / stopped) with a status dot that pulses on the 15-second keep-alive heartbeat; tap the amber banner to give up retrying
 - **Multiple concurrent sessions** — "Connect (new session)" opens another terminal; each gets its own persistent notification
 - **Foreground service** keeps sessions alive when backgrounded (survives Android's task killers)
@@ -41,7 +41,9 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
   passphrase-protected included; wrong passphrase just re-prompts) and
   export any key back out (`ssh -i` compatible). No lock-in.
 - **TOFU host-key verification** with fingerprints (`known_hosts`)
-- All secrets encrypted with the **Android Keystore** (AES-256-GCM)
+- All secrets encrypted with the **Android Keystore** (AES-256-GCM) — and
+  decrypted private keys are parsed in memory, never spilled to a file, so
+  no plaintext key material ever reaches the filesystem
 - Optional **biometric app lock** (fingerprint / face / device credential)
 - **Opt-in crash reporting** — self-hosted Sentry, off by default, host addresses scrubbed, no PII (builds without a DSN have it fully disabled)
 

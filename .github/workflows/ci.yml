@@ -32,6 +32,21 @@ jobs:
       - name: Detekt
         run: ./gradlew detekt
 
+      # Android lint catches what neither tests nor detekt can see: manifest /
+      # resource / API-level defects. Errors fail the build; warnings are
+      # reported in the uploaded HTML. lintAll derives the variant list from
+      # the build script, so a new flavor is gated without editing CI.
+      - name: Android lint
+        run: ./gradlew lintAll
+
+      - name: Upload lint report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: app/build/reports/lint-results-*.html
+          if-no-files-found: ignore
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

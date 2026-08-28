@@ -230,13 +230,17 @@ class CorruptedKeyTest {
 
     // ----------------------------------- stored-key loss at connect (plan 1.4)
 
-    /** KeyManager over a temp filesDir, optionally seeded with keys.json. */
-    private fun keyManager(keysJson: String? = null): Pair<KeyManager, File> {
+    /**
+     * KeyManager over a temp filesDir, optionally seeded with keys.json.
+     * [cacheDir] defaults to that same dir; pass an unusable one to prove a
+     * path does not need scratch space.
+     */
+    private fun keyManager(keysJson: String? = null, cacheDir: File? = null): Pair<KeyManager, File> {
         val dir = Files.createTempDirectory("conch-keys").toFile()
         dir.deleteOnExit()
         val context = io.mockk.mockk<Context>()
         io.mockk.every { context.filesDir } returns dir
-        io.mockk.every { context.cacheDir } returns dir
+        io.mockk.every { context.cacheDir } returns (cacheDir ?: dir)
         keysJson?.let {
             val metaDir = File(dir, "keys").apply { mkdirs() }
             File(metaDir, "keys.json").writeText(it)
@@ -289,6 +293,46 @@ class CorruptedKeyTest {
                 assertTrue(SshSession.isTerminalFailure(msg))
             }
         }
+    }
+
+    /**
+     * The decrypted private key must never be written to the filesystem.
+     * Everything else in the app keeps key material Keystore-encrypted at
+     * rest; a connect path that spills a plaintext PEM into the app cache —
+     * once per connect, and left behind entirely if the process is killed
+     * before the cleanup — would quietly undo that. sshj parses the PEM from
+     * memory instead, and this pins it.
+     */
+    @Test
+    fun `loading a stored key writes no plaintext key material to disk`() {
+        // An UNUSABLE cache dir (a regular file, so createTempFile there
+        // cannot succeed): the load must not want scratch space at all. This
+        // is the teeth of the test — a temp-file implementation deletes its
+        // spill on the way out, so counting leftover files proves nothing.
+        val noCache = Files.createTempFile("conch-not-a-dir", null).toFile()
+            .apply { deleteOnExit() }
+        val (km, dir) = keyManager(storedKeyJson, cacheDir = noCache)
+
+        val (seed, pub) = Ed25519Codec.generateKeyPair()
+        val pem = Ed25519Codec.openSshPrivateKeyPem(seed, pub, "prod-ed25519")
+
+        io.mockk.mockkObject(SecretsStore) {
+            io.mockk.every { SecretsStore.get(any()) } returns pem
+            val provider = km.loadKeyProvider(SSHClient(), "11111111-2222-3333-4444-555555555555")
+            assertTrue(
+                "the loaded key must be the stored one",
+                net.schmizz.sshj.common.Buffer.PlainBuffer()
+                    .apply { putPublicKey(provider.public) }.getCompactData()
+                    .contentEquals(wireBlobFor(pub)),
+            )
+        }
+
+        // the cache dir is covered by being unusable; this catches a spill
+        // into filesDir instead
+        assertTrue(
+            "no file under filesDir may hold the private key in the clear",
+            dir.walkTopDown().filter { it.isFile }.none { it.readText().contains("PRIVATE KEY") },
+        )
     }
 
     @Test

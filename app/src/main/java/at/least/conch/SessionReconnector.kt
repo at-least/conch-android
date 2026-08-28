@@ -20,6 +20,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * [onSessionStopped][Listener.onSessionStopped] fires exactly once per
  * reconnector, no matter how often [stop] is called (banner tap followed by
  * onDestroy) or which path delivers it.
+ *
+ * It also subscribes itself to [networkSignal] for its own lifetime, so a
+ * retry waiting out its backoff is pulled forward the moment the device has
+ * a network again — see [onNetworkAvailable].
  */
 class SessionReconnector(
     /** Builds a fresh, NOT-yet-connected session; [start] connects it. */
@@ -28,7 +32,8 @@ class SessionReconnector(
     postDelayed: (delayMs: Long, action: () -> Unit) -> Unit,
     cancelScheduled: () -> Unit,
     policy: ReconnectPolicy = ReconnectPolicy(),
-) : SshSession.Callbacks {
+    private val networkSignal: NetworkSignal = NetworkWatcher,
+) : SshSession.Callbacks, NetworkSignal.Listener {
 
     interface Listener {
         /** Session came up (initial connect or successful reconnect). */
@@ -43,12 +48,25 @@ class SessionReconnector(
         fun onSessionStopped(reason: String)
     }
 
+    companion object {
+        /** Banner reason when a retry is pulled forward by [onNetworkAvailable]. */
+        const val NETWORK_BACK_REASON = "Network available"
+    }
+
     private val scheduler = ReconnectScheduler(policy, postDelayed, cancelScheduled)
 
     private val stopDelivered = AtomicBoolean(false)
 
     @Volatile
     private var current: SshSession? = null
+
+    init {
+        // Subscribed here rather than by the caller: this is the object that
+        // knows whether a retry is waiting, so no construction site can
+        // forget the wiring or double-register. Dropped in deliverStopped —
+        // the single funnel through which a reconnector reaches its end.
+        networkSignal.addListener(this)
+    }
 
     fun start() {
         // a retry that raced a stop on another thread must not resurrect
@@ -77,6 +95,21 @@ class SessionReconnector(
     /** Live-connection display signal for the health dot. */
     val isConnected: Boolean get() = current?.isConnected == true
 
+    /**
+     * The device regained a usable network (Wi-Fi↔cellular handover, airplane
+     * mode off, tunnel back up). If a retry is sitting out its backoff, run it
+     * now instead of leaving the terminal dark for up to the 30s cap — the
+     * failure that scheduled it was almost certainly the missing network.
+     * A no-op when connected, connecting, or stopped by the user.
+     *
+     * @return true if a waiting retry was pulled forward.
+     */
+    override fun onNetworkAvailable(): Boolean =
+        scheduler.retryNow(
+            connect = { start() },
+            onScheduled = { n, delayMs -> listener.onReconnecting(n, delayMs, NETWORK_BACK_REASON) },
+        )
+
     /** Stop all local-port-forward tunnels on the live session (shell stays). */
     fun stopTunnels() = current?.stopTunnels()
 
@@ -102,6 +135,7 @@ class SessionReconnector(
 
     private fun deliverStopped(reason: String) {
         if (stopDelivered.compareAndSet(false, true)) {
+            networkSignal.removeListener(this)
             listener.onSessionStopped(reason)
         }
     }

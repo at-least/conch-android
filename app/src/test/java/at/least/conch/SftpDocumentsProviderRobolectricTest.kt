@@ -153,6 +153,23 @@ class SftpDocumentsProviderRobolectricTest {
         return out
     }
 
+    /**
+     * The Play and FOSS builds are meant to coexist on one device (README
+     * "can coexist with the Play build"). Two installed apps may not declare
+     * the same provider authority — Android rejects the second install with
+     * INSTALL_FAILED_CONFLICTING_PROVIDER — so the authority must carry the
+     * flavor's applicationId suffix, and the manifest's `${applicationId}`
+     * placeholder must resolve to the very same string the code builds URIs
+     * with. Resolving the provider proves both halves agree.
+     */
+    @Test
+    fun `provider authority is scoped to the build flavor's applicationId`() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        assertEquals(ctx.packageName + ".sftp", SftpDocumentsProvider.AUTHORITY)
+        val declared = ctx.packageManager.resolveContentProvider(SftpDocumentsProvider.AUTHORITY, 0)
+        assertEquals(SftpDocumentsProvider::class.java.name, declared?.name)
+    }
+
     @Test
     fun `roots list only saf-exposed hosts`() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import androidx.core.content.edit
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -51,7 +52,7 @@ object SecretsStore {
         cipher.init(Cipher.ENCRYPT_MODE, masterKey())
         val iv = cipher.iv
         val ct = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-        prefs.edit().putString(alias, encode(iv, ct)).apply()
+        prefs.edit { putString(alias, encode(iv, ct)) }
     }
 
     @Synchronized
@@ -83,7 +84,7 @@ object SecretsStore {
     @Synchronized
     fun delete(alias: String) {
         check(::prefs.isInitialized) { "SecretsStore not initialised" }
-        prefs.edit().remove(alias).apply()
+        prefs.edit { remove(alias) }
     }
 
     private fun encode(iv: ByteArray, ct: ByteArray): String {

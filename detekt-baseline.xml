@@ -66,7 +66,7 @@
     <ID>NestedBlockDepth:SshConnectAuthInteractionTest.kt$SshConnectAuthInteractionTest$@Test(timeout = 30_000) fun `ed25519 key not in authorized_keys is rejected`()</ID>
     <ID>TooGenericExceptionThrown:TofuHostKeyInteractionTest.kt$TofuHostKeyInteractionTest$throw RuntimeException("UI blew up")</ID>
     <ID>TooManyFunctions:Ed25519Codec.kt$Ed25519Codec</ID>
-    <ID>TooManyFunctions:SessionReconnector.kt$SessionReconnector : Callbacks</ID>
+    <ID>TooManyFunctions:SessionReconnector.kt$SessionReconnector : CallbacksListener</ID>
     <ID>TooManyFunctions:SessionTabs.kt$at.least.conch.SessionTabs.kt</ID>
     <ID>TooManyFunctions:SettingsActivity.kt$SettingsActivity : ComponentActivity</ID>
     <ID>TooManyFunctions:SftpDocumentsProvider.kt$SftpDocumentsProvider : DocumentsProvider</ID>

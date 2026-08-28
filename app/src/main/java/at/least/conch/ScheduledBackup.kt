@@ -3,6 +3,7 @@ package at.least.conch
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.content.edit
 import androidx.core.net.toUri
 
 /**
@@ -57,16 +58,16 @@ class ScheduledBackup(private val context: Context) {
                 android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
         )
         SecretsStore.put(PASS_KEY, passphrase)
-        prefs().edit()
-            .putString(KEY_TREE, treeUri.toString())
-            .putLong(KEY_MS, 0L)
-            .putString(KEY_FP, null)
-            .remove(KEY_FILE)
-            .apply()
+        prefs().edit {
+            putString(KEY_TREE, treeUri.toString())
+            putLong(KEY_MS, 0L)
+            putString(KEY_FP, null)
+            remove(KEY_FILE)
+        }
     }
 
     fun disable() {
-        prefs().edit().clear().apply()
+        prefs().edit { clear() }
         SecretsStore.delete(PASS_KEY)
     }
 
@@ -112,17 +113,17 @@ class ScheduledBackup(private val context: Context) {
             val fileUri = resolveFileUri(tree)
             context.contentResolver.openOutputStream(fileUri, "wt")?.use { it.write(blob) }
                 ?: error("cannot open output stream")
-            prefs().edit()
-                .putString(KEY_FP, fingerprint)
-                .putLong(KEY_MS, nowMs)
-                .putString(KEY_FILE, fileUri.toString())
-                .apply()
+            prefs().edit {
+                putString(KEY_FP, fingerprint)
+                putLong(KEY_MS, nowMs)
+                putString(KEY_FILE, fileUri.toString())
+            }
             Outcome.Exported(blob.size)
         } catch (e: Exception) {
             CrashReporting.report(e)
             // stale document (deleted underneath us): forget and let the
             // next attempt recreate it
-            prefs().edit().remove(KEY_FILE).apply()
+            prefs().edit { remove(KEY_FILE) }
             Outcome.Failed(e.message ?: e.javaClass.simpleName)
         }
     }
@@ -133,7 +134,7 @@ class ScheduledBackup(private val context: Context) {
             val uri = stored.toUri()
             if (uri.toString().startsWith(tree.toString())) return uri
             // configured folder changed: the old document belongs to another tree
-            prefs().edit().remove(KEY_FILE).apply()
+            prefs().edit { remove(KEY_FILE) }
         }
         val root = DocumentsContract.buildDocumentUriUsingTree(
             tree,

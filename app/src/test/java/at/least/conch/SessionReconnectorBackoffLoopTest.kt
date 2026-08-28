@@ -4,6 +4,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -36,6 +37,7 @@ class SessionReconnectorBackoffLoopTest {
     private class RecordingListener : SessionReconnector.Listener {
         val connected = AtomicInteger(0)
         val reconnecting = ConcurrentLinkedQueue<Pair<Int, Long>>()
+        val reasons = ConcurrentLinkedQueue<String>()
         val stopped = ConcurrentLinkedQueue<String>()
 
         override fun onSessionConnected() {
@@ -48,6 +50,7 @@ class SessionReconnectorBackoffLoopTest {
 
         override fun onReconnecting(attempt: Int, delayMs: Long, reason: String) {
             reconnecting.add(attempt to delayMs)
+            reasons.add(reason)
         }
 
         override fun onSessionStopped(reason: String) {
@@ -70,38 +73,71 @@ class SessionReconnectorBackoffLoopTest {
         }
     }
 
+    /** Collects listeners so a test can fire the network-back signal itself. */
+    private class FakeNetworkSignal : NetworkSignal {
+        private val listeners = CopyOnWriteArrayList<NetworkSignal.Listener>()
+
+        override fun addListener(listener: NetworkSignal.Listener) {
+            listeners += listener
+        }
+
+        override fun removeListener(listener: NetworkSignal.Listener) {
+            listeners -= listener
+        }
+
+        val subscribed: Boolean get() = listeners.isNotEmpty()
+
+        /** @return true if some listener acted on the signal. */
+        fun fire(): Boolean = listeners.map { it.onNetworkAvailable() }.any { it }
+    }
+
+    /**
+     * The harness every case here shares: a reconnector whose every connect
+     * fails instantly, with [postDelayed] on virtual time. [gate] closes the
+     * scheduling door so a test can stop the loop without racing one last
+     * retry into flight.
+     */
+    private fun TestScope.failingReconnector(
+        listener: SessionReconnector.Listener,
+        pending: CopyOnWriteArrayList<Job>,
+        gate: AtomicBoolean = AtomicBoolean(false),
+        networkSignal: NetworkSignal = FakeNetworkSignal(),
+        connector: () -> Nothing = { throw IOException("network down") },
+    ) = SessionReconnector(
+        newSession = { cb ->
+            SshSession(
+                context = null,
+                host = Host(hostname = "127.0.0.1", username = "u", authType = Host.AUTH_PASSWORD),
+                initialCols = 80,
+                initialRows = 24,
+                callbacks = cb,
+                tofuPrompt = null,
+                post = { it.run() },
+                connector = { _, _ -> connector() },
+            )
+        },
+        listener = listener,
+        postDelayed = { delayMs, action ->
+            if (!gate.get()) {
+                pending += launch {
+                    delay(delayMs)
+                    action()
+                }
+            }
+        },
+        cancelScheduled = {
+            pending.forEach(Job::cancel)
+            pending.clear()
+        },
+        networkSignal = networkSignal,
+    )
+
     @Test
     fun `failed connects double the delay to the 30s cap and keep retrying`() = runTest {
         val listener = RecordingListener()
         val pending = CopyOnWriteArrayList<Job>()
         val gate = AtomicBoolean(false)
-        val reconnector = SessionReconnector(
-            newSession = { cb ->
-                SshSession(
-                    context = null,
-                    host = Host(hostname = "127.0.0.1", username = "u", authType = Host.AUTH_PASSWORD),
-                    initialCols = 80,
-                    initialRows = 24,
-                    callbacks = cb,
-                    tofuPrompt = null,
-                    post = { it.run() },
-                    connector = { _, _ -> throw IOException("network down") },
-                )
-            },
-            listener = listener,
-            postDelayed = { delayMs, action ->
-                if (!gate.get()) {
-                    pending += launch {
-                        delay(delayMs)
-                        action()
-                    }
-                }
-            },
-            cancelScheduled = {
-                pending.forEach(Job::cancel)
-                pending.clear()
-            },
-        )
+        val reconnector = failingReconnector(listener, pending, gate)
 
         reconnector.start()
         pumpUntil(testScheduler) { listener.reconnecting.size >= 9 }
@@ -130,33 +166,7 @@ class SessionReconnectorBackoffLoopTest {
         val listener = RecordingListener()
         val pending = CopyOnWriteArrayList<Job>()
         val gate = AtomicBoolean(false)
-        val reconnector = SessionReconnector(
-            newSession = { cb ->
-                SshSession(
-                    context = null,
-                    host = Host(hostname = "127.0.0.1", username = "u", authType = Host.AUTH_PASSWORD),
-                    initialCols = 80,
-                    initialRows = 24,
-                    callbacks = cb,
-                    tofuPrompt = null,
-                    post = { it.run() },
-                    connector = { _, _ -> throw IOException("network down") },
-                )
-            },
-            listener = listener,
-            postDelayed = { delayMs, action ->
-                if (!gate.get()) {
-                    pending += launch {
-                        delay(delayMs)
-                        action()
-                    }
-                }
-            },
-            cancelScheduled = {
-                pending.forEach(Job::cancel)
-                pending.clear()
-            },
-        )
+        val reconnector = failingReconnector(listener, pending, gate)
 
         reconnector.start()
         pumpUntil(testScheduler) { listener.reconnecting.size >= 3 }
@@ -176,33 +186,9 @@ class SessionReconnectorBackoffLoopTest {
     fun `authentication failure is terminal - no retry loop`() = runTest {
         val listener = RecordingListener()
         val pending = CopyOnWriteArrayList<Job>()
-        val reconnector = SessionReconnector(
-            newSession = { cb ->
-                SshSession(
-                    context = null,
-                    host = Host(hostname = "127.0.0.1", username = "u", authType = Host.AUTH_PASSWORD),
-                    initialCols = 80,
-                    initialRows = 24,
-                    callbacks = cb,
-                    tofuPrompt = null,
-                    post = { it.run() },
-                    connector = { _, _ ->
-                        throw net.schmizz.sshj.userauth.UserAuthException("bad credentials")
-                    },
-                )
-            },
-            listener = listener,
-            postDelayed = { delayMs, action ->
-                pending += launch {
-                    delay(delayMs)
-                    action()
-                }
-            },
-            cancelScheduled = {
-                pending.forEach(Job::cancel)
-                pending.clear()
-            },
-        )
+        val reconnector = failingReconnector(listener, pending) {
+            throw net.schmizz.sshj.userauth.UserAuthException("bad credentials")
+        }
 
         reconnector.start()
         pumpUntil(testScheduler) { listener.stopped.isNotEmpty() }
@@ -220,5 +206,50 @@ class SessionReconnectorBackoffLoopTest {
         assertTrue(SshSession.isTerminalFailure("Authentication failed (wrong user/password/key?)"))
         org.junit.Assert.assertFalse(SshSession.isTerminalFailure("Connection timed out"))
         org.junit.Assert.assertFalse(SshSession.isTerminalFailure("Connection closed by remote"))
+    }
+
+    @Test
+    fun `the network coming back pulls a waiting retry forward`() = runTest {
+        val listener = RecordingListener()
+        val pending = CopyOnWriteArrayList<Job>()
+        val gate = AtomicBoolean(false)
+        val network = FakeNetworkSignal()
+        val reconnector = failingReconnector(listener, pending, gate, network)
+
+        // the reconnector subscribes itself — no caller has to remember to
+        assertTrue("a live reconnector must be listening for the network", network.subscribed)
+
+        reconnector.start()
+        // several failures deep, so the backoff has visibly grown
+        pumpUntil(testScheduler) { listener.reconnecting.size >= 3 }
+        val timeWhenNetworkReturned = testScheduler.currentTime
+
+        // Radio back (Wi-Fi↔cellular handover). Which attempt is in flight at
+        // this instant is up to the real ssh-reader threads, so keep firing
+        // until one is actually sitting in its backoff — that wait advances NO
+        // virtual time, which is what makes the assertions below meaningful.
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!network.fire()) {
+            check(System.currentTimeMillis() < deadline) { "no retry ever became pending" }
+            Thread.sleep(5)
+        }
+        val pulledAt = listener.reconnecting.size - 1
+        val pulled = listener.reconnecting.toList()[pulledAt]
+
+        assertEquals("the pulled-forward attempt must be reported with no delay", 0L, pulled.second)
+        assertEquals(SessionReconnector.NETWORK_BACK_REASON, listener.reasons.last())
+        // it really was immediate: not one millisecond of backoff elapsed
+        assertEquals(timeWhenNetworkReturned, testScheduler.currentTime)
+
+        // and the backoff resumes where it left off rather than restarting at 1s
+        pumpUntil(testScheduler) { listener.reconnecting.size >= pulledAt + 2 }
+        val next = listener.reconnecting.toList()[pulledAt + 1]
+        assertEquals(pulled.first + 1, next.first)
+        assertEquals(ReconnectPolicy().delayForAttempt(next.first), next.second)
+
+        gate.set(true)
+        reconnector.stop("done")
+        testScheduler.advanceUntilIdle()
+        assertTrue("a stopped reconnector must unsubscribe itself", !network.subscribed)
     }
 }

@@ -167,12 +167,7 @@ class TerminalView @JvmOverloads constructor(
                 }
                 return true
             }
-            if (scrollOffset > 0) {
-                scrollOffset = 0
-                invalidate()
-            } else {
-                showSoftKeyboard()
-            }
+            performClick()
             return true
         }
 
@@ -535,6 +530,30 @@ class TerminalView @JvmOverloads constructor(
 
     // ----------------------------------------------------------------- input
 
+    /**
+     * "Activate this view" for both a finger tap and an accessibility service
+     * (TalkBack double-tap, ACTION_CLICK): leave scrollback if we are in it,
+     * otherwise raise the soft keyboard. onSingleTapConfirmed routes its plain
+     * tap through here so the two paths can never drift apart — a custom view
+     * that handles touches without a performClick is unreachable to a11y
+     * (ClickableViewAccessibility).
+     */
+    override fun performClick(): Boolean {
+        super.performClick()
+        if (scrollOffset > 0) {
+            scrollOffset = 0
+            invalidate()
+        } else {
+            showSoftKeyboard()
+        }
+        return true
+    }
+
+    // Clicks ARE routed to performClick — from onSingleTapConfirmed, which is
+    // the only place that can tell a tap from the start of a drag, a
+    // long-press selection or a scroll. Lint only looks for the call inside
+    // onTouchEvent itself and cannot see through the GestureDetector.
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val handled = gestureDetector.onTouchEvent(event)
         if (mouseDragActive) forwardMouseDrag(event)

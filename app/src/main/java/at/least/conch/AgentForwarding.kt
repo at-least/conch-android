@@ -11,7 +11,6 @@ import net.schmizz.sshj.connection.channel.direct.Session
 import net.schmizz.sshj.connection.channel.forwarded.AbstractForwardedChannel
 import net.schmizz.sshj.connection.channel.forwarded.AbstractForwardedChannelOpener
 import net.schmizz.sshj.connection.channel.forwarded.ConnectListener
-import java.io.File
 
 /**
  * Client side of ssh-agent forwarding. sshj has none, so this is built on
@@ -127,18 +126,17 @@ class KeyManagerAgentSource(private val context: Context) : AgentKeySource {
         val fingerprint = KeyManager.fingerprintOfBlob(blob)
         val info = KeyManager(context).list().firstOrNull { it.fingerprint == fingerprint }
             ?: return null
-        val pem = SecretsStore.get("key-priv:${info.id}") ?: return null
-        val tmp = File.createTempFile("conch-agent", ".key", context.cacheDir)
         return try {
-            tmp.writeText(pem)
+            // Same loader the connect path uses, so the "decrypted key material
+            // never reaches the filesystem" invariant lives in exactly one
+            // place — this path signs once per server-side hop, so it is the
+            // one that would spill most often if the two ever drifted.
             SSHClient().use { ssh ->
-                val privateKey = ssh.loadKeys(tmp.absolutePath).private
+                val privateKey = KeyManager(context).loadKeyProvider(ssh, info.id).private
                 SshAgentSigner.sign(privateKey, data, flags)
             }
         } catch (_: Exception) {
             null
-        } finally {
-            tmp.delete()
         }
     }
 }

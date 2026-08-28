@@ -24,7 +24,15 @@ import java.io.FileOutputStream
 class SftpDocumentsProvider : DocumentsProvider() {
 
     companion object {
-        const val AUTHORITY = "at.least.conch.sftp"
+        /**
+         * Derived from the applicationId so the Play and FOSS builds declare
+         * DIFFERENT provider authorities — two installed apps may not share
+         * one authority, and Android refuses to install the second
+         * (INSTALL_FAILED_CONFLICTING_PROVIDER). The manifest uses the same
+         * `${applicationId}.sftp` placeholder; the two must stay in step.
+         */
+        @JvmField
+        val AUTHORITY: String = BuildConfig.APPLICATION_ID + ".sftp"
 
         /** Robolectric swaps the backend in before attachInfo. */
         @Volatile

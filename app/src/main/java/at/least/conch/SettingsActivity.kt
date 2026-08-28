@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,7 +58,7 @@ class SettingsActivity : ComponentActivity() {
 
     // account-free sync (ScheduledBackup)
     private val syncConfigured = mutableStateOf(false)
-    private val syncLastMs = mutableStateOf(0L)
+    private val syncLastMs = mutableLongStateOf(0L)
     private val syncBusy = mutableStateOf(false)
     private val showSyncPass = mutableStateOf(false)
     private val syncPassText = mutableStateOf("")
@@ -192,7 +193,7 @@ class SettingsActivity : ComponentActivity() {
     private fun refreshSync() {
         val sb = ScheduledBackup(this)
         syncConfigured.value = sb.isConfigured()
-        syncLastMs.value = sb.lastExportMs()
+        syncLastMs.longValue = sb.lastExportMs()
     }
 
     private fun onSyncTarget(uri: Uri) {
@@ -465,9 +466,9 @@ class SettingsActivity : ComponentActivity() {
                         )
                         if (syncConfigured.value) {
                             Text(
-                                if (syncLastMs.value > 0) {
+                                if (syncLastMs.longValue > 0) {
                                     "Last export " + android.text.format.DateUtils
-                                        .getRelativeTimeSpanString(syncLastMs.value)
+                                        .getRelativeTimeSpanString(syncLastMs.longValue)
                                 } else {
                                     "Will export on next app open"
                                 },

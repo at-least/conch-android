@@ -1,6 +1,7 @@
 package at.least.conch
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,5 +75,80 @@ class ReconnectPolicyTest {
         f.scheduler.onConnectionLost({}) { _, _ -> }
         f.scheduler.onConnectionLost({}) { _, _ -> }
         assertEquals(2, f.cancelled) // once per onConnectionLost call
+    }
+
+    // ---------------------------------------------------- network-back retry
+
+    @Test
+    fun `retryNow connects immediately and drops the scheduled attempt`() {
+        val f = FakeClock()
+        var connects = 0
+        val notified = mutableListOf<Pair<Int, Long>>()
+        f.scheduler.onConnectionLost({ connects++ }) { _, _ -> }
+        f.scheduler.onConnectionLost({ connects++ }) { _, _ -> }
+        assertEquals(0, connects) // both are still waiting out their delay
+
+        assertTrue(f.scheduler.retryNow({ connects++ }) { n, d -> notified.add(n to d) })
+
+        assertEquals(1, connects)
+        assertEquals("banner shows the same attempt, now", listOf(2 to 0L), notified)
+        assertEquals("the pending post must be cancelled, not left to double-fire", 3, f.cancelled)
+        // counter is NOT reset: a server that is genuinely down keeps backing off
+        assertEquals(2, f.scheduler.attempt)
+        f.scheduler.onConnectionLost({}) { n, d -> notified.add(n to d) }
+        assertEquals(3 to 4_000L, notified.last())
+    }
+
+    @Test
+    fun `retryNow is a no-op unless a retry is waiting`() {
+        val f = FakeClock()
+        var connects = 0
+
+        // never dropped yet — nothing to hurry
+        assertFalse(f.scheduler.retryNow({ connects++ }) { _, _ -> })
+
+        f.scheduler.onConnectionLost({ connects++ }) { _, _ -> }
+        assertTrue(f.scheduler.retryNow({ connects++ }) { _, _ -> })
+        // a handover burst (Wi-Fi + cellular) must collapse into ONE attempt
+        assertFalse(f.scheduler.retryNow({ connects++ }) { _, _ -> })
+        assertFalse(f.scheduler.retryNow({ connects++ }) { _, _ -> })
+        assertEquals(1, connects)
+
+        // and once connected, later network events change nothing
+        f.scheduler.onConnected()
+        assertFalse(f.scheduler.retryNow({ connects++ }) { _, _ -> })
+        assertEquals(1, connects)
+    }
+
+    @Test
+    fun `retryNow after stop never resurrects the session`() {
+        val f = FakeClock()
+        var connects = 0
+        f.scheduler.onConnectionLost({ connects++ }) { _, _ -> }
+        f.scheduler.stop()
+        assertFalse(f.scheduler.retryNow({ connects++ }) { _, _ -> })
+        assertEquals(0, connects)
+    }
+
+    @Test
+    fun `a retry that fires normally leaves nothing for retryNow to pull`() {
+        val f = FakeClock()
+        var connects = 0
+        f.scheduler.onConnectionLost({ connects++ }) { _, _ -> }
+        f.posted.last().second() // the postDelayed action comes due
+        assertEquals(1, connects)
+        assertFalse("already connecting — nothing pending", f.scheduler.retryNow({ connects++ }) { _, _ -> })
+        assertEquals(1, connects)
+    }
+
+    @Test
+    fun `a due retry that lands after stop does not connect`() {
+        val f = FakeClock()
+        var connects = 0
+        f.scheduler.onConnectionLost({ connects++ }) { _, _ -> }
+        val due = f.posted.last().second
+        f.scheduler.stop() // user gave up while the delay was in flight
+        due() // a Handler post already past the point of cancellation
+        assertEquals(0, connects)
     }
 }

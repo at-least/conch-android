@@ -16,6 +16,22 @@
   continuously materialized in a folder you pick (Syncthing/Dropbox/cable),
   refreshing at most hourly and only when data changed; restore on any
   device with merge-only Import. No accounts, no cloud, no new permissions
+- New: **instant reconnect when the network comes back** — a Wi-Fi↔cellular
+  handover or airplane-mode-off no longer leaves the terminal dark for the
+  rest of the backoff (up to 30s); the pending retry fires the moment the
+  device has a usable network again. The backoff itself is unchanged, so a
+  server that is genuinely down is not hammered
+- Fixed: the **FOSS and Play builds can now actually be installed side by
+  side**, as the README promises — both declared the same SAF file-provider
+  authority, and Android rejects the second install of a duplicated
+  authority (INSTALL_FAILED_CONFLICTING_PROVIDER)
+- Security: **decrypted private keys never touch the filesystem** — connect
+  and agent-forwarding signatures used to write the plaintext PEM to the app
+  cache and delete it afterwards (leaving it behind entirely if the process
+  was killed in between); both now parse the key from memory
+- Accessibility: a tap on the terminal is a real click, so TalkBack (and any
+  service using ACTION_CLICK) can raise the keyboard; themed monochrome
+  launcher icon for Android 13+
 - New: **Monitor history sparklines** — 5 minutes of CPU/RAM lines under
   the live cards, at zero extra server load (samples ride the existing 5s
   poll; failed probes leave honest gaps instead of a fake flat line)
@@ -34,6 +50,10 @@
 - Compatibility: targetSdk/compileSdk 36 (predictive-back-safe: no
   legacy onBackPressed paths), Gradle 8.13 / AGP 8.9.2 / Robolectric
   4.16.1 toolchain bump
+- Internal/tests: Android lint now gates CI alongside tests and detekt
+  (it caught the provider-authority collision above); the terminal's tap
+  handling, the Monitor cards and the settings/backup preference writes were
+  cleaned up to keep the report at zero errors
 - Internal/tests: an independent Docker OpenSSH test matrix
   (`tools/sshd-matrix`, deliberately separate from the iOS project's)
   now covers auth scenarios, TOFU pinning, SFTP, both tunnel directions,
