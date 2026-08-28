@@ -2,6 +2,38 @@
 
 ## 0.9.1 (unreleased)
 
+- New: **hosts in Android's system file pickers (SAF)** — opt in per host
+  (Edit host → "Files in system picker") and every app can open/save remote
+  files through Conch once you grant a folder; browse/mkdir/rename/delete,
+  roots land in the SFTP home like your shell does (the Secure ShellFish
+  gap on Android)
+- New: **ssh-agent forwarding** (`-A`) per host — your stored keys sign for
+  the server's own ssh/git hops; off by default with an explicit trust
+  warning (enabling exposes every stored key). Includes `ForwardAgent`
+  config import; the on-device agent implements the wire protocol itself
+  because no JVM SSH library ships one
+- New: **account-free sync** — Settings keeps the encrypted backup
+  continuously materialized in a folder you pick (Syncthing/Dropbox/cable),
+  refreshing at most hourly and only when data changed; restore on any
+  device with merge-only Import. No accounts, no cloud, no new permissions
+- New: **Monitor history sparklines** — 5 minutes of CPU/RAM lines under
+  the live cards, at zero extra server load (samples ride the existing 5s
+  poll; failed probes leave honest gaps instead of a fake flat line)
+- New: key export (`ssh -i`-compatible OpenSSH/PKCS#8), public-key
+  one-tap copy, passphrase-protected key import with retry
+- Fixed: sessions left running past Android 15's 6-hour dataSync
+  foreground-service cap no longer crash the app — the limit now ends
+  background protection gracefully with a notification (tmux sessions
+  survive server-side and re-attach on reopen)
+- Compatibility: targetSdk/compileSdk 36 (predictive-back-safe: no
+  legacy onBackPressed paths), Gradle 8.13 / AGP 8.9.2 / Robolectric
+  4.16.1 toolchain bump
+- Internal/tests: an independent Docker OpenSSH test matrix
+  (`tools/sshd-matrix`, deliberately separate from the iOS project's)
+  now covers auth scenarios, TOFU pinning, SFTP, both tunnel directions,
+  PTY semantics, real tmux, ZMODEM against real rz/sz through a real SSH
+  PTY, and agent forwarding end-to-end against real OpenSSH
+
 - Fixed: crash and gesture bugs — the command palette crashed when history
   contained the same command twice (LazyColumn duplicate key; history only
   dedups consecutive repeats); scrollback drag + fling moved opposite to the

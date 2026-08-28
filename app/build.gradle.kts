@@ -11,12 +11,12 @@ apply(from = "sentry.gradle")
 
 android {
     namespace = "at.least.conch"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "at.least.conch"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 10
         versionName = "0.9.1"
     }
@@ -142,7 +142,7 @@ dependencies {
     // Robolectric: exercises real SharedPreferences / filesDir paths that
     // isReturnDefaultValues stubbing cannot reach (ExtraKeysConfig, AppLock,
     // HostStore/KeyManager on-disk formats).
-    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
     // MockK: object mocking (SecretsStore) for Android-bound paths that
     // Robolectric cannot back (Android Keystore).

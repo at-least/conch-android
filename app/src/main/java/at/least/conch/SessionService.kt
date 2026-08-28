@@ -57,6 +57,58 @@ class SessionService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * Android 15+ caps dataSync foreground services at 6 hours per 24-hour
+     * window; when the cap hits, the system calls here and the service MUST
+     * stop shortly — not stopping crashes with
+     * ForegroundServiceDidNotStopInTimeException. Sessions survive server-
+     * side (tmux auto-attach) and the app reconnects on next open, so this
+     * degrades gracefully: stop, then tell the user what happened.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        handleForegroundTimeout()
+    }
+
+    private fun handleForegroundTimeout() {
+        val sessionNames = Registry.entries().map { it.second }
+        Registry.clear()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        if (sessionNames.isEmpty()) return
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(TIMEOUT_NOTIF_ID, buildTimeoutNotification(sessionNames.first()))
+    }
+
+    private fun buildTimeoutNotification(hostName: String): Notification {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                "Active sessions",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Keeps SSH sessions alive in the background"
+                setShowBadge(false)
+            },
+        )
+        val open = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle("Background protection ended — $hostName")
+            .setContentText(
+                "Android caps background sessions at 6 hours per day. Your tmux " +
+                    "session is alive on the server — reopen Conch to reconnect.",
+            )
+            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+    }
+
     private fun stopSession(sessionId: String) {
         Registry.remove(sessionId)
         val notifId = Registry.takeNotifId(sessionId)
@@ -150,6 +202,7 @@ class SessionService : Service() {
     companion object {
         private const val CHANNEL_ID = "conchapp_sessions"
         private const val NOTIF_ID_BASE = 1
+        private const val TIMEOUT_NOTIF_ID = 9001
         private const val ACTION_STOP = "at.least.conch.action.STOP_SESSION"
 
         fun start(context: Context, sessionId: String, hostName: String) {
