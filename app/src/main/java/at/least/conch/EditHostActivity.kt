@@ -118,6 +118,7 @@ private fun EditHostScreen(
     var keepAlive by rememberSaveable { mutableStateOf(initial?.keepAlive ?: true) }
     var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
     var forwardAgent by rememberSaveable { mutableStateOf(initial?.forwardAgent ?: false) }
+    var safExpose by rememberSaveable { mutableStateOf(initial?.safExpose ?: false) }
     var socksPortText by rememberSaveable {
         mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "")
     }
@@ -322,6 +323,22 @@ private fun EditHostScreen(
                 )
             }
 
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = safExpose,
+                    onClick = { safExpose = !safExpose },
+                    label = { Text("Files in system picker") }
+                )
+            }
+            if (safExpose) {
+                Text(
+                    "Shows this host's files in Android's file pickers. Other apps " +
+                        "see them only after you grant access to a folder.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             OutlinedTextField(
                 value = socksPortText,
                 onValueChange = { socksPortText = it },
@@ -404,6 +421,7 @@ private fun EditHostScreen(
                             socksPort = socksPortText.toIntOrNull() ?: 0,
                             jumpHostId = jumpHostId,
                             forwardAgent = forwardAgent,
+                            safExpose = safExpose,
                             tunnels = tunnels.toMutableList(),
                         ),
                         password

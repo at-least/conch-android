@@ -58,6 +58,8 @@ data class HostWire(
     @EncodeDefault(Mode.NEVER) val password: String? = null,
     /** ssh-agent forwarding; omitted when false for byte-compatible backups. */
     @EncodeDefault(Mode.NEVER) val forwardAgent: Boolean = false,
+    /** Expose this host to system file pickers via the SAF DocumentsProvider. */
+    @EncodeDefault(Mode.NEVER) val safExpose: Boolean = false,
 ) {
     fun toHost(): Host {
         val host = Host(
@@ -74,6 +76,7 @@ data class HostWire(
             socksPort = socksPort,
             jumpHostId = jumpHostId,
             forwardAgent = forwardAgent,
+            safExpose = safExpose,
         )
         host.tunnels.addAll(tunnels.map { it.toTunnel() })
         return host
@@ -95,6 +98,7 @@ data class HostWire(
             tunnels = h.tunnels.map { TunnelWire.from(it) },
             jumpHostId = h.jumpHostId,
             forwardAgent = h.forwardAgent,
+            safExpose = h.safExpose,
         )
     }
 }
@@ -118,6 +122,8 @@ data class Host(
     var jumpHostId: String? = null,
     /** ssh-agent forwarding (-A): the server may ask this device to sign with stored keys. */
     var forwardAgent: Boolean = false,
+    /** Expose this host's files to system file pickers (SAF DocumentsProvider). */
+    var safExpose: Boolean = false,
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
     companion object {

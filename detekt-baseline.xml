@@ -69,6 +69,8 @@
     <ID>TooManyFunctions:SessionReconnector.kt$SessionReconnector : Callbacks</ID>
     <ID>TooManyFunctions:SessionTabs.kt$at.least.conch.SessionTabs.kt</ID>
     <ID>TooManyFunctions:SettingsActivity.kt$SettingsActivity : ComponentActivity</ID>
+    <ID>TooManyFunctions:SftpDocumentsProvider.kt$SftpDocumentsProvider : DocumentsProvider</ID>
+    <ID>TooManyFunctions:SftpProviderFs.kt$SftpProviderFs : SftpBackendAutoCloseable</ID>
     <ID>TooManyFunctions:TerminalActivity.kt$TerminalActivity : FragmentActivity</ID>
     <ID>TooManyFunctions:TerminalEmulator.kt$TerminalEmulator</ID>
     <ID>TooManyFunctions:TerminalEmulator.kt$TerminalEmulator$&lt;no name provided&gt; : TerminalSessionClient</ID>

@@ -61,9 +61,14 @@ class TestSshd(
 
     companion object {
         init {
-            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-                Security.insertProviderAt(BouncyCastleProvider(), 1)
-            }
+            // Robolectric runs test classes in a sandbox classloader whose
+            // own TestSshd also registers "BC" into the JVM-global provider
+            // table. Plain-JVM classes later in the same test JVM would then
+            // get crypto objects from the WRONG classloader and die mid-
+            // handshake ("Broken transport; encountered EOF") — so each
+            // classloader swaps BC in for itself on first use.
+            Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
+            Security.insertProviderAt(BouncyCastleProvider(), 1)
         }
 
         private fun generate(algorithm: String, bits: Int?): KeyPair {

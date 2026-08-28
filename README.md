@@ -55,6 +55,9 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Sessions switcher** — list every live terminal session, tap to switch,
   swipe to disconnect that session only
 - **SFTP** — browse, download, upload, rename, delete, mkdir/new-file, sort by name/size/time
+- **SAF file provider** — expose any host to Android's system file pickers
+  (opt-in per host): every app can open/save remote files through Conch,
+  like a mounted drive
 - **Monitor** — live CPU / memory / swap / disk / load / uptime dashboard
   with 5-minute CPU/RAM history sparklines (no extra server load)
 - **Docker** — list containers, start/stop/restart, view logs

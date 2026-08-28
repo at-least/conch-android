@@ -67,5 +67,19 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/hosts_widget_info" />
         </receiver>
+
+        <!-- SAF: expose SAF-enabled hosts to system file pickers. Managed by
+             the platform (MANAGE_DOCUMENTS signature-level permission), roots
+             are per-host opt-in (Host.safExpose). -->
+        <provider
+            android:name=".SftpDocumentsProvider"
+            android:authorities="at.least.conch.sftp"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
     </application>
 </manifest>

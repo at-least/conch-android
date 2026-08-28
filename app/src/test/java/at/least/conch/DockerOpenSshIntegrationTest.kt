@@ -337,6 +337,50 @@ class DockerOpenSshIntegrationTest {
         }
     }
 
+    @Test
+    fun `saf backend round-trips against real openssh`() {
+        DockerMatrix.requireMatrix()
+        val store = newStore()
+        val host = Host(
+            id = "saf-docker",
+            hostname = "127.0.0.1",
+            username = "pwuser",
+            authType = Host.AUTH_PASSWORD,
+        ).apply { port = DockerMatrix.PW_AND_KEY_PORT }
+        val fs = SftpProviderFs(
+            loadHost = { if (it == host.id) host else null },
+            connectHost = { h ->
+                SshConnectionFactory.connect(
+                    host = h,
+                    prompt = DockerMatrix.acceptPrompt,
+                    store = store,
+                    keyProvider = { _, _ -> error("password auth in this test") },
+                    password = { "conch-pw-1" },
+                )
+            },
+        )
+        try {
+            val home = fs.homePath(host.id)
+            assertEquals("/home/pwuser", home)
+
+            fs.mkdir(host.id, "$home/saf-dir")
+            val payload = ByteArray(50_000) { i -> ((i * 53 + 5) and 0xFF).toByte() }
+            fs.openWrite(host.id, "$home/saf-dir/t.bin").use { it.write(payload) }
+            assertArrayEquals(payload, fs.openRead(host.id, "$home/saf-dir/t.bin").use { it.readBytes() })
+
+            fs.rename(host.id, "$home/saf-dir/t.bin", "$home/saf-dir/u.bin")
+            assertEquals(
+                listOf("u.bin"),
+                fs.list(host.id, "$home/saf-dir").map { it.displayName },
+            )
+            fs.delete(host.id, "$home/saf-dir/u.bin")
+            fs.delete(host.id, "$home/saf-dir")
+            assertTrue(fs.list(host.id, home).none { it.displayName == "saf-dir" })
+        } finally {
+            fs.close()
+        }
+    }
+
     private fun writeShell(shell: net.schmizz.sshj.connection.channel.direct.Session.Shell, data: String) {
         synchronized(shell.outputStream) {
             shell.outputStream.write(data.toByteArray())
