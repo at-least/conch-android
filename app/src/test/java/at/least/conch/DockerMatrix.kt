@@ -24,10 +24,56 @@ object DockerMatrix {
     /** host port → container 2225: same auth as 2233 but AllowTcpForwarding yes. */
     const val FORWARDING_PORT = 2235
 
+    /** host port → container 2226: keyboard-interactive (PAM) only, no "password" method. */
+    const val KBD_INTERACTIVE_PORT = 2236
+
+    /** host port → container 2227: only listens for 8 s after the UDP knock sequence. */
+    const val GATED_PORT = 2237
+
+    /** UDP knock sequence knockd watches for (same numbers on host and in the container). */
+    val KNOCK_PORTS = listOf(2260, 2261, 2262)
+
     /** sshd port INSIDE the container (targets of direct-tcpip / inner ssh). */
     const val CONTAINER_SSH_PORT = 2223
 
+    /** Forwarding-enabled sshd port INSIDE the container. */
+    const val CONTAINER_FWD_PORT = 2225
+
+    /** Default matrix container, as named by tools/sshd-matrix/run.sh. */
+    const val CONTAINER_NAME = "conch-android-sshd"
+
     const val FLAG = "conch.localSshdTest"
+
+    /** Second flag: with it, every distro variant must be up (CI); without it, missing variants skip. */
+    const val DISTRO_FLAG = "conch.distroMatrix"
+
+    /**
+     * One row of the distro matrix (tools/sshd-matrix/run.sh --variants):
+     * the same recipe on another base image, three instances on
+     * [pwPort]..[pwPort]+2 mirroring 2233..2235 of the default container.
+     */
+    data class Variant(
+        val name: String,
+        val base: String,
+        val pwPort: Int,
+        val container: String = "$CONTAINER_NAME-$name",
+    ) {
+        val keyOnlyPort: Int get() = pwPort + 1
+        val forwardingPort: Int get() = pwPort + 2
+        override fun toString() = "$name ($base)"
+    }
+
+    /** The default container as a matrix row (bookworm, ports 2233..2235). */
+    val DEFAULT_VARIANT = Variant("bookworm", "debian:bookworm-slim", PW_AND_KEY_PORT, CONTAINER_NAME)
+
+    /** Keep in step with VARIANTS in run.sh. */
+    val VARIANTS = listOf(
+        Variant("ubuntu2004", "ubuntu:20.04", 2243),
+        Variant("ubuntu2404", "ubuntu:24.04", 2246),
+        Variant("alpine", "alpine:3.20", 2249),
+        Variant("trixie", "debian:trixie-slim", 2252),
+        Variant("rocky9", "rockylinux:9", 2255),
+    )
 
     val keysDir: File = File(
         System.getenv("CONCH_ANDROID_MATRIX_KEYS")
@@ -39,12 +85,89 @@ object DockerMatrix {
 
     fun optedIn(): Boolean = System.getProperty(FLAG) == "true"
 
-    fun reachable(): Boolean = try {
-        Socket().use { it.connect(InetSocketAddress("127.0.0.1", PW_AND_KEY_PORT), 1_000) }
+    fun distroOptedIn(): Boolean = System.getProperty(DISTRO_FLAG) == "true"
+
+    fun reachable(port: Int = PW_AND_KEY_PORT): Boolean = try {
+        Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 1_000) }
         true
     } catch (_: Exception) {
         false
     }
+
+    /**
+     * True once [port] accepts a TCP connection AND greets with an SSH
+     * banner — a Docker port proxy accepts connections before the container
+     * process behind it is back, so a bare connect() is not "ready".
+     */
+    fun sshdAnswers(port: Int): Boolean = try {
+        Socket().use { s ->
+            s.connect(InetSocketAddress("127.0.0.1", port), 1_000)
+            s.soTimeout = 2_000
+            val buf = ByteArray(8)
+            var got = 0
+            while (got < buf.size) {
+                val n = s.getInputStream().read(buf, got, buf.size - got)
+                if (n < 0) break
+                got += n
+            }
+            String(buf, 0, got, Charsets.US_ASCII).startsWith("SSH-2.0")
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    fun waitForSshd(port: Int, timeoutMs: Long = 30_000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (sshdAnswers(port)) return
+            Thread.sleep(250)
+        }
+        throw AssertionError("sshd on 127.0.0.1:$port did not come back within ${timeoutMs}ms")
+    }
+
+    /**
+     * Distro-variant gate: skips unless the default matrix is opted in; with
+     * [DISTRO_FLAG] a missing variant FAILS (CI started them all), otherwise
+     * a variant that is not running just skips — a developer may bring up
+     * one base at a time (run.sh --variant NAME).
+     */
+    fun requireVariant(v: Variant) {
+        assumeTrue("opt-in test: pass -D$FLAG=true", optedIn())
+        if (distroOptedIn()) {
+            assertTrue(
+                "variant $v not reachable on 127.0.0.1:${v.pwPort} — start it: tools/sshd-matrix/run.sh --variants",
+                reachable(v.pwPort),
+            )
+        } else {
+            assumeTrue("variant $v not running (tools/sshd-matrix/run.sh --variant ${v.name})", reachable(v.pwPort))
+        }
+    }
+
+    /**
+     * Runs the docker CLI on the host that runs the tests (the same daemon
+     * that started the matrix) — used to restart/pause the container, add
+     * tc netem qdiscs and spawn throwaway containers. Fails loudly on a
+     * non-zero exit so a broken fixture never masquerades as an app bug.
+     */
+    fun docker(vararg args: String, timeoutMs: Long = 60_000, allowFailure: Boolean = false): String {
+        val proc = ProcessBuilder(listOf("docker") + args).redirectErrorStream(true).start()
+        val out = proc.inputStream.bufferedReader().readText()
+        if (!proc.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+            proc.destroyForcibly()
+            throw AssertionError("docker ${args.joinToString(" ")} timed out: $out")
+        }
+        if (proc.exitValue() != 0 && !allowFailure) {
+            throw AssertionError("docker ${args.joinToString(" ")} failed (${proc.exitValue()}): $out")
+        }
+        return out
+    }
+
+    /** `docker exec` in the default container (root). */
+    fun dockerExec(command: String, container: String = CONTAINER_NAME, allowFailure: Boolean = false): String =
+        docker("exec", container, "sh", "-c", command, allowFailure = allowFailure)
+
+    /** The remote's OpenSSH version string, e.g. "OpenSSH_9.2p1 Debian-2+deb12u3". */
+    fun sshVersion(ssh: SSHClient): String = exec(ssh, "ssh -V 2>&1").trim()
 
     fun requireMatrix() {
         assumeTrue("opt-in test: pass -D$FLAG=true", optedIn())

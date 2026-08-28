@@ -164,19 +164,57 @@ TOFU accept/reject, and reconnect-after-drop.
 
 For real-OpenSSH wire behavior there is an opt-in Docker matrix
 (`tools/sshd-matrix/`, independent of the conch-ios harness — own image,
-container and ports): three sshd configs on 127.0.0.1 (password+pubkey on
-:2233, pubkey-only on :2234, forwarding-enabled on :2235) with fixed users,
-throwaway test keys, and real lrzsz/tmux/ssh-client binaries in the image. The
-integration tests cover auth scenarios, TOFU pinning, SFTP against
-internal-sftp, both tunnel directions, PTY semantics, tmux, ZMODEM
-downloads/uploads end-to-end through a real SSH PTY, and ssh-agent
-forwarding.
+container and ports). The default container (Debian bookworm, OpenSSH 9.2)
+runs five sshd configs on 127.0.0.1 with fixed users and throwaway test keys:
+
+| port | instance | exercised by |
+|---|---|---|
+| 2233 | password + pubkey | auth, TOFU, host-key change/RSA pin, SFTP, PTY, tmux, ZMODEM (real lrzsz), Monitor probe, Docker tab (host docker socket mounted) |
+| 2234 | pubkey only | key auth, refused password, unknown key, FIDO2 `sk-ssh-ed25519` authorized_keys entry |
+| 2235 | forwarding allowed | -L/-R tunnels, ssh-agent forwarding, ProxyJump into the container's inner sshd, SOCKS5 |
+| 2236 | keyboard-interactive only (PAM) | the 2FA-prompt server shape through the plain password path |
+| 2237 | gated by knockd | port knocking: opens for 8 s after UDP 2260,2261,2262 |
+
+The container also has `NET_ADMIN` so tests can shape its link with
+`tc netem` (latency/jitter/loss), and the reconnect tests kill session
+processes, `docker restart` and `docker pause` it to reproduce real
+outages (session kill, sshd host reboot with persisted host keys, silent
+network freeze detected only by keep-alive).
+
+`run.sh --variants` adds the distro matrix — the same recipe on Ubuntu
+20.04 (OpenSSH 8.2), Ubuntu 24.04 (9.6), Alpine 3.20 (busybox userland),
+Debian trixie (OpenSSH 10) and Rocky 9 — and `DockerDistroMatrixTest` runs
+auth/SFTP/PTY/Monitor-probe rows against each. A variant that is not
+running skips unless `-Dconch.distroMatrix=true` demands it (CI does).
 
 ```bash
-tools/sshd-matrix/run.sh    # idempotent: builds image, generates keys, starts container
-./gradlew testFossDebugUnitTest -Dconch.localSshdTest=true \
-    --tests '*.DockerSshdAuthTest' --tests '*.DockerOpenSshIntegrationTest'
+tools/sshd-matrix/run.sh              # idempotent: builds image, generates keys, starts container
+tools/sshd-matrix/run.sh --variants   # + all distro variants (or --variant alpine)
+./gradlew testFossDebugUnitTest -Dconch.localSshdTest=true --tests 'at.least.conch.Docker*'
+./gradlew testFossDebugUnitTest -Dconch.localSshdTest=true -Dconch.distroMatrix=true \
+    --tests 'at.least.conch.Docker*'   # variants must be up
+tools/sshd-matrix/run.sh --stop
 ```
+
+CI runs the whole Docker matrix on every push/PR (`docker-matrix` job).
+
+### On-device tests
+
+`app/src/androidTest` holds instrumented tests for what neither the JVM
+nor Robolectric can reach: the Android-Keystore-backed `SecretsStore`
+feeding a real connect, the SAF provider driven through `ContentResolver`
+(real `ParcelFileDescriptor` pipes), and the foreground `SessionService`
+posting real notifications. They talk to the same sshd matrix via the
+emulator gateway (`10.0.2.2`; `-Pconch.matrixHost=` for a device):
+
+```bash
+tools/sshd-matrix/run.sh
+./gradlew :app:connectedFossDebugAndroidTest            # matrix missing → skipped
+./gradlew :app:connectedFossDebugAndroidTest -Pconch.localSshdTest=true   # → fails (CI)
+```
+
+CI runs them nightly, on manual dispatch and on pushes to `main`
+(`instrumented` job, API 34 x86_64 emulator).
 
 ## Development roadmap
 

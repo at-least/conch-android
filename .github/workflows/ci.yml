@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # nightly: instrumented (emulator) run against the sshd matrix
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 jobs:
   check:
@@ -53,4 +57,97 @@ jobs:
         with:
           name: test-reports
           path: app/build/reports/tests/
+          if-no-files-found: ignore
+
+  # Real OpenSSH in Docker (tools/sshd-matrix): the default bookworm
+  # container (auth, TOFU, SFTP, tunnels, PTY, tmux, ZMODEM, agent, jump,
+  # SOCKS, PAM keyboard-interactive, host-key change, knockd port knocking,
+  # docker-socket Docker tab, tc-netem slow links, kill/restart/pause
+  # reconnects) plus the distro matrix (Ubuntu 20.04/24.04, Alpine, Debian
+  # trixie/OpenSSH 10, Rocky 9). Both flags make a missing container FAIL.
+  docker-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Start sshd matrix (default + all distro variants)
+        run: tools/sshd-matrix/run.sh --variants
+
+      - name: Docker matrix tests
+        run: >
+          ./gradlew :app:testFossDebugUnitTest --stacktrace
+          -Dconch.localSshdTest=true -Dconch.distroMatrix=true
+          --tests 'at.least.conch.Docker*'
+
+      - name: Matrix container logs on failure
+        if: failure()
+        run: |
+          for c in $(docker ps -a --filter name=conch-android-sshd --format '{{.Names}}'); do
+            echo "=== $c"; docker logs "$c" 2>&1 | tail -50
+            docker exec "$c" sh -c 'tail -30 /var/log/sshd_*.log /var/log/knockd.log 2>/dev/null' || true
+          done
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-matrix-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+
+  # On-device: Keystore-backed secrets, the SAF provider through
+  # ContentResolver, the foreground service — on an emulator, against the
+  # same sshd matrix (reached at 10.0.2.2). ~10 min, so nightly / manual /
+  # main only, never on every PR.
+  instrumented:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Start sshd matrix
+        run: tools/sshd-matrix/run.sh
+
+      - name: Instrumented tests (foss, API 34 emulator)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: ./gradlew :app:connectedFossDebugAndroidTest -Pconch.localSshdTest=true --stacktrace
+
+      - name: Upload instrumented reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-reports
+          path: app/build/reports/androidTests/
           if-no-files-found: ignore

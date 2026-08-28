@@ -19,6 +19,15 @@ android {
         targetSdk = 36
         versionCode = 10
         versionName = "0.9.1"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Instrumented tests reach the Docker sshd matrix on the host through
+        // the emulator's gateway; pass -Pconch.matrixHost=… for a real device
+        // and -Pconch.localSshdTest=true to make a missing matrix FAIL (CI).
+        testInstrumentationRunnerArguments["conchMatrixHost"] =
+            (project.findProperty("conch.matrixHost") as String?) ?: "10.0.2.2"
+        testInstrumentationRunnerArguments["conchLocalSshdTest"] =
+            (project.findProperty("conch.localSshdTest") as String?) ?: "false"
     }
 
     flavorDimensions += "store"
@@ -175,10 +184,20 @@ dependencies {
         exclude(group = "org.slf4j", module = "slf4j-android")
     }
     testRuntimeOnly("org.slf4j:slf4j-nop:2.0.16")
+
+    // On-device tests (app/src/androidTest): the real Android Keystore-backed
+    // SecretsStore, the SAF provider driven through ContentResolver, the
+    // foreground SessionService — against the Docker sshd matrix on the host.
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
 tasks.withType<Test>().configureEach {
-    // -Dconch.localSshdTest=true is a Gradle-daemon JVM flag; relay it into the
-    // test JVM so opt-in Docker-sshd tests (DockerSshdAuthTest) can see it.
-    System.getProperty("conch.localSshdTest")?.let { systemProperty("conch.localSshdTest", it) }
+    // -Dconch.localSshdTest=true / -Dconch.distroMatrix=true are Gradle-daemon
+    // JVM flags; relay them into the test JVM so the opt-in Docker-sshd tests
+    // (Docker*Test, see DockerMatrix) can see them.
+    for (flag in listOf("conch.localSshdTest", "conch.distroMatrix")) {
+        System.getProperty(flag)?.let { systemProperty(flag, it) }
+    }
 }
