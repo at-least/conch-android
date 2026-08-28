@@ -48,9 +48,12 @@ class SessionService : Service() {
             }
         } catch (_: Exception) {
             // Android 14+ denies some FGS starts (background timing); the
-            // session still works without the persistent notification.
+            // session still works without the persistent notification. Only
+            // this session is dropped — stopping the service here would
+            // strip the foreground protection of every other live session.
             Registry.remove(sessionId)
-            stopSelf()
+            Registry.takeNotifId(sessionId)
+            if (Registry.isEmpty()) stopSelf()
             return START_NOT_STICKY
         }
         return START_NOT_STICKY
@@ -69,13 +72,17 @@ class SessionService : Service() {
     }
 
     private fun handleForegroundTimeout() {
-        val sessionNames = Registry.entries().map { it.second }
+        val sessions = Registry.entries()
         Registry.clear()
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // stopForeground removes only the bound notification; the ongoing
+        // (non-dismissable) ones of the other sessions would otherwise stay
+        // on the shade forever, since ACTION_STOP no longer knows their ids.
+        sessions.forEach { (id, _) -> nm.cancel(id) }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
-        if (sessionNames.isEmpty()) return
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(TIMEOUT_NOTIF_ID, buildTimeoutNotification(sessionNames.first()))
+        if (sessions.isEmpty()) return
+        nm.notify(TIMEOUT_NOTIF_ID, buildTimeoutNotification(sessions.first().second))
     }
 
     private fun buildTimeoutNotification(hostName: String): Notification {

@@ -105,11 +105,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        AppLock.onWentToBackground()
-    }
-
     /** Parses an OpenSSH config file into hosts; returns the user-facing summary. */
     private fun importOpenSshConfig(uri: android.net.Uri): String = try {
         val text = contentResolver.openInputStream(uri)?.use {
@@ -201,6 +196,7 @@ class MainActivity : FragmentActivity() {
                         // The sessions switcher was buried in the overflow;
                         // a badged action shows at a glance that sessions are
                         // live and opens them in one tap.
+                        LiveSessions.version.intValue // subscribe: the registry is not snapshot state
                         if (!LiveSessions.isEmpty()) {
                             IconButton(onClick = { showSessions = true }) {
                                 BadgedBox(
@@ -322,8 +318,12 @@ class MainActivity : FragmentActivity() {
                 confirmButton = {
                     TextButton(onClick = {
                         hosts.remove(host)
+                        // hosts that jumped through this one would keep a
+                        // dangling id; clear it so they connect directly
+                        hosts.forEach { if (it.jumpHostId == host.id) it.jumpHostId = null }
                         store.save(hosts)
                         store.deleteSecrets(host.id)
+                        HostsWidget.update(this@MainActivity) // or the widget keeps a dead host
                         confirmDelete = null
                         message = "Deleted ${host.displayName()}"
                     }) { Text("Delete") }
@@ -431,6 +431,7 @@ private fun HostCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    LiveSessions.version.intValue // subscribe: the registry is not snapshot state
     val status = HostCardStatus(liveSessionCount = LiveSessions.countForHost(host.id))
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         ListItem(

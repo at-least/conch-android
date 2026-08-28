@@ -1,5 +1,6 @@
 package at.least.conch
 
+import androidx.compose.runtime.mutableIntStateOf
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -31,12 +32,26 @@ object LiveSessions {
 
     private val sessions = ConcurrentHashMap<String, Live>()
 
+    /**
+     * Bumps on every change. The map itself is not snapshot state, so a
+     * composable that only read [isEmpty]/[all] (the home screen's badge)
+     * never recomposed when a session ended in another task; read this
+     * alongside them to subscribe.
+     */
+    val version = mutableIntStateOf(0)
+
+    private fun changed() {
+        version.intValue = version.intValue + 1
+    }
+
     fun register(live: Live) {
         sessions[live.id] = live
+        changed()
     }
 
     fun unregister(id: String) {
         sessions.remove(id)
+        changed()
     }
 
     fun all(): List<Live> = sessions.values.toList().sortedBy { it.startedAt }
@@ -49,5 +64,6 @@ object LiveSessions {
     fun disconnectAll() {
         sessions.values.forEach { runCatching { it.disconnect() } }
         sessions.clear()
+        changed()
     }
 }

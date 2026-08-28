@@ -101,10 +101,21 @@ object CrashReporting {
         }
     }
 
-    private fun scrub(event: io.sentry.SentryEvent): io.sentry.SentryEvent? {
+    /**
+     * beforeSend hook. By the time it runs Sentry has already turned the
+     * throwable into [io.sentry.SentryEvent.getExceptions] — plain strings
+     * carrying the original message — so those are what actually get
+     * serialized and must be scrubbed; swapping the (transient) throwable
+     * alone leaves "Connection refused: prod.example.com:22" in the payload.
+     */
+    internal fun scrub(event: io.sentry.SentryEvent): io.sentry.SentryEvent? {
         event.message?.let { m ->
             val s = m.message
             if (s != null) m.message = Scrubber.scrub(s)
+            m.formatted?.let { f -> m.formatted = Scrubber.scrub(f) }
+        }
+        event.exceptions?.forEach { ex ->
+            ex.value = Scrubber.scrub(ex.value)
         }
         event.throwable?.let { t ->
             event.throwable = Scrubber.scrubThrowable(t)

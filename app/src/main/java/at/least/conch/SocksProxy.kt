@@ -79,42 +79,14 @@ class SocksProxy(private val client: SSHClient) {
             reply(output, 0x07)
             return
         }
-        val host = when (atyp) {
-            0x01 -> {
-                val b = ByteArray(4)
-                readFully(input, b)
-                b.joinToString(".") { (it.toInt() and 0xFF).toString() }
-            }
-            0x03 -> {
-                val len = input.read()
-                val b = ByteArray(len)
-                readFully(input, b)
-                String(b)
-            }
-            0x04 -> {
-                val b = ByteArray(16)
-                readFully(input, b)
-                // build ipv6 text
-                buildString {
-                    for (i in 0 until 8) {
-                        if (i > 0) append(':')
-                        append(
-                            String.format(
-                                Locale.ROOT,
-                                "%x",
-                                ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF)
-                            )
-                        )
-                    }
-                }
-            }
-            else -> {
-                reply(output, 0x08)
-                return
-            }
+        val host = readAddress(input, atyp)
+        if (host == null) {
+            reply(output, 0x08) // address type not supported
+            return
         }
         val portHi = input.read()
         val portLo = input.read()
+        if (portHi < 0 || portLo < 0) return
         val port = (portHi shl 8) or portLo
 
         // open a direct-tcpip channel through SSH
@@ -124,15 +96,57 @@ class SocksProxy(private val client: SSHClient) {
             reply(output, 0x04) // host unreachable
             return
         }
-        reply(output, 0x00) // succeeded
+        try {
+            reply(output, 0x00) // succeeded
 
-        // bridge both directions; closing one side closes the other
-        val t1 = pump(sock.getInputStream(), chan.outputStream)
-        val t2 = pump(chan.inputStream, output)
-        t1.join()
-        t2.join()
-        runCatching { sock.close() }
-        runCatching { chan.close() }
+            // bridge both directions; closing one side closes the other
+            val t1 = pump(sock.getInputStream(), chan.outputStream)
+            val t2 = pump(chan.inputStream, output)
+            t1.join()
+            t2.join()
+        } finally {
+            // a client that hung up before the reply must not leave the
+            // direct-tcpip channel open on the shared SSH connection
+            runCatching { sock.close() }
+            runCatching { chan.close() }
+        }
+    }
+
+    /** DST.ADDR for [atyp]; null for an unsupported type (or a truncated domain length). */
+    private fun readAddress(input: InputStream, atyp: Int): String? = when (atyp) {
+        0x01 -> {
+            val b = ByteArray(4)
+            readFully(input, b)
+            b.joinToString(".") { (it.toInt() and 0xFF).toString() }
+        }
+        0x03 -> {
+            val len = input.read()
+            if (len < 0) {
+                null
+            } else {
+                val b = ByteArray(len)
+                readFully(input, b)
+                String(b)
+            }
+        }
+        0x04 -> {
+            val b = ByteArray(16)
+            readFully(input, b)
+            // build ipv6 text
+            buildString {
+                for (i in 0 until 8) {
+                    if (i > 0) append(':')
+                    append(
+                        String.format(
+                            Locale.ROOT,
+                            "%x",
+                            ((b[i * 2].toInt() and 0xFF) shl 8) or (b[i * 2 + 1].toInt() and 0xFF)
+                        )
+                    )
+                }
+            }
+        }
+        else -> null
     }
 
     private fun reply(output: OutputStream, status: Int) {

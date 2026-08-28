@@ -72,9 +72,11 @@ class ScheduledBackup(private val context: Context) {
     }
 
     /** Foreground hook: export only if the gate rules say so. Never throws. */
-    fun maybeExport(nowMs: Long = System.currentTimeMillis()): Outcome {
+    fun maybeExport(nowMs: Long = System.currentTimeMillis()): Outcome = synchronized(exportLock) {
         val tree = prefs().getString(KEY_TREE, null)?.toUri() ?: return Outcome.NotConfigured
-        val payload = BackupManager(context).collect()
+        val manager = BackupManager(context)
+        if (manager.hasUnreadableSecrets()) return Outcome.Failed(UNREADABLE_SECRETS)
+        val payload = manager.collect()
         val fp = BackupCodec.fingerprint(payload)
         val p = prefs()
         val changed = fp != p.getString(KEY_FP, null)
@@ -87,9 +89,11 @@ class ScheduledBackup(private val context: Context) {
     }
 
     /** Settings button path: ignores the gates, still needs configuration. */
-    fun exportNow(nowMs: Long = System.currentTimeMillis()): Outcome {
+    fun exportNow(nowMs: Long = System.currentTimeMillis()): Outcome = synchronized(exportLock) {
         val tree = prefs().getString(KEY_TREE, null)?.toUri() ?: return Outcome.NotConfigured
-        val payload = BackupManager(context).collect()
+        val manager = BackupManager(context)
+        if (manager.hasUnreadableSecrets()) return Outcome.Failed(UNREADABLE_SECRETS)
+        val payload = manager.collect()
         return writeBackup(tree, payload, BackupCodec.fingerprint(payload), nowMs)
     }
 
@@ -151,6 +155,21 @@ class ScheduledBackup(private val context: Context) {
     private fun prefs() = context.getSharedPreferences("scheduled_backup", Context.MODE_PRIVATE)
 
     companion object {
+        /**
+         * Settings' "sync now" and Main.onResume's maybeExport can overlap;
+         * both would then createDocument() and leave "conch-backup (1).til"
+         * behind in the sync folder, with only one of them tracked.
+         */
+        private val exportLock = Any()
+
+        /**
+         * The synced file is the user's only off-device copy of their keys;
+         * a Keystore that cannot decrypt them right now must never cause it
+         * to be overwritten with a backup that has none.
+         */
+        const val UNREADABLE_SECRETS =
+            "stored passwords/keys are unreadable right now (Keystore) — backup not overwritten"
+
         /** At most one export per hour; unchanged data never rewrites. */
         const val MIN_INTERVAL_MS = 60L * 60 * 1000
 

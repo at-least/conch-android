@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -86,6 +87,9 @@ import kotlinx.coroutines.withContext
 /** Connection health shown as the banner: dot style + color per state (see [StatusDot]). */
 internal enum class ConnState { CONNECTING, CONNECTED, RECONNECTING, STOPPED }
 
+/** ZMODEM uploads are in-memory (file + escaped copy); SFTP streams, so big files go there. */
+const val ZMODEM_UPLOAD_MAX_BYTES = 32 * 1024 * 1024
+
 class TerminalActivity : FragmentActivity() {
 
     private var reconnector: SessionReconnector? = null
@@ -112,6 +116,9 @@ class TerminalActivity : FragmentActivity() {
     private val message = mutableStateOf<String?>(null)
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Token scoping the reconnector's pending retry on [mainHandler]. */
+    private val retryToken = Any()
 
     /** Command history capture (null when disabled in Settings). */
     private var historyAssembler: InputLineAssembler? = null
@@ -158,11 +165,6 @@ class TerminalActivity : FragmentActivity() {
         AppLock.lockIfNeeded(this)
     }
 
-    override fun onStop() {
-        super.onStop()
-        AppLock.onWentToBackground()
-    }
-
     override fun onResume() {
         super.onResume()
         if (SettingsStore.keepScreenOn(this)) {
@@ -195,8 +197,12 @@ class TerminalActivity : FragmentActivity() {
 
                 override fun onSessionStopped(reason: String) = showStopped(reason)
             },
-            postDelayed = { delayMs, action -> mainHandler.postDelayed(action, delayMs) },
-            cancelScheduled = { mainHandler.removeCallbacksAndMessages(null) },
+            // Token-scoped so cancelling a retry never drops unrelated work
+            // someone later posts on the same handler.
+            postDelayed = { delayMs, action ->
+                mainHandler.postAtTime(action, retryToken, SystemClock.uptimeMillis() + delayMs)
+            },
+            cancelScheduled = { mainHandler.removeCallbacksAndMessages(retryToken) },
         ).also { it.start() }
     }
 
@@ -304,7 +310,7 @@ class TerminalActivity : FragmentActivity() {
         ) { uri ->
             if (uri != null) {
                 try {
-                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    val bytes = contentResolver.openInputStream(uri)?.use { readBounded(it, ZMODEM_UPLOAD_MAX_BYTES) }
                         ?: error("Cannot read file")
                     val name = uri.lastPathSegment?.substringAfterLast('/') ?: "upload.bin"
                     terminalView?.beginZmodemUpload(name, bytes)
@@ -584,12 +590,16 @@ class TerminalActivity : FragmentActivity() {
                                         reconnector?.write(data)
                                         historyAssembler?.feed(data)
                                     }
+                                    // ZMODEM frames / cancels: SSH-bound, but not
+                                    // keystrokes — keep them out of command history
+                                    onProtocol = { data -> reconnector?.write(data) }
                                     // Engine device replies (CPR/DA/...) go to the SSH channel too.
                                     this@TerminalActivity.emulator?.onResponse = { data ->
                                         reconnector?.write(data)
                                     }
                                     onPtyResize = { c, r -> reconnector?.resizePty(c, r) }
                                     onCtrlStateChanged = { armed -> this@TerminalActivity.ctrlArmed.value = armed }
+                                    onAltStateChanged = { armed -> this@TerminalActivity.altArmed.value = armed }
                                     onScrollOffsetChanged = { off -> this@TerminalActivity.scrollOffset.intValue = off }
                                     if (host?.fontSizeSp ?: 0f > 0f) {
                                         fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
@@ -900,6 +910,25 @@ class TerminalActivity : FragmentActivity() {
         val tv = terminalView ?: return
         tv.ctrlArmed = !tv.ctrlArmed
         ctrlArmed.value = tv.ctrlArmed
+    }
+
+    /**
+     * Reads at most [max] bytes, failing clearly beyond that. The ZMODEM
+     * sender holds the whole file plus its escaped form in memory, so an
+     * unbounded pick (a 400 MB tarball) was an OOM crash mid-upload.
+     */
+    private fun readBounded(input: java.io.InputStream, max: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(64 * 1024)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            if (out.size() + n > max) {
+                error("File is larger than ${max / (1024 * 1024)} MB — use the Files tab (SFTP) for big uploads")
+            }
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
     }
 
     private fun toggleAlt() {

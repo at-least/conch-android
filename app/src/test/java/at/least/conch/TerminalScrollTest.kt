@@ -41,6 +41,29 @@ class TerminalScrollTest {
     }
 
     @Test
+    fun `slow drag accumulates sub-cell deltas into whole lines`() {
+        // four quarter-cell events (a slow finger at 120 Hz) = one line
+        var offset = 7
+        var carry = 0f
+        repeat(3) {
+            val (next, rem) = TerminalScroll.afterDrag(offset, carry, -cell / 4, cell, max)
+            assertEquals("no line yet", 7, next)
+            offset = next
+            carry = rem
+        }
+        val (next, rem) = TerminalScroll.afterDrag(offset, carry, -cell / 4, cell, max)
+        assertEquals(8, next)
+        assertEquals(0f, rem, 0.001f)
+    }
+
+    @Test
+    fun `fast drag keeps its fractional remainder`() {
+        val (next, rem) = TerminalScroll.afterDrag(0, 0f, -2.5f * cell, cell, max)
+        assertEquals(2, next)
+        assertEquals(-0.5f * cell, rem, 0.001f)
+    }
+
+    @Test
     fun `fling down goes deeper into history`() {
         // velocityY is the finger velocity: down is positive.
         val next = TerminalScroll.afterFling(current = 0, velocityY = 16000f, max = max)

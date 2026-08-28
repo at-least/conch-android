@@ -29,10 +29,35 @@ object Ed25519Codec {
         return PKCS8_PREFIX + seed
     }
 
+    /**
+     * Seed from a PKCS#8 Ed25519 key. Accepts the minimal v1 shape this
+     * codec writes AND RFC 8410 v2 blobs (attributes and/or the embedded
+     * public key, as some tools emit): the seed is always the 32-byte
+     * OCTET STRING nested in the privateKey OCTET STRING (`04 22 04 20`),
+     * and the algorithm must be the Ed25519 OID.
+     */
     fun seedFromPkcs8(pkcs8: ByteArray): ByteArray? {
-        if (pkcs8.size != 48) return null
-        if (!pkcs8.copyOfRange(0, 16).contentEquals(PKCS8_PREFIX)) return null
-        return pkcs8.copyOfRange(16, 48)
+        if (pkcs8.size == 48 && pkcs8.copyOfRange(0, 16).contentEquals(PKCS8_PREFIX)) {
+            return pkcs8.copyOfRange(16, 48)
+        }
+        if (indexOf(pkcs8, ED25519_ALGORITHM) < 0) return null
+        val at = indexOf(pkcs8, CURVE_PRIVATE_KEY_TAG)
+        if (at < 0 || at + CURVE_PRIVATE_KEY_TAG.size + 32 > pkcs8.size) return null
+        return pkcs8.copyOfRange(at + CURVE_PRIVATE_KEY_TAG.size, at + CURVE_PRIVATE_KEY_TAG.size + 32)
+    }
+
+    /** AlgorithmIdentifier for id-Ed25519 (1.3.101.112). */
+    private val ED25519_ALGORITHM = hexToBytes("300506032b6570")
+
+    /** OCTET STRING(34) { OCTET STRING(32) } — the CurvePrivateKey wrapper. */
+    private val CURVE_PRIVATE_KEY_TAG = hexToBytes("04220420")
+
+    private fun indexOf(haystack: ByteArray, needle: ByteArray): Int {
+        outer@ for (i in 0..haystack.size - needle.size) {
+            for (j in needle.indices) if (haystack[i + j] != needle[j]) continue@outer
+            return i
+        }
+        return -1
     }
 
     fun x509FromPublic(publicPoint: ByteArray): ByteArray {

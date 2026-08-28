@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /** SSH key management: generate ed25519 keys, import, inspect, delete. */
+@Suppress("TooManyFunctions") // one screen's actions: import (+passphrase retry), export, generate, delete
 class KeysActivity : ComponentActivity() {
 
     /** An import that needs a passphrase (first prompt or retry). */
@@ -72,10 +73,26 @@ class KeysActivity : ComponentActivity() {
     /** One-shot user-facing message, shown as a Snackbar (was Toast). */
     private var message: String? by mutableStateOf(null)
 
+    /**
+     * Key import runs here: reading a SAF stream (Drive can be slow) and,
+     * for passphrase-protected OpenSSH keys, bcrypt-pbkdf — seconds on a
+     * phone, an ANR on the main thread.
+     */
+    private val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "conch-keys").apply { isDaemon = true }
+    }
+
+    private var importing: Boolean by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { ConchTheme { KeysScreen() } }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        executor.shutdown()
     }
 
     override fun onResume() {
@@ -86,14 +103,20 @@ class KeysActivity : ComponentActivity() {
 
     /** Reads the picked file and runs the first import attempt. */
     private fun readAndImport(uri: android.net.Uri) {
-        try {
-            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                ?: error("Cannot read file")
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "imported"
-            attemptImport(name, bytes, null)
-        } catch (e: Exception) {
-            CrashReporting.report(e)
-            message = "Import failed: ${e.message}"
+        importing = true
+        executor.execute {
+            try {
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("Cannot read file")
+                val name = displayNameOf(this, uri) ?: "imported"
+                attemptImportBlocking(name, bytes, null)
+            } catch (e: Exception) {
+                CrashReporting.report(e)
+                runOnUiThread {
+                    importing = false
+                    message = "Import failed: ${e.message}"
+                }
+            }
         }
     }
 
@@ -164,21 +187,34 @@ class KeysActivity : ComponentActivity() {
      * failing out to the file picker. Parity driver: ConnectBot "wrong key
      * passphrase gives no retry".
      */
-    private fun attemptImport(name: String, bytes: ByteArray, passphrase: CharArray?) {
-        try {
-            KeyManager(this).import(name, bytes, passphrase)
-            keys.clear()
-            keys.addAll(KeyManager(this).list())
-            passphrasePrompt = null
-            passphraseText = ""
-            message = "Imported $name"
+    /** Runs on [executor]; every UI mutation hops back to the main thread. */
+    private fun attemptImportBlocking(name: String, bytes: ByteArray, passphrase: CharArray?) {
+        val km = KeyManager(this)
+        val outcome: Runnable = try {
+            km.import(name, bytes, passphrase)
+            val fresh = km.list()
+            Runnable {
+                keys.clear()
+                keys.addAll(fresh)
+                passphrasePrompt = null
+                passphraseText = ""
+                message = "Imported $name"
+            }
         } catch (e: EncryptedKeyException) {
-            passphrasePrompt = PassphrasePrompt(name, bytes, e.message ?: "Passphrase required")
-            passphraseText = ""
+            Runnable {
+                passphrasePrompt = PassphrasePrompt(name, bytes, e.message ?: "Passphrase required")
+                passphraseText = ""
+            }
         } catch (e: Exception) {
             CrashReporting.report(e)
-            passphrasePrompt = null
-            message = "Import failed: ${e.message}"
+            Runnable {
+                passphrasePrompt = null
+                message = "Import failed: ${e.message}"
+            }
+        }
+        runOnUiThread {
+            importing = false
+            outcome.run()
         }
     }
 
@@ -245,22 +281,32 @@ class KeysActivity : ComponentActivity() {
                 name = genName,
                 onNameChange = { genName = it },
                 onGenerate = {
-                    KeyManager(this).generate(genName.trim())
-                    keys.clear()
-                    keys.addAll(KeyManager(this).list())
+                    try {
+                        KeyManager(this).generate(genName.trim())
+                        keys.clear()
+                        keys.addAll(KeyManager(this).list())
+                        message = "Generated ${genName.trim()}"
+                    } catch (e: Exception) {
+                        // a Keystore failure (or an unreadable keys.json)
+                        // is a message, not a crash
+                        CrashReporting.report(e)
+                        message = "Generate failed: ${e.message}"
+                    }
                     showGenerate = false
-                    message = "Generated ${genName.trim()}"
                 },
                 onDismiss = { showGenerate = false },
             )
         }
 
-        var exportKey by remember { mutableStateOf<SshKeyInfo?>(null) }
+        // saveable: the CreateDocument result can arrive in a recreated
+        // activity (process death behind the picker), where a plain
+        // remember() would have forgotten which key to write
+        var exportKeyId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
         val exportLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("text/plain")
         ) { uri ->
-            val k = exportKey
-            exportKey = null
+            val k = exportKeyId?.let { id -> keys.firstOrNull { it.id == id } }
+            exportKeyId = null
             if (uri != null && k != null) writeExport(uri, k)
         }
 
@@ -271,7 +317,9 @@ class KeysActivity : ComponentActivity() {
                 onTextChange = { passphraseText = it },
                 onUnlock = {
                     if (passphraseText.isNotEmpty()) {
-                        attemptImport(prompt.name, prompt.bytes, passphraseText.toCharArray())
+                        val pass = passphraseText.toCharArray()
+                        importing = true
+                        executor.execute { attemptImportBlocking(prompt.name, prompt.bytes, pass) }
                     }
                 },
                 onDismiss = {
@@ -291,13 +339,18 @@ class KeysActivity : ComponentActivity() {
                     message = "Public key copied"
                 },
                 onDelete = {
-                    KeyManager(this@KeysActivity).delete(k.id)
-                    keys.removeAll { it.id == k.id }
+                    try {
+                        KeyManager(this@KeysActivity).delete(k.id)
+                        keys.removeAll { it.id == k.id }
+                        message = "Deleted ${k.name}"
+                    } catch (e: Exception) {
+                        CrashReporting.report(e)
+                        message = "Delete failed: ${e.message}"
+                    }
                     detail = null
-                    message = "Deleted ${k.name}"
                 },
                 onExport = {
-                    exportKey = k
+                    exportKeyId = k.id
                     detail = null
                     exportLauncher.launch("${k.name}.key")
                 },

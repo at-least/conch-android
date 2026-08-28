@@ -1,6 +1,9 @@
 package at.least.conch
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.os.Bundle
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
@@ -60,7 +63,11 @@ object AppLock {
                 }
 
                 override fun onAuthenticationError(code: Int, msg: CharSequence) {
-                    // cancelled / too many failures -> close the app
+                    // ERROR_CANCELED is the SYSTEM withdrawing the prompt
+                    // (incoming call, rotation, app sent to background) —
+                    // the next onStart re-prompts. Anything the user did
+                    // (cancel, negative button) or a lockout closes the app.
+                    if (code == BiometricPrompt.ERROR_CANCELED) return
                     activity.finishAffinity()
                 }
             },
@@ -75,5 +82,37 @@ object AppLock {
 
     fun onWentToBackground() {
         unlockedSince = 0L
+    }
+
+    /**
+     * Re-locks only when the whole app leaves the foreground. Android orders
+     * an activity switch as `A.onPause → B.onStart → A.onStop`, so a
+     * per-activity onStop hook zeroed the grace window right after the
+     * next screen had passed its check — every Main↔Terminal/Settings hop
+     * (and every rotation of Main) re-prompted, which is exactly what the
+     * grace window exists to prevent.
+     */
+    fun install(app: Application) {
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            private var started = 0
+
+            override fun onActivityStarted(activity: Activity) {
+                started++
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                started--
+                if (started <= 0) {
+                    started = 0
+                    onWentToBackground()
+                }
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
     }
 }

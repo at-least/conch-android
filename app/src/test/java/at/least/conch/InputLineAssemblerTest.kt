@@ -172,4 +172,28 @@ class InputLineAssemblerTest {
     fun `empty CR emits nothing`() {
         assertTrue(assemble(byteArrayOf(0x0D), byteArrayOf(0x0D)).isEmpty())
     }
+
+    @Test
+    fun `readline editing keys make the line untrackable`() {
+        // Ctrl-R search: the shell runs the matched command, not "lsdep"
+        val ctrlR = assemble(b("ls"), byteArrayOf(0x12), b("dep"), byteArrayOf(0x0D))
+        assertTrue("Ctrl-R result must not be recorded as typed text", ctrlR.isEmpty())
+        // Ctrl-W kills a word: the shell runs "ls bar", we would have said "ls foobar"
+        val ctrlW = assemble(b("ls foo"), byteArrayOf(0x17), b("bar"), byteArrayOf(0x0D))
+        assertTrue(ctrlW.isEmpty())
+        // Ctrl-A / Ctrl-E / Ctrl-K likewise
+        for (c in intArrayOf(0x01, 0x05, 0x0B)) {
+            val edited = assemble(b("echo hi"), byteArrayOf(c.toByte()), byteArrayOf(0x0D))
+            assertTrue("0x${c.toString(16)}", edited.isEmpty())
+        }
+        // and the next line is tracked again
+        val asm = mutableListOf<String>()
+        val a = InputLineAssembler { asm.add(it) }
+        a.feed(b("ls"))
+        a.feed(byteArrayOf(0x12))
+        a.feed(byteArrayOf(0x0D))
+        a.feed(b("pwd"))
+        a.feed(byteArrayOf(0x0D))
+        assertEquals(listOf("pwd"), asm)
+    }
 }

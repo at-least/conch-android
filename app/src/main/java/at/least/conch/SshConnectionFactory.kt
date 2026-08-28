@@ -3,6 +3,10 @@ package at.least.conch
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import net.schmizz.keepalive.KeepAliveProvider
+import net.schmizz.keepalive.KeepAliveRunner
+import net.schmizz.sshj.Config
+import net.schmizz.sshj.DefaultConfig
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
 
@@ -19,6 +23,26 @@ object SshConnectionFactory {
      */
     const val KEEP_ALIVE_INTERVAL_SECONDS = 15
 
+    /**
+     * Unanswered keep-alives before the transport is declared dead: 3 × 15 s
+     * = 45 s. sshj's default provider only *sends* IGNORE packets and never
+     * expects a reply, so a transport whose network silently vanished
+     * (Wi-Fi→cellular handover, NAT table flush) stayed "connected" until
+     * TCP's own retransmit timeout — minutes — and the reconnect never
+     * started. Request/response keep-alives give the reader thread a real
+     * failure to act on.
+     */
+    const val KEEP_ALIVE_MAX_UNANSWERED = 3
+
+    /**
+     * Prefix for errors that only editing the host record can fix (no
+     * password saved, key auth with no key chosen, jump host deleted). The
+     * reconnector treats these as terminal — retrying with backoff forever
+     * against a local misconfiguration only hides the message that says
+     * what to do.
+     */
+    const val HOST_CONFIG_PREFIX = "Edit this host: "
+
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     /**
@@ -33,7 +57,7 @@ object SshConnectionFactory {
     ): SSHClient {
         val jumpHost = host.jumpHostId?.let { id ->
             HostStore(context).load().firstOrNull { it.id == id }
-                ?: error("Jump host not found — edit this host and reselect a jump host")
+                ?: error("${HOST_CONFIG_PREFIX}jump host not found — reselect a jump host")
         }
         val keys = agentKeys ?: if (host.forwardAgent) KeyManagerAgentSource(context) else null
         return connect(
@@ -78,7 +102,7 @@ object SshConnectionFactory {
      * failed auth, session teardown) tears the jump transport down too, so
      * SshSession's existing single-client lifecycle needs no changes.
      */
-    private class JumpedClient(private val jump: SSHClient) : SSHClient() {
+    private class JumpedClient(config: Config, private val jump: SSHClient) : SSHClient(config) {
         override fun disconnect() {
             try { super.disconnect() } catch (_: Exception) {}
             try { jump.disconnect() } catch (_: Exception) {}
@@ -95,35 +119,28 @@ object SshConnectionFactory {
         jump: SSHClient? = null,
         agentKeys: AgentKeySource? = null,
     ): SSHClient {
-        val ssh = if (jump != null) JumpedClient(jump) else SSHClient()
+        val config = DefaultConfig().apply { keepAliveProvider = KeepAliveProvider.KEEP_ALIVE }
+        val ssh = if (jump != null) JumpedClient(config, jump) else SSHClient(config)
         ssh.addHostKeyVerifier(TofuHostKeyVerifier(store, prompt, mainHandler))
         ssh.connectTimeout = 10_000
         ssh.timeout = 0
         ssh.useCompression()
-        if (jump != null) {
-            ssh.connectVia(jump.newDirectConnection(host.hostname, host.port))
-        } else {
-            ssh.connect(host.hostname, host.port)
-        }
 
         try {
-            when (host.authType) {
-                Host.AUTH_KEY -> {
-                    val keyId = host.keyId
-                        ?: error("Host is set to key auth but no key is selected")
-                    val provider = keyProvider(ssh, keyId)
-                    ssh.authPublickey(host.username, provider)
-                }
-                else -> {
-                    val pw = password(host)
-                    if (pw.isNullOrEmpty()) {
-                        error("No stored password — edit this host and save a password")
-                    }
-                    ssh.authPassword(host.username, pw)
-                }
+            if (jump != null) {
+                // Inside the try: a target that is unreachable through the
+                // jump, or whose host key is rejected, must not leak the
+                // already-authenticated jump transport (one per retry).
+                ssh.connectVia(jump.newDirectConnection(host.hostname, host.port))
+            } else {
+                ssh.connect(host.hostname, host.port)
             }
+            authenticate(ssh, host, keyProvider, password)
             if (host.keepAlive) {
-                ssh.connection.keepAlive.setKeepAliveInterval(KEEP_ALIVE_INTERVAL_SECONDS)
+                ssh.connection.keepAlive.apply {
+                    keepAliveInterval = KEEP_ALIVE_INTERVAL_SECONDS
+                    (this as? KeepAliveRunner)?.maxAliveCount = KEEP_ALIVE_MAX_UNANSWERED
+                }
             }
             if (host.forwardAgent && agentKeys != null) {
                 // a refusing server must not kill the session (tunnel policy)
@@ -133,12 +150,34 @@ object SshConnectionFactory {
                 }
             }
         } catch (e: Exception) {
-            // The transport is already connected; without this the socket and
-            // sshj reader threads leak on every failed login attempt.
+            // Without this the socket and sshj reader threads (and the jump
+            // client, via JumpedClient) leak on every failed attempt.
             try { ssh.disconnect() } catch (_: Exception) {}
             throw e
         }
         return ssh
+    }
+
+    private fun authenticate(
+        ssh: SSHClient,
+        host: Host,
+        keyProvider: (SSHClient, String) -> KeyProvider,
+        password: (Host) -> String?,
+    ) {
+        when (host.authType) {
+            Host.AUTH_KEY -> {
+                val keyId = host.keyId
+                    ?: error("${HOST_CONFIG_PREFIX}key auth is selected but no key is chosen")
+                ssh.authPublickey(host.username, keyProvider(ssh, keyId))
+            }
+            else -> {
+                val pw = password(host)
+                if (pw.isNullOrEmpty()) {
+                    error("${HOST_CONFIG_PREFIX}no stored password — save a password")
+                }
+                ssh.authPassword(host.username, pw)
+            }
+        }
     }
 
     fun describeError(e: Exception): String = when {

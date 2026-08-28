@@ -69,4 +69,32 @@ class Ed25519CodecTest {
     private fun readU32(b: ByteArray, off: Int): Int =
         ((b[off].toInt() and 0xFF) shl 24) or ((b[off + 1].toInt() and 0xFF) shl 16) or
             ((b[off + 2].toInt() and 0xFF) shl 8) or (b[off + 3].toInt() and 0xFF)
+
+    @Test
+    fun `pkcs8 v2 with embedded public key yields the same seed`() {
+        val (seed, pub) = Ed25519Codec.generateKeyPair()
+        // RFC 8410 OneAsymmetricKey: version 1, attributes absent, publicKey [1]
+        val v2 = org.bouncycastle.asn1.pkcs.PrivateKeyInfo(
+            org.bouncycastle.asn1.x509.AlgorithmIdentifier(
+                org.bouncycastle.asn1.ASN1ObjectIdentifier("1.3.101.112"),
+            ),
+            org.bouncycastle.asn1.DEROctetString(seed),
+            null,
+            pub,
+        ).encoded
+        assertTrue("must not be the minimal v1 shape", v2.size != 48)
+        assertArrayEquals(seed, Ed25519Codec.seedFromPkcs8(v2))
+    }
+
+    @Test
+    fun `pkcs8 of another algorithm is rejected even when it contains an octet string`() {
+        // X25519 (1.3.101.110) has the same CurvePrivateKey shape but is not an Ed25519 key
+        val x = org.bouncycastle.asn1.pkcs.PrivateKeyInfo(
+            org.bouncycastle.asn1.x509.AlgorithmIdentifier(
+                org.bouncycastle.asn1.ASN1ObjectIdentifier("1.3.101.110"),
+            ),
+            org.bouncycastle.asn1.DEROctetString(ByteArray(32) { 7 }),
+        ).encoded
+        assertEquals(null, Ed25519Codec.seedFromPkcs8(x))
+    }
 }

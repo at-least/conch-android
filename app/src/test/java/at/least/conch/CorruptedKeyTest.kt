@@ -256,6 +256,31 @@ class CorruptedKeyTest {
     """.trimIndent()
 
     @Test
+    fun `an unreadable keys_json refuses writes that would orphan every stored key`() {
+        val (km, dir) = keyManager("{ not json ]")
+        assertTrue(km.list().isEmpty())
+        assertTrue(km.metaUnreadable)
+        assertTrue(File(dir, "keys/keys.json.corrupt").exists())
+        io.mockk.mockkObject(SecretsStore) {
+            io.mockk.every { SecretsStore.put(any(), any()) } returns Unit
+            io.mockk.every { SecretsStore.delete(any()) } returns Unit
+            try {
+                km.generate("new-key")
+                fail("generate must not rewrite an unreadable key list")
+            } catch (e: IllegalStateException) {
+                assertEquals(KeyManager.UNREADABLE_META, e.message)
+            }
+            try {
+                km.delete("whatever")
+                fail("delete must not rewrite an unreadable key list")
+            } catch (e: IllegalStateException) {
+                assertEquals(KeyManager.UNREADABLE_META, e.message)
+            }
+        }
+        assertEquals("the corrupt file is left for recovery", "{ not json ]", File(dir, "keys/keys.json").readText())
+    }
+
+    @Test
     fun `missing keystore secret fails with actionable message and stops reconnect`() {
         // the Keystore-reset scenario: keys.json still lists the key, but
         // the encrypted blob no longer decrypts — get() reads as absent

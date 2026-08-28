@@ -9,9 +9,15 @@
     <!-- Sessions switcher: bring a live terminal's own task back to the front. -->
     <uses-permission android:name="android.permission.REORDER_TASKS" />
 
+    <!-- Android Auto Backup is off: secrets are sealed with a per-device
+         Keystore key that never leaves the device, so a cloud/D2D restore
+         would land hosts and keys whose passwords and key material can no
+         longer be decrypted — every host "exists" but none can connect. The
+         portable path is Settings → Backup (passphrase-encrypted, works on
+         any device) and account-free sync. -->
     <application
         android:name=".App"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"

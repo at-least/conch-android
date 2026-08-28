@@ -85,4 +85,30 @@ class HostStoreLegacyMigrationTest {
         }
         assertEquals(before, file.readText())
     }
+
+    @Test
+    fun `a keystore failure mid-migration keeps every host and leaves the file for a retry`() {
+        val (file, context) = newContext()
+        file.writeText(
+            """[{"id":"h1","hostname":"a","username":"u","password":"pw-one"},""" +
+                """{"id":"h2","hostname":"b","username":"u","password":"pw-two"}]"""
+        )
+        val before = file.readText()
+        val secrets = mutableMapOf<String, String>()
+
+        mockkObject(SecretsStore) {
+            every { SecretsStore.get(any()) } answers { secrets[firstArg()] }
+            every { SecretsStore.put(any(), any()) } answers {
+                if (firstArg<String>() == "host-pw:h2") error("keystore hiccup")
+                secrets[firstArg()] = secondArg()
+            }
+
+            val hosts = HostStore(context).load()
+            assertEquals("the failing host is still listed", listOf("h1", "h2"), hosts.map { it.id })
+            assertEquals("pw-one", secrets["host-pw:h1"])
+        }
+        // not re-saved: h2's password would have been dropped for good
+        assertEquals(before, file.readText())
+        assertTrue(file.readText().contains("pw-two"))
+    }
 }

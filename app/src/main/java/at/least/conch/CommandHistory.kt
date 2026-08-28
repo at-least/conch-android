@@ -315,7 +315,11 @@ class InputLineAssembler(private val onLine: (String) -> Unit) {
                 dropPending = true // Tab: completion, record is a prefix
             }
             else -> if (b < 0x20) {
-                if (inPaste) appendPrintableChar(b.toChar())
+                // any other C0 byte is a readline command we do not model
+                // (Ctrl-R search, Ctrl-W/K/A/E edits …): what the shell runs
+                // is no longer what was typed, so the line must not be
+                // recorded — the contract is "never record a WRONG line"
+                if (inPaste) appendPrintableChar(b.toChar()) else dropPending = true
             } else {
                 appendPrintableChar(b.toChar())
             }

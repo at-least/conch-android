@@ -206,9 +206,12 @@ class SnippetsActivity : ComponentActivity() {
                         enabled = editLabel.isNotBlank() && editCommand.isNotBlank(),
                         onClick = {
                             val target = editing
-                            if (target != null) {
-                                target.label = editLabel.trim()
-                                target.command = editCommand
+                            val idx = target?.let { t -> snippets.indexOfFirst { it.id == t.id } } ?: -1
+                            if (target != null && idx >= 0) {
+                                // replace, don't mutate: the list only
+                                // recomposes on element change, so an in-place
+                                // edit kept showing the old label until resume
+                                snippets[idx] = target.copy(label = editLabel.trim(), command = editCommand)
                             } else {
                                 snippets.add(0, Snippet(label = editLabel.trim(), command = editCommand))
                             }

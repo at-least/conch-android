@@ -84,7 +84,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.sftp.RemoteResourceInfo
@@ -283,9 +285,13 @@ private fun MetricCards(
     )
     MetricCard(
         "Disk (/)",
-        "${formatBytes(s.diskUsedBytes)} / ${formatBytes(s.diskTotalBytes)}",
+        if (s.diskTotalBytes > 0) "${formatBytes(s.diskUsedBytes)} / ${formatBytes(s.diskTotalBytes)}" else "n/a",
         ratio(s.diskUsedBytes, s.diskTotalBytes),
-        "%.1f%% used".format(100.0 * s.diskUsedBytes / s.diskTotalBytes.coerceAtLeast(1))
+        if (s.diskTotalBytes > 0) {
+            "%.1f%% used".format(100.0 * s.diskUsedBytes / s.diskTotalBytes)
+        } else {
+            "df -B1 unavailable on this host (busybox?)"
+        }
     )
     MetricCard("Uptime", formatUptime(s.uptimeSeconds), null, "since boot")
 }
@@ -394,8 +400,11 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     fun refresh() {
         busy = true
         scope.launch {
+            // exec() returns stdout only; "docker: command not found" and
+            // daemon errors are stderr — merge them or the fallback below
+            // never has anything to show
             val out = withContext(Dispatchers.IO) {
-                session.exec(DockerParser.LIST_COMMAND)
+                session.exec("${DockerParser.LIST_COMMAND} 2>&1")
             } ?: ""
             containers.clear()
             containers.addAll(DockerParser.parse(out))
@@ -410,7 +419,9 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
     fun action(container: DockerParser.Container, dockerCmd: String) {
         busy = true
         scope.launch {
-            withContext(Dispatchers.IO) { session.exec("docker $dockerCmd ${container.id}") }
+            val out = withContext(Dispatchers.IO) { session.exec("docker $dockerCmd ${container.id} 2>&1") }
+            // success prints the id; anything longer is the daemon's error
+            status = out?.trim()?.takeIf { it.isNotEmpty() && it != container.id }?.take(2000)
             refresh()
         }
     }
@@ -420,7 +431,8 @@ fun DockerTab(session: SessionReconnector, modifier: Modifier = Modifier) {
         logsText = "loading…"
         scope.launch {
             logsText = withContext(Dispatchers.IO) {
-                session.exec("docker logs --tail 200 ${container.id}")
+                // most services log to stderr; without 2>&1 the dialog is empty
+                session.exec("docker logs --tail 200 ${container.id} 2>&1")
             } ?: "error: exec failed"
         }
     }
@@ -583,6 +595,9 @@ fun SftpTab(
     val context = LocalContext.current
     var sftp by remember { mutableStateOf<SFTPClient?>(null) }
     var sftpFailed by remember { mutableStateOf(false) }
+    // bumped by "Retry": the open effect is keyed on it, otherwise the button
+    // only cleared the flag and the tab sat on "Opening SFTP…" forever
+    var retryGen by remember { mutableIntStateOf(0) }
     var path by remember { mutableStateOf(startPath) }
     val entries = remember { mutableStateListOf<SftpEntry>() }
     var busy by remember { mutableStateOf(false) }
@@ -607,12 +622,22 @@ fun SftpTab(
     // (Re)open SFTP on mount AND on every reconnect (connectionGen change).
     // The previous client is closed first so we never leak a dead SFTPClient
     // after the underlying SSHClient is replaced by SessionReconnector.
-    LaunchedEffect(connectionGen) {
-        sftp?.let { runCatching { it.close() } }
+    LaunchedEffect(connectionGen, retryGen) {
+        // close() sends CHANNEL_CLOSE — a socket write, which on the main
+        // thread throws NetworkOnMainThreadException (swallowed) and leaves
+        // the server-side channel open: the very leak this is here to stop
+        sftp?.let { old -> withContext(Dispatchers.IO) { runCatching { old.close() } } }
         sftp = null
         sftpFailed = false
         entries.clear()
-        val client = withContext(Dispatchers.IO) { session.sftpClient() }
+        // NonCancellable so a cancellation mid-open still hands us the client
+        // (a cancelled withContext discards its result — and the channel)
+        val client = withContext(NonCancellable + Dispatchers.IO) { session.sftpClient() }
+        if (!isActive) {
+            // tab left / reconnected while opening: give the channel back
+            client?.let { c -> withContext(NonCancellable + Dispatchers.IO) { runCatching { c.close() } } }
+            return@LaunchedEffect
+        }
         if (client == null) {
             sftpFailed = true
         } else {
@@ -628,16 +653,23 @@ fun SftpTab(
     // visit leaked one SFTPClient (a channel on the shared connection), until
     // the server's channel limit killed the interactive shell too.
     DisposableEffect(Unit) {
-        onDispose { sftp?.let { runCatching { it.close() } } }
+        onDispose {
+            // off the main thread (see above); a plain thread, since the
+            // composition's scope is already cancelled here
+            sftp?.let { old ->
+                Thread({ runCatching { old.close() } }, "sftp-close").apply { isDaemon = true }.start()
+            }
+        }
     }
 
     fun refresh() {
         val sftp = sftp ?: return
         busy = true
+        val target = path
         scope.launch {
             val list = withContext(Dispatchers.IO) {
                 try {
-                    sftp.ls(path)
+                    sftp.ls(target)
                         .filter { it.name != "." && it.name != ".." }
                         .let { raw -> sortEntries(raw, sortMode, sortDescending) }
                         .map {
@@ -655,6 +687,9 @@ fun SftpTab(
                     emptyList()
                 }
             }
+            // a slow listing that returns after the user already navigated
+            // away must not overwrite the current directory's contents
+            if (target != path) return@launch
             entries.clear()
             entries.addAll(list)
             busy = false
@@ -679,13 +714,23 @@ fun SftpTab(
         status = "Downloading ${entry.name}…"
         scope.launch {
             val msg = withContext(Dispatchers.IO) {
+                var partial: File? = null
                 try {
+                    // the name is whatever the server put in SSH_FXP_NAME
+                    require(!entry.name.contains('/') && entry.name != "..") { "unsafe remote name" }
                     val local = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), entry.name)
-                    sftp.get(entry.path, local.absolutePath)
+                    // land in a .part file: a drop mid-transfer must not leave
+                    // a truncated file under the final name
+                    val part = File(local.parentFile, entry.name + ".part").also { partial = it }
+                    sftp.get(entry.path, part.absolutePath)
+                    if (!part.renameTo(local)) error("cannot rename ${part.name}")
+                    partial = null
                     "Downloaded to: ${local.absolutePath}"
                 } catch (e: Exception) {
                     CrashReporting.report(e)
                     "Download failed: ${e.message}"
+                } finally {
+                    partial?.delete()
                 }
             }
             busy = false
@@ -701,7 +746,7 @@ fun SftpTab(
             val msg = withContext(Dispatchers.IO) {
                 var tmp: File? = null
                 try {
-                    val name = uri.lastPathSegment?.substringAfterLast('/') ?: "upload.bin"
+                    val name = displayNameOf(context, uri) ?: "upload.bin"
                     tmp = File.createTempFile("up", null, context.cacheDir).also { t ->
                         context.contentResolver.openInputStream(uri)?.use { input ->
                             t.outputStream().use { input.copyTo(it) }
@@ -824,7 +869,7 @@ fun SftpTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            Button(onClick = { sftpFailed = false }, modifier = Modifier.padding(top = 16.dp)) {
+            Button(onClick = { retryGen++ }, modifier = Modifier.padding(top = 16.dp)) {
                 Text("Retry")
             }
         }
@@ -1217,4 +1262,21 @@ internal fun LoadingTab(label: String) {
 private suspend fun isWindowsHost(session: SessionReconnector): Boolean {
     val uname = withContext(Dispatchers.IO) { session.exec("uname -s") }
     return uname?.contains("NT", true) == true
+}
+
+/**
+ * The user-visible file name of a SAF document. `lastPathSegment` is an
+ * opaque document id for most providers (Downloads: "msf:123", Drive:
+ * "acc=1;doc=…"), so only the local-storage provider happened to work.
+ */
+internal fun displayNameOf(context: android.content.Context, uri: Uri): String? {
+    val fromQuery = runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    }.getOrNull()
+    val name = fromQuery?.takeIf { it.isNotBlank() }
+        ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+        ?: return null
+    // one path component, never a traversal
+    return name.replace('/', '_').takeIf { it != ".." && it != "." }
 }

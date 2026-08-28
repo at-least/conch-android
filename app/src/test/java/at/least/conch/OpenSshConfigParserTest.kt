@@ -8,6 +8,48 @@ import org.junit.Test
 class OpenSshConfigParserTest {
 
     @Test
+    fun `tabs and key=value separators are the same as spaces`() {
+        val config = "Host=tabbed\n\tHostName\ttab.example.com\n\tUser=carol\n\tPort = 2200\n"
+        val hosts = OpenSshConfigParser.parse(config)
+        assertEquals(1, hosts.size)
+        assertEquals("tabbed", hosts[0].alias)
+        assertEquals("tab.example.com", hosts[0].hostname)
+        assertEquals("carol", hosts[0].user)
+        assertEquals(2200, hosts[0].port)
+    }
+
+    @Test
+    fun `only the first separator splits so option values keep their equals signs`() {
+        val config = """
+            Host jumpy
+              ProxyJump bastion
+              ProxyCommand ssh -o ProxyCommand=none -W %h:%p gw
+              IdentityFile=~/.ssh/id_ed25519
+        """.trimIndent()
+        val h = OpenSshConfigParser.parse(config).single()
+        assertEquals("bastion", h.proxyJump)
+        assertEquals("~/.ssh/id_ed25519", h.identityFile)
+    }
+
+    @Test
+    fun `a Match block does not bleed into the preceding Host`() {
+        val config = """
+            Host web
+              HostName web.example.com
+            Match host web user root
+              HostName root-only.example.com
+              Port 2222
+            Host db
+              HostName db.example.com
+        """.trimIndent()
+        val hosts = OpenSshConfigParser.parse(config)
+        assertEquals(listOf("web", "db"), hosts.map { it.alias })
+        assertEquals("web.example.com", hosts[0].hostname)
+        assertEquals(22, hosts[0].port)
+        assertEquals("db.example.com", hosts[1].hostname)
+    }
+
+    @Test
     fun `parses basic host blocks`() {
         val config = """
             # my servers

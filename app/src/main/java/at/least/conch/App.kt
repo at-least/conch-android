@@ -17,5 +17,6 @@ class App : Application() {
         SecretsStore.init(this)
         NetworkWatcher.init(this)
         CrashReporting.init(this)
+        AppLock.install(this)
     }
 }

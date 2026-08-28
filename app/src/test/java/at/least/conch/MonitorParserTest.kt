@@ -68,6 +68,27 @@ class MonitorParserTest {
     }
 
     @Test
+    fun `a missing DISK section still yields cpu memory and load (busybox df)`() {
+        // busybox df has no -B; its complaint goes to stderr, so the section is empty
+        val out = """
+            ---CPU
+            cpu  100 0 100 800 0 0 0 0 0 0
+            cpu  120 0 120 760 0 0 0 0 0 0
+            ---MEM
+            Mem:   1000 400 0 0 0 600
+            ---DISK
+            ---LOAD
+            0.20 0.18 0.12 1/400 1234
+            ---UP
+            86412.5 100000.0
+        """.trimIndent()
+        val s = MonitorParser.parse(out)!!
+        assertEquals(1000L, s.memTotalBytes)
+        assertEquals(0L, s.diskTotalBytes)
+        assertEquals(0.20, s.load1, 0.0001)
+    }
+
+    @Test
     fun `idle-only delta reads as zero percent busy`() {
         // all new ticks landed in idle -> busy share 0% (iOS parity edge)
         val busy = MonitorParser.cpuUsage(

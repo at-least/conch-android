@@ -40,10 +40,13 @@ class ZmodemReceiver {
         const val ZCOMPL = 15
         const val ZCAN = 16
 
+        // Subpacket terminators (zmodem.h): 'j' = ZCRCQ (more follows, ZACK
+        // wanted), 'k' = ZCRCW (frame ends, ZACK wanted). sz ends every
+        // ZFILE subpacket with 'k'.
         const val ZCRCE = 0x68 // 'h' frame ends, no ZACK
         const val ZCRCG = 0x69 // 'i' more subpackets follow
-        const val ZCRCW = 0x6A // 'j' end, ZACK expected
-        const val ZCRCQ = 0x6B // 'k' ZACK expected, more follows
+        const val ZCRCQ = 0x6A // 'j' ZACK expected, more follows
+        const val ZCRCW = 0x6B // 'k' end, ZACK expected
 
         const val CANFDX = 0x01
         const val CANOVIO = 0x02
@@ -65,8 +68,13 @@ class ZmodemReceiver {
             return c
         }
 
-        /** ZRINIT reply advertising 16-bit CRC only (no CANFC32). */
-        fun zrinitBytes(): ByteArray = hexFrame(ZRINIT, intArrayOf(0, CANFDX or CANOVIO, 0, 0))
+        /**
+         * ZRINIT reply advertising 16-bit CRC only (no CANFC32). Flags live
+         * in ZF0 = header byte 3 (ZF0..ZF3 are ZP3..ZP0 read backwards);
+         * bytes 0–1 are the receive-buffer size, 0 = unlimited (full
+         * streaming, which is what our receiver does).
+         */
+        fun zrinitBytes(): ByteArray = hexFrame(ZRINIT, intArrayOf(0, 0, 0, CANFDX or CANOVIO))
 
         /**
          * Hex frame: ZPAD ZDLE 'B', 14 hex chars (type+4 bytes+CRC16), CR LF.
@@ -118,6 +126,13 @@ class ZmodemReceiver {
         val active: Boolean,
     )
 
+    /**
+     * SNIFF: terminal bytes pass through until a frame start. ACTIVE: a
+     * transfer is running. DONE: the stream was handed to a [ZmodemSender]
+     * (remote `rz`); bytes pass through as a safety net. A finished or
+     * failed download returns to SNIFF, so the same instance keeps
+     * watching for the next `sz` — and never blacks out the terminal.
+     */
     private enum class Phase { SNIFF, ACTIVE, DONE }
 
     private var phase = Phase.SNIFF
@@ -132,6 +147,9 @@ class ZmodemReceiver {
     private val send = ByteArrayOutputStream()
     private val display = ByteArrayOutputStream()
 
+    /** "OO" (over-and-out) bytes sz still owes after our ZFIN; swallowed, not shown. */
+    private var overAndOutLeft = 0
+
     val isActive: Boolean get() = phase == Phase.ACTIVE
 
     fun feed(input: ByteArray): FeedResult {
@@ -143,7 +161,10 @@ class ZmodemReceiver {
             when (phase) {
                 Phase.SNIFF -> sniff()
                 Phase.ACTIVE -> parse()
-                Phase.DONE -> {}
+                Phase.DONE -> {
+                    display.write(buf)
+                    buf = ByteArray(0)
+                }
             }
         } catch (e: Exception) {
             fail("zmodem: ${e.message}")
@@ -163,13 +184,34 @@ class ZmodemReceiver {
 
     private fun fail(reason: String) {
         events.add(Event.Failed(reason))
-        phase = Phase.DONE
+        // whatever sz still had in flight is protocol junk, not terminal
+        // output — drop it and go back to watching for the next transfer
+        buf = ByteArray(0)
+        resetToSniff()
+    }
+
+    private fun resetToSniff() {
+        phase = Phase.SNIFF
+        awaitSub = 0
+        inData = false
+        fileName = ""
+        fileSize = 0
+        received = 0
+        expectedPos = 0
     }
 
     // -------------------------------------------------------------- SNIFF
 
     /** Pass bytes through until a frame start "**␘B" / "*␘B" / "**␘0" / "*␘0" appears. */
     private fun sniff() {
+        while (overAndOutLeft > 0 && buf.isNotEmpty()) {
+            if (buf[0] != 'O'.code.toByte()) {
+                overAndOutLeft = 0
+                break
+            }
+            buf = buf.copyOfRange(1, buf.size)
+            overAndOutLeft--
+        }
         var i = 0
         while (i < buf.size) {
             if (isFrameStartAt(i)) {
@@ -475,23 +517,33 @@ class ZmodemReceiver {
                 send.write(zrinitBytes())
             }
             ZFIN -> {
+                // "OO" is the SENDER's sign-off (sz writes it after our
+                // ZFIN); a receiver that sends it lands "OO" in the remote
+                // shell's input once sz has exited
                 send.write(hexFrame(ZFIN))
-                send.write("OO".toByteArray())
-                phase = Phase.DONE
+                overAndOutLeft = 2
+                resetToSniff()
             }
             ZNAK, ZCRC, ZCHALLENGE, ZCOMPL, ZACK, ZSKIP -> {}
             ZABORT, ZCAN, ZFERR -> fail("remote aborted")
         }
     }
 
-    private fun hdrToLong(hdr: IntArray): Long =
-        ((hdr[0].toLong() and 0xFF) shl 24) or ((hdr[1].toLong() and 0xFF) shl 16) or
-            ((hdr[2].toLong() and 0xFF) shl 8) or (hdr[3].toLong() and 0xFF)
+    /**
+     * Position headers are little-endian: ZP0 is the low byte (zmodem.h;
+     * lrzsz sends ZEOF len 19 as `13 00 00 00`). Every happy-path position
+     * is 0 so a big-endian mistake stays invisible — until a ZRPOS resync
+     * or a ZCRCW ack at a non-zero offset, where sz reads pos 768 as
+     * 196608 and the transfer stalls.
+     */
+    internal fun hdrToLong(hdr: IntArray): Long =
+        ((hdr[3].toLong() and 0xFF) shl 24) or ((hdr[2].toLong() and 0xFF) shl 16) or
+            ((hdr[1].toLong() and 0xFF) shl 8) or (hdr[0].toLong() and 0xFF)
 
-    private fun pos4(v: Long): IntArray = intArrayOf(
-        (v ushr 24 and 0xFF).toInt(),
-        (v ushr 16 and 0xFF).toInt(),
-        (v ushr 8 and 0xFF).toInt(),
+    internal fun pos4(v: Long): IntArray = intArrayOf(
         (v and 0xFF).toInt(),
+        (v ushr 8 and 0xFF).toInt(),
+        (v ushr 16 and 0xFF).toInt(),
+        (v ushr 24 and 0xFF).toInt(),
     )
 }

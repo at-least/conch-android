@@ -7,6 +7,7 @@ import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.common.KeyType
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
+import net.schmizz.sshj.userauth.password.PasswordUtils
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
@@ -59,14 +60,26 @@ class KeyManager(private val context: Context) {
     private val dir: File get() = File(context.filesDir, "keys").apply { mkdirs() }
     private val metaFile: File get() = File(dir, "keys.json")
 
+    /**
+     * True when the last [list] found keys.json present but unreadable.
+     * Their secrets are still in the Keystore and the file is kept as
+     * keys.json.corrupt, so writes that would rebuild the list from the
+     * empty result (and orphan every key) are refused instead.
+     */
+    @Volatile
+    var metaUnreadable: Boolean = false
+        private set
+
     fun list(): MutableList<SshKeyInfo> {
         val out = mutableListOf<SshKeyInfo>()
+        metaUnreadable = false
         try {
             if (metaFile.exists()) {
                 val wires = ConchJson.decodeFromString(ListSerializer(KeyWire.serializer()), metaFile.readText())
                 out.addAll(wires.map { it.toInfo() })
             }
         } catch (_: Exception) {
+            metaUnreadable = true
             // keep a copy for recovery before the next save overwrites it
             runCatching { metaFile.copyTo(File(metaFile.parentFile, "${metaFile.name}.corrupt"), overwrite = true) }
         }
@@ -101,10 +114,10 @@ class KeyManager(private val context: Context) {
      * at rest), so the passphrase is only needed at import time.
      */
     fun import(name: String, pemBytes: ByteArray, passphrase: CharArray? = null): SshKeyInfo {
-        val tmp = File.createTempFile("import", ".key", context.cacheDir)
-        try {
-            tmp.writeBytes(pemBytes)
-            val provider = loadProvider(tmp, passphrase)
+        // parsed in memory: a temp file in cacheDir would put the plaintext
+        // key on flash (and delete() does not wipe it)
+        val provider = loadProvider(pemBytes, passphrase)
+        run {
             val privPkcs8 = provider.private.encoded
                 ?: throw IllegalArgumentException("Unsupported private key format")
             val publicKey = provider.public
@@ -126,8 +139,6 @@ class KeyManager(private val context: Context) {
                 ed25519Seed = edSeed,
                 fallbackPublicKey = publicKey,
             )
-        } finally {
-            tmp.delete()
         }
     }
 
@@ -137,17 +148,20 @@ class KeyManager(private val context: Context) {
      * failure as a wrong passphrase (sshj surfaces AEAD/tag errors as
      * assorted IOExceptions and RuntimeExceptions).
      */
-    private fun loadProvider(keyFile: File, passphrase: CharArray?): KeyProvider {
-        if (passphrase == null && looksEncrypted(keyFile.readBytes())) {
+    private fun loadProvider(pemBytes: ByteArray, passphrase: CharArray?): KeyProvider {
+        if (passphrase == null && looksEncrypted(pemBytes)) {
             throw EncryptedKeyException("This key is passphrase-protected")
         }
         val probe = SSHClient()
         return try {
-            val provider = if (passphrase != null) {
-                probe.loadKeys(keyFile.absolutePath, passphrase)
-            } else {
-                probe.loadKeys(keyFile.absolutePath)
-            }
+            // Same format detection as the file overloads (OpenSSH v1,
+            // PKCS#8/PKCS#5, PuTTY), fed from memory. ISO-8859-1 maps every
+            // byte 1:1 so a stray non-ASCII comment cannot corrupt the blob.
+            val provider = probe.loadKeys(
+                String(pemBytes, Charsets.ISO_8859_1),
+                null,
+                passphrase?.let { PasswordUtils.createOneOff(it) },
+            )
             // FileKeyProvider parses lazily — force it inside this try so a
             // wrong passphrase throws here, not at first use.
             provider.private
@@ -206,6 +220,7 @@ class KeyManager(private val context: Context) {
             fingerprint = fingerprint,
         )
         val keys = list()
+        check(!metaUnreadable) { UNREADABLE_META }
         keys.add(key)
         save(keys)
         return key
@@ -213,6 +228,7 @@ class KeyManager(private val context: Context) {
 
     fun delete(id: String) {
         val keys = list()
+        check(!metaUnreadable) { UNREADABLE_META }
         keys.removeAll { it.id == id }
         save(keys)
         SecretsStore.delete("key-priv:$id")
@@ -277,6 +293,10 @@ class KeyManager(private val context: Context) {
          * to stop the reconnect loop — retries cannot restore key material.
          */
         const val MISSING_KEY_PREFIX = "Stored key unavailable:"
+
+        const val UNREADABLE_META =
+            "The key list (keys.json) is unreadable — it was kept as keys.json.corrupt; " +
+                "restore or delete it before adding or removing keys"
 
         /**
          * Cheap sniff for passphrase-protected key material, before handing

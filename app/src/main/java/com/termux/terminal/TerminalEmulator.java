@@ -374,12 +374,13 @@ public final class TerminalEmulator {
             mSession.write(String.format("\033[<%d;%d;%d" + (pressed ? 'M' : 'm'), mouseButton, column, row));
         } else {
             mouseButton = pressed ? mouseButton : 3; // 3 for release of all buttons.
-            // Clip to screen, and clip to the limits of 8-bit data.
-            boolean out_of_bounds = column > 255 - 32 || row > 255 - 32;
-            if (!out_of_bounds) {
-                byte[] data = {'\033', '[', 'M', (byte) (32 + mouseButton), (byte) (32 + column), (byte) (32 + row)};
-                mSession.write(data, 0, data.length);
-            }
+            // Clamp to the limits of 8-bit data (xterm does the same in
+            // non-UTF-8 mode): a wide landscape terminal must still deliver
+            // clicks on its right side instead of dropping them.
+            column = Math.min(column, 255 - 32);
+            row = Math.min(row, 255 - 32);
+            byte[] data = {'\033', '[', 'M', (byte) (32 + mouseButton), (byte) (32 + column), (byte) (32 + row)};
+            mSession.write(data, 0, data.length);
         }
     }
 

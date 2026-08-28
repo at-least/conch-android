@@ -70,8 +70,10 @@ class ZmodemSender {
         fun subpacket(payload: ByteArray, terminator: Int): ByteArray {
             val escaped = escape(payload)
             val crc = ZmodemReceiver.crc16(payload + byteArrayOf(terminator.toByte()))
-            return escaped + byteArrayOf(ZDLE.toByte(), terminator.toByte()) +
-                byteArrayOf(((crc shr 8) and 0xFF).toByte(), (crc and 0xFF).toByte())
+            // the CRC bytes travel escaped too: a raw 0x11/0x13 there is
+            // eaten by rz's zdlread as XON/XOFF and the subpacket fails
+            val crcBytes = escape(byteArrayOf(((crc shr 8) and 0xFF).toByte(), (crc and 0xFF).toByte()))
+            return escaped + byteArrayOf(ZDLE.toByte(), terminator.toByte()) + crcBytes
         }
 
         private fun pos4(v: Long): IntArray = intArrayOf(
@@ -141,7 +143,7 @@ class ZmodemSender {
         // byte-identical shape to what lrzsz sz emits: bin-frame ('A') ZFILE
         // header followed by the escaped subpacket — hex-framed ZFILEs trip
         // lrzsz rz's CRC check (observed live)
-        return frameFor(ZFILE, IntArray(4)) + subpacketFor(info, ZCRCQ)
+        return frameFor(ZFILE, IntArray(4)) + subpacketFor(info, ZCRCW) // 'k', as sz does
     }
 
     fun feed(input: ByteArray): FeedResult {
@@ -276,14 +278,17 @@ class ZmodemSender {
     /** True when the receiver's ZRINIT advertised 32-bit CRCs (CANFC32). */
     private var useCrc32 = false
 
-    /** 16-bit bin frame ('A' marker): raw header bytes + 2-byte CRC16. */
+    /** 16-bit bin frame ('A' marker): escaped header bytes + escaped 2-byte CRC16. */
     private fun binFrame(type: Int, hdr: IntArray): ByteArray {
         val body = ByteArray(5)
         body[0] = type.toByte()
         for (i in 0 until 4) body[1 + i] = hdr[i].toByte()
         val crc = ZmodemReceiver.crc16(body)
+        val crcBytes = byteArrayOf(((crc shr 8) and 0xFF).toByte(), (crc and 0xFF).toByte())
+        // header and CRC go through ZDLE escaping like the 32-bit frame: a
+        // position byte of 0x11/0x13/0x18 sent raw is swallowed or misread
         return byteArrayOf(ZmodemReceiver.ZPAD.toByte(), ZDLE.toByte(), 0x41.toByte()) +
-            body + byteArrayOf(((crc shr 8) and 0xFF).toByte(), (crc and 0xFF).toByte())
+            escape(body) + escape(crcBytes)
     }
 
     /** 32-bit bin frame ('C' marker): escaped header + little-endian escaped CRC32. */

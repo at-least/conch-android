@@ -15,6 +15,11 @@ class BackupManager(private val context: Context) {
         val keysAdded: Int,
         val snippetsAdded: Int,
         val knownHostsMerged: Boolean,
+        /**
+         * Secrets written for ids that already existed but had no readable
+         * secret — the Keystore-reset recovery path (see [restore]).
+         */
+        val secretsRefilled: Int = 0,
     )
 
     companion object {
@@ -65,6 +70,18 @@ class BackupManager(private val context: Context) {
         }
     }
 
+    /**
+     * True when some stored secret exists but cannot be decrypted right now
+     * (Keystore reset or hiccup). [collect] would render every such secret
+     * as "" — and a scheduled export would then overwrite the user's only
+     * off-device copy of their private keys with a hollow backup.
+     */
+    fun hasUnreadableSecrets(): Boolean {
+        val aliases = HostStore(context).load().map { "host-pw:${it.id}" } +
+            KeyManager(context).list().map { "key-priv:${it.id}" }
+        return aliases.any { SecretsStore.contains(it) && SecretsStore.get(it) == null }
+    }
+
     fun collect(): BackupCodec.BackupPayload {
         val hosts = HostStore(context).load()
         val hostSecrets = hosts.associate {
@@ -92,6 +109,24 @@ class BackupManager(private val context: Context) {
         )
     }
 
+    /**
+     * Keystore-reset recovery: the ids are all still on disk, so the merge
+     * adds nothing — yet their secrets are gone. Writing a backup's secret
+     * over an UNREADABLE one destroys nothing readable, so merge semantics
+     * hold. Returns how many were refilled.
+     */
+    private fun refillSecrets(ids: List<String>, prefix: String, secrets: Map<String, String>): Int {
+        var n = 0
+        for (id in ids) {
+            val secret = secrets[id]
+            if (!secret.isNullOrEmpty() && SecretsStore.get("$prefix$id") == null) {
+                SecretsStore.put("$prefix$id", secret)
+                n++
+            }
+        }
+        return n
+    }
+
     fun restore(payload: BackupCodec.BackupPayload): RestoreResult {
         // hosts
         val hostStore = HostStore(context)
@@ -104,12 +139,20 @@ class BackupManager(private val context: Context) {
             }
         }
         if (addedHostIds.isNotEmpty()) hostStore.save(mergedHosts)
+        var refilled = refillSecrets(
+            incomingHosts.map { it.id }.filter { it !in addedHostIds },
+            "host-pw:",
+            payload.hostSecrets,
+        )
 
         // keys
         var keysAdded = 0
         if (payload.keys.isNotEmpty()) {
             val km = KeyManager(context)
             val existingKeys = km.list()
+            // an unreadable keys.json reads as "no keys"; merging into that
+            // would rewrite the file with only the imported ones
+            check(!km.metaUnreadable) { KeyManager.UNREADABLE_META }
             val importIds = keyIdsToImport(existingKeys.map { it.id }.toSet(), payload.keys, payload.keySecrets)
             keysAdded = importIds.size
             if (keysAdded > 0) {
@@ -124,6 +167,7 @@ class BackupManager(private val context: Context) {
                 // has a single owner
                 km.save(merged.map { it.toInfo() })
             }
+            refilled += refillSecrets(existingKeys.map { it.id }, "key-priv:", payload.keySecrets)
         }
 
         // snippets
@@ -144,6 +188,6 @@ class BackupManager(private val context: Context) {
             AtomicFile.write(file, union.joinToString("\n", postfix = "\n"))
         }
 
-        return RestoreResult(addedHostIds.size, keysAdded, snippetsAdded, grew)
+        return RestoreResult(addedHostIds.size, keysAdded, snippetsAdded, grew, refilled)
     }
 }

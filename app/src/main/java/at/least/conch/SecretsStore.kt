@@ -59,8 +59,10 @@ object SecretsStore {
     fun get(alias: String): String? {
         check(::prefs.isInitialized) { "SecretsStore not initialised" }
         val blob = prefs.getString(alias, null) ?: return null
-        val (iv, ct) = decode(blob) ?: return null
         return try {
+            // inside the try: Base64.decode throws on a corrupt value, and one
+            // bad entry must not crash every caller that walks the store
+            val (iv, ct) = decode(blob) ?: return null
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, masterKey(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(ct), Charsets.UTF_8)

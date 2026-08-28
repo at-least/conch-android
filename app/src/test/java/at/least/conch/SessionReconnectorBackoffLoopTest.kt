@@ -204,6 +204,11 @@ class SessionReconnectorBackoffLoopTest {
         assertTrue(SshSession.isTerminalFailure(SshSession.REASON_SESSION_ENDED))
         assertTrue(SshSession.isTerminalFailure("Authentication failed: bad credentials"))
         assertTrue(SshSession.isTerminalFailure("Authentication failed (wrong user/password/key?)"))
+        // local misconfiguration: only editing the host fixes it, so a retry
+        // loop would just hide the message that says so
+        val misconfigured = SshConnectionFactory.HOST_CONFIG_PREFIX + "no stored password — save a password"
+        assertTrue(SshSession.isTerminalFailure(misconfigured))
+        assertTrue(SshSession.isTerminalFailure("${KeyManager.MISSING_KEY_PREFIX} key-1"))
         org.junit.Assert.assertFalse(SshSession.isTerminalFailure("Connection timed out"))
         org.junit.Assert.assertFalse(SshSession.isTerminalFailure("Connection closed by remote"))
     }
@@ -237,7 +242,9 @@ class SessionReconnectorBackoffLoopTest {
         val pulled = listener.reconnecting.toList()[pulledAt]
 
         assertEquals("the pulled-forward attempt must be reported with no delay", 0L, pulled.second)
-        assertEquals(SessionReconnector.NETWORK_BACK_REASON, listener.reasons.last())
+        // by its own index, not .last(): the instantly-failing attempt it
+        // fired may already have scheduled the NEXT retry on another thread
+        assertEquals(SessionReconnector.NETWORK_BACK_REASON, listener.reasons.toList()[pulledAt])
         // it really was immediate: not one millisecond of backoff elapsed
         assertEquals(timeWhenNetworkReturned, testScheduler.currentTime)
 

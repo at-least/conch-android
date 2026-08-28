@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * [post] and [connector] are seams for JVM tests: the app uses the defaults
  * (main-thread Handler + [SshConnectionFactory] with Android storage).
  */
+@Suppress("TooManyFunctions") // one connection's whole lifecycle; splitting it would only scatter the locking
 class SshSession(
     private val context: Context?,
     private val host: Host,
@@ -78,13 +79,16 @@ class SshSession(
          * session, authentication was rejected (retrying a bad password
          * forever spams the server and can trip lockouts — let the user fix
          * the credentials instead), or the stored key material is gone
-         * (no retry can restore it — re-import is the only fix). Matches the
+         * (no retry can restore it — re-import is the only fix), or the host
+         * record itself is unusable (no password saved, key auth with no key,
+         * jump host deleted — only editing the host fixes it). Matches the
          * prefixes SshConnectionFactory.describeError emits for those cases.
          */
         fun isTerminalFailure(reason: String): Boolean =
             reason == REASON_SESSION_ENDED ||
                 reason.startsWith("Authentication failed") ||
-                reason.startsWith(KeyManager.MISSING_KEY_PREFIX)
+                reason.startsWith(KeyManager.MISSING_KEY_PREFIX) ||
+                reason.startsWith(SshConnectionFactory.HOST_CONFIG_PREFIX)
     }
 
     interface Callbacks {
@@ -205,10 +209,19 @@ class SshSession(
                 }
                 val established = establishedAtMs
                 val uptime = if (established == 0L) 0L else System.currentTimeMillis() - established
-                disconnectInner(cleanCloseReason(uptime))
+                disconnectInner(cleanCloseReason(uptime), teardown = false)
             } catch (e: Exception) {
                 CrashReporting.report(e)
-                disconnectInner(SshConnectionFactory.describeError(e))
+                disconnectInner(SshConnectionFactory.describeError(e), teardown = false)
+            } finally {
+                // disconnect() is one-shot: if it ran while this thread was
+                // still binding tunnel ports / starting the SOCKS proxy /
+                // opening the shell, its teardown saw none of that and the
+                // ports would stay bound (and the client leaked) for the
+                // life of the process. Whatever this thread set up, this
+                // thread releases — every step is idempotent, so on the
+                // normal path (teardown already done) this is a no-op.
+                releaseTransport()
             }
         }.apply {
             name = "ssh-reader"
@@ -368,27 +381,42 @@ class SshSession(
      * Tear down all local-port-forward tunnels AND the SOCKS5 proxy WITHOUT
      * closing the shell or the SSH transport. The shell channel and any
      * exec/SFTP channels stay alive (C52 tunnel capsule parity: user taps
-     * "⇅ N" → stop all tunnels). Synchronized so a reconnect's startTunnels
-     * can't race a concurrent stop.
+     * "⇅ N" → stop all tunnels). Safe to call from the main thread: local
+     * listeners close immediately; the `-R` cancels are server round-trips
+     * (sshj blocks up to the 30 s connection timeout on a dead link) and
+     * run on a background thread.
      */
     fun stopTunnels() {
+        closeLocalListeners()
+        if (synchronized(remoteForwards) { remoteForwards.isNotEmpty() }) {
+            Thread(::cancelRemoteForwards, "ssh-cancel-forwards").apply {
+                isDaemon = true
+                start()
+            }
+        }
+    }
+
+    private fun closeLocalListeners() {
         synchronized(forwarderSockets) {
             forwarderSockets.forEach { try { it.close() } catch (_: Exception) {} }
             forwarderSockets.clear()
             forwarderThreads.forEach { it.interrupt() }
             forwarderThreads.clear()
         }
-        synchronized(remoteForwards) {
-            remoteForwards.forEach { f ->
-                try {
-                    client?.remotePortForwarder?.cancel(f)
-                } catch (_: Exception) {
-                }
-            }
-            remoteForwards.clear()
-        }
         socksProxy?.stop()
         socksProxy = null
+    }
+
+    /** Takes every `-R` forward off the list (so a second caller finds none) and cancels it on the server. */
+    private fun cancelRemoteForwards() {
+        val forwards = synchronized(remoteForwards) { remoteForwards.toList().also { remoteForwards.clear() } }
+        val ssh = client ?: return
+        forwards.forEach { f ->
+            try {
+                ssh.remotePortForwarder.cancel(f)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     /** Number of active local-port-forward tunnels + SOCKS proxy (display signal). */
@@ -403,13 +431,39 @@ class SshSession(
         disconnectInner(reason)
     }
 
-    private fun disconnectInner(reason: String) {
+    /**
+     * @param teardown false from the reader thread, whose `finally` releases
+     *                 the transport itself; true from a disconnect() caller.
+     */
+    private fun disconnectInner(reason: String, teardown: Boolean = true) {
         if (!closed.compareAndSet(false, true)) return
         writerExecutor.shutdownNow()
-        stopTunnels()
-        try { session?.close() } catch (_: Exception) {}
-        try { client?.disconnect() } catch (_: Exception) {}
+        // Local listeners go now (a reconnect rebinds the same ports within
+        // a second); the sshj side goes on a background thread because
+        // Session.close() and RemotePortForwarder.cancel() each await a
+        // server reply for up to the 30 s connection timeout — on a dead
+        // link that is an ANR when the user taps the banner or backs out.
+        closeLocalListeners()
+        if (teardown) {
+            Thread(::releaseTransport, "ssh-teardown").apply {
+                isDaemon = true
+                start()
+            }
+        }
         val c = callbacks
         post { c.onDisconnected(reason) }
+    }
+
+    /**
+     * Releases everything the transport owns. Idempotent and safe to run
+     * concurrently from the reader thread's `finally` and a disconnect()
+     * caller — closed sockets, cleared lists and sshj's own close locks make
+     * a second pass a no-op.
+     */
+    private fun releaseTransport() {
+        closeLocalListeners()
+        cancelRemoteForwards()
+        try { session?.close() } catch (_: Exception) {}
+        try { client?.disconnect() } catch (_: Exception) {}
     }
 }

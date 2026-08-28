@@ -89,8 +89,9 @@ class SharedConnectionProbesTest {
             val snap = MonitorParser.parse(monitorOut)
             assertNotNull("probe output parses to a snapshot", snap)
             snap!!
-            // busy = (510-20)/510: deltas between the two cpu samples above
-            assertEquals(96.08, snap.cpuPercent, 0.01)
+            // busy = (440-20)/440 over the first 8 fields (user … steal);
+            // guest/guest_nice (the 9th/10th) are already inside user/nice
+            assertEquals(95.45, snap.cpuPercent, 0.01)
             assertEquals(8_000_000_000L, snap.memTotalBytes)
             assertEquals(4_000_000_000L, snap.memUsedBytes)
             assertEquals(2_000_000_000L, snap.swapTotalBytes)

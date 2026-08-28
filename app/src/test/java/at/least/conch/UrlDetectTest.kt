@@ -13,6 +13,19 @@ class UrlDetectTest {
     }
 
     @Test
+    fun `an emoji before the url does not shift the hit test`() {
+        // U+1F600 is one cell wide-char (2 columns) but TWO UTF-16 units
+        val emu = emuWith("\uD83D\uDE00 https://example.com/x done")
+        val row = emu.getRowText(0)
+        // two cells AND two UTF-16 units, so the row text index is the column
+        val start = row.indexOf("https://")
+        val end = start + "https://example.com/x".length - 1
+        assertEquals("https://example.com/x", TerminalView.urlInRow(emu, 0, start))
+        assertEquals("https://example.com/x", TerminalView.urlInRow(emu, 0, end))
+        assertNull(TerminalView.urlInRow(emu, 0, end + 2)) // the space after the url
+    }
+
+    @Test
     fun `plain url detected at any column inside it`() {
         val emu = emuWith("see https://example.com/some/path for docs")
         // find where the url starts on screen

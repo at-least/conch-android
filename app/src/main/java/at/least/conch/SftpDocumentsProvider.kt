@@ -133,8 +133,22 @@ class SftpDocumentsProvider : DocumentsProvider() {
         if (parentHost != childHost) return false
         val parentPath = SftpDocIds.pathOf(parentDocumentId)
         val childPath = SftpDocIds.pathOf(documentId)
-        if (parentPath == SftpDocIds.ROOT_PATH) return true // home roots everything below
-        return childPath.startsWith("$parentPath/")
+        // This check is what scopes an OPEN_DOCUMENT_TREE grant: the root
+        // document is the host's HOME, not the whole filesystem, so a tree
+        // grant on it must not let "host:/etc/shadow" through.
+        val parent = if (parentPath == SftpDocIds.ROOT_PATH) fs.homePath(parentHost) else parentPath
+        if (childPath == SftpDocIds.ROOT_PATH) return false
+        return childPath == parent || childPath.startsWith(parent.trimEnd('/') + "/")
+    }
+
+    /**
+     * A display name is one path component: "/" would escape the parent
+     * (and the tree grant scoped to it), "." / ".." are not files.
+     */
+    private fun checkedName(displayName: String?): String {
+        val name = displayName?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("no name")
+        require(!name.contains('/') && name != "." && name != "..") { "invalid name: $name" }
+        return name
     }
 
     override fun openDocument(
@@ -146,17 +160,20 @@ class SftpDocumentsProvider : DocumentsProvider() {
         val hostId = SftpDocIds.hostOf(docId) ?: throw FileNotFoundException("bad id: $docId")
         val path = SftpDocIds.pathOf(docId)
         val writable = mode?.contains('w') == true
-        val pipe = ParcelFileDescriptor.createPipe() // [0] read end, [1] write end
+        // A reliable pipe carries a failure to the other side: a plain pipe
+        // turns an SFTP drop mid-copy into a clean EOF, and the calling app
+        // saves a silently truncated file believing the download succeeded.
+        // The backend stream is opened BEFORE the pipe so a failed open
+        // (unknown host, untrusted key) does not leak two descriptors.
         if (writable) {
             val target = fs.openWrite(hostId, path)
+            val pipe = createReliablePipe { target.close() } // [0] read end, [1] write end
             Thread {
-                // a cancelled write just ends the copy; the file stays
-                // partial, exactly like an editor crash mid-save
-                runCatching {
-                    FileInputStream(pipe[0].fileDescriptor).use { input ->
-                        target.use { output -> input.copyTo(output) }
-                    }
-                }.onFailure { CrashReporting.report(it) }
+                copyThenClose(pipe[0], "remote write failed") {
+                    // a cancelled write just ends the copy; the file stays
+                    // partial, exactly like an editor crash mid-save
+                    target.use { output -> FileInputStream(pipe[0].fileDescriptor).copyTo(output) }
+                }
             }.apply {
                 name = "conch-saf-write"
                 isDaemon = true
@@ -165,18 +182,43 @@ class SftpDocumentsProvider : DocumentsProvider() {
             return pipe[1]
         }
         val source = fs.openRead(hostId, path)
+        val pipe = createReliablePipe { source.close() }
         Thread {
-            runCatching {
-                FileOutputStream(pipe[1].fileDescriptor).use { output ->
-                    source.use { input -> input.copyTo(output) }
-                }
-            }.onFailure { CrashReporting.report(it) }
+            copyThenClose(pipe[1], "remote read failed") {
+                source.use { input -> input.copyTo(FileOutputStream(pipe[1].fileDescriptor)) }
+            }
         }.apply {
             name = "conch-saf-read"
             isDaemon = true
             start()
         }
         return pipe[0]
+    }
+
+    private inline fun createReliablePipe(onFail: () -> Unit): Array<ParcelFileDescriptor> =
+        try {
+            ParcelFileDescriptor.createReliablePipe()
+        } catch (e: Exception) {
+            runCatching { onFail() }
+            throw e
+        }
+
+    /**
+     * Runs [copy] on our end of the pipe, then closes that end — cleanly on
+     * success, with an error the peer's next read/`checkError()` surfaces
+     * on failure. The raw stream is deliberately NOT closed separately: the
+     * descriptor is owned by the [ParcelFileDescriptor], and closing it
+     * twice can hit an fd number another thread already reused.
+     */
+    private inline fun copyThenClose(end: ParcelFileDescriptor, failure: String, copy: () -> Unit) {
+        try {
+            copy()
+            end.close()
+        } catch (e: Exception) {
+            CrashReporting.report(e)
+            runCatching { end.closeWithError(e.message ?: failure) }
+                .onFailure { runCatching { end.close() } }
+        }
     }
 
     override fun createDocument(
@@ -187,7 +229,7 @@ class SftpDocumentsProvider : DocumentsProvider() {
         val docId = parentDocumentId ?: throw FileNotFoundException("no parent")
         val hostId = SftpDocIds.hostOf(docId) ?: throw FileNotFoundException("bad parent: $docId")
         val parentPath = SftpDocIds.pathOf(docId)
-        val name = displayName?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("no name")
+        val name = checkedName(displayName)
         val childPath = SftpDocIds.childPath(
             if (parentPath == SftpDocIds.ROOT_PATH) fs.homePath(hostId) else parentPath,
             name,
@@ -210,7 +252,7 @@ class SftpDocumentsProvider : DocumentsProvider() {
 
     override fun renameDocument(documentId: String?, displayName: String?): String? {
         val docId = documentId ?: throw FileNotFoundException("no document")
-        val name = displayName?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("no name")
+        val name = checkedName(displayName)
         val hostId = SftpDocIds.hostOf(docId) ?: throw FileNotFoundException("bad id: $docId")
         val from = SftpDocIds.pathOf(docId)
         val to = SftpDocIds.childPath(SftpDocIds.parentPath(from), name)

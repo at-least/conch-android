@@ -47,7 +47,10 @@ fun SessionsSheet(
     modifier: Modifier = Modifier,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    var sessions by remember { mutableStateOf(LiveSessions.all()) }
+    // keyed on the registry version: a session ending elsewhere (its own
+    // task, the widget) refreshes the sheet instead of leaving a stale row
+    val registryVersion = LiveSessions.version.intValue
+    var sessions by remember(registryVersion) { mutableStateOf(LiveSessions.all()) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, modifier = modifier) {
         Column(Modifier.fillMaxWidth()) {
@@ -76,7 +79,10 @@ fun SessionsSheet(
                         confirmValueChange = {
                             if (it == SwipeToDismissBoxValue.EndToStart) {
                                 live.disconnect()
-                                sessions = LiveSessions.all()
+                                // disconnect() only posts the teardown; the
+                                // registry drops the id later in onDestroy —
+                                // remove the row now or it stays swiped-open
+                                sessions = sessions.filter { s -> s.id != live.id }
                                 true
                             } else {
                                 false

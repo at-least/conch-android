@@ -2,6 +2,139 @@
 
 ## 0.9.1 (unreleased)
 
+- Fixed: **Disconnect actually disconnected nothing** — the SSH teardown
+  ran on the main thread, where Android forbids socket writes; the
+  exception was swallowed, the UI said "Disconnected", and the socket,
+  sshj reader thread and the remote shell (plus its tmux client) lived on
+  until the server's TCP timeout. Teardown now runs on a background
+  thread, which also removes the 30-second freeze sshj's channel close
+  could cause on a dead link. The Files tab's SFTP channel close had the
+  same defect (one leaked server-side channel per visit, until the
+  server's channel cap killed the shell)
+- Fixed: **a silently dead link is now noticed** — sshj's default
+  keep-alive only *sends* packets and never expects an answer, so after a
+  Wi-Fi→cellular handover the session sat "connected" (green dot) on a
+  dead transport for minutes and the instant-reconnect never fired. The
+  15-second keep-alive is now request/response; three unanswered (45 s)
+  drops the transport and the reconnect loop takes over
+- Fixed: backing out of a host while it was still "Connecting…" could
+  leave its tunnel ports bound and the half-built connection leaked for
+  the life of the process (the next session to that host then got
+  "port in use" tunnels); a target unreachable through a jump host leaked
+  the authenticated jump connection on every retry
+- Fixed: hosts that cannot connect until you edit them (no password
+  saved, key auth with no key, deleted jump host) no longer retry forever
+  behind a "Reconnecting (n)…" banner — the error is terminal and says
+  what to do, like the missing-key case already did
+- Fixed: **ZMODEM — the terminal went dark after every download**: sz's
+  final ZFIN arrived after the receiver had been dropped, and the
+  replacement swallowed all further shell output until "Cancel file
+  transfer". One receiver now lives for the whole session and returns to
+  watching after each transfer, so `sz a b` batches work too, sz's "OO"
+  sign-off no longer lands at the prompt, and the ZMODEM frames we send
+  are no longer recorded as command-history entries. Position headers
+  are little-endian as lrzsz expects (a resync at a non-zero offset used
+  to stall), ZRINIT advertises its flags in the right byte, and uploads
+  over 32 MB are refused with a pointer to SFTP instead of an OOM crash
+- Fixed: hardware/IME Backspace sends DEL (0x7F) — the PTY's default
+  `erase`, what Termux and ConnectBot send — instead of BS, which only
+  readline understood (`sudo` password prompts, `read`, `less` inserted
+  a literal ^H)
+- Security: **crash reports actually scrub host addresses** — Sentry
+  turns the throwable into its exception list before our scrubber ran,
+  so "Connection refused: prod.example.com:22" still reached the server;
+  the list is scrubbed now (and there is a test on the event, not just
+  on the regex). Key import no longer writes the plaintext key to the
+  cache directory; it is parsed from memory like connect already was
+- Security: Android Auto Backup is off. Secrets are sealed with a
+  per-device Keystore key that never leaves the device, so a cloud or
+  device-to-device restore produced hosts and keys that could not be
+  decrypted — every host present, none able to connect. Settings →
+  Backup (passphrase-encrypted) and account-free sync are the portable
+  paths and were always the intended ones
+- Fixed: **account-free sync can no longer overwrite your only backup
+  with an empty one** — when the Keystore cannot decrypt the stored
+  secrets (a reset, or a transient failure), the export is refused with a
+  clear reason instead of writing a file with no passwords or keys, which
+  Syncthing would then have propagated everywhere. Restoring a backup on
+  a device after a Keystore reset refills the unreadable secrets instead
+  of adding nothing because "the ids already exist"
+- Fixed: SAF file provider — a tree grant on a host's root is scoped to
+  the SFTP home (an app holding it could construct any absolute path
+  on the host), display names containing "/" or ".." are refused, a
+  connection drop mid-copy now surfaces as an I/O error to the calling
+  app instead of a clean EOF that saved a silently truncated file, the
+  idle sweeper can no longer close a connection an operation just
+  re-leased, and a dead pooled connection is replaced instead of retried
+  against forever
+- Fixed: a legacy-password migration that hit a Keystore error for one
+  host rewrote hosts.json without that host's password (permanent loss);
+  the file is now left intact so the migration retries next launch. A
+  corrupt entry in the secrets store no longer crashes every store read
+- Fixed: `~/.ssh/config` import understands tab-separated and `Key=value`
+  lines (a tab after `HostName` produced a host with an empty hostname)
+  and no longer applies a `Match` block's directives to the preceding
+  `Host`
+- Fixed: two sessions and one denied foreground-service start (Android
+  14+ background timing) no longer stop the service for both; the 6-hour
+  timeout now cancels every session's notification (the extra ones were
+  ongoing and could not be dismissed)
+- Fixed: the home screen's live-sessions badge updates when a session
+  ends in another task (the registry was not observable state); a
+  corrupt keys.json no longer lets the next generate/import/delete
+  rewrite it as a one-key list (the stored keys' secrets are intact —
+  the file is kept as keys.json.corrupt and writes are refused with a
+  message until it is restored or removed); Ed25519 keys in PKCS#8 v2
+  form (embedded public key / attributes) import correctly; ZMODEM
+  16-bit frame headers and CRCs are ZDLE-escaped like the 32-bit ones
+- Fixed: **the app lock re-prompted on every screen change** — Android
+  stops the previous activity *after* starting the next one, so the
+  per-activity "went to background" hook zeroed the 30-second grace window
+  right after the new screen had passed it (and cancelling that prompt
+  closed the app). The lock now re-arms only when no activity of the app
+  is on screen
+- Fixed: Docker tab — container logs and daemon errors are stderr, which
+  `exec` never returned: logs of most services showed an empty dialog and
+  "docker: command not found" showed an empty list. Files tab — "Retry"
+  after an SFTP failure did nothing but spin; a slow directory listing
+  could overwrite the folder you had already navigated to; leaving the tab
+  mid-open leaked the SFTP channel; uploads from Downloads/Drive were
+  named after the provider's opaque id (`msf:123`) instead of the file;
+  downloads land in a `.part` file and are renamed on success instead of
+  leaving a truncated file under the real name, and a hostile server name
+  containing "/" is refused
+- Fixed: command history no longer records a wrong line after readline
+  editing keys (Ctrl-R search, Ctrl-W/K/A/E): the line the shell ran is
+  not the line that was typed, so it is skipped like Tab completion
+- Fixed: slow scrollback drags — each 120 Hz touch event was rounded to
+  whole lines on its own, so a finger moving slowly never scrolled; the
+  sub-cell remainder is carried between events. X10 mouse clicks beyond
+  column 223 (wide landscape terminals) are clamped instead of dropped.
+  CPU% no longer double-counts VM guest time
+- Fixed: host editor — the tunnel list survived rotation as the only field
+  that did not; invalid tunnels (port 0, blank host) and an out-of-range
+  SOCKS port are refused at Save with a message instead of being silently
+  skipped at connect; deleting a host updates the widget and clears other
+  hosts' jump-host reference to it. Keys — passphrase-protected imports run
+  bcrypt-pbkdf off the main thread (seconds of freeze before), generate/
+  delete failures are messages instead of crashes, imported files get their
+  real display name, and the export target survives process death behind
+  the file picker. Settings — a too-short backup passphrase keeps the
+  dialog open instead of discarding the picked file; two sync exports can
+  no longer run at once and leave a "conch-backup (1).til" behind. The
+  sessions sheet drops a swiped session immediately and both it and the
+  host cards follow the live-session registry
+- Fixed: rotating the screen during a backup export/import or sync setup
+  no longer drops the picked file and the passphrase dialog, or re-enables
+  the buttons while the previous instance is still writing (two imports
+  could run at once) — the flow state and its worker live in a ViewModel
+  now. Monitor: a host without `df -B1` (busybox) shows CPU/memory/load
+  with the disk card marked n/a instead of "Failed to read metrics"
+- Fixed: the ALT extra-key stayed lit after the view consumed the latch;
+  editing a snippet updates the row immediately instead of on next
+  resume; the app lock no longer closes the app when the system itself
+  withdraws the biometric prompt (incoming call, rotation) — it just
+  re-prompts
 - New: **dark mode, and Material You** — every screen ran on Compose's
   default light palette regardless of the system setting, because the app
   had no theme wrapper at all; there is now one Material 3 theme that

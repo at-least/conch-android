@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -184,7 +185,11 @@ private fun EditHostScreen(
     var keysMenuOpen by rememberSaveable { mutableStateOf(false) }
     var jumpHostId by rememberSaveable { mutableStateOf(initial?.jumpHostId) }
     var jumpMenuOpen by rememberSaveable { mutableStateOf(false) }
-    val tunnels = remember { mutableStateListOf<Tunnel>().apply { initial?.tunnels?.let { addAll(it) } } }
+    // saveable like every other field — the tunnel list was the one thing a
+    // rotation reset to the stored host
+    val tunnels = rememberSaveable(saver = TunnelListSaver) {
+        mutableStateListOf<Tunnel>().apply { initial?.tunnels?.let { addAll(it) } }
+    }
 
     // Inline validation (Material: the error belongs on the field, not in a
     // toast that has vanished by the time the user looks for the problem).
@@ -194,6 +199,11 @@ private fun EditHostScreen(
     val port = if (portText.isBlank()) 22 else portText.toIntOrNull()
     val portError = showErrors && (port == null || port !in 1..65535)
     val keyError = showErrors && authType == Host.AUTH_KEY && selectedKeyId == null
+    val socksPort = socksPortText.trim().let { if (it.isEmpty()) 0 else it.toIntOrNull() ?: -1 }
+    val socksError = showErrors && (socksPort < 0 || socksPort > 65535)
+    // SshSession silently skips a tunnel with a bad port or blank host, so
+    // the only place the user can learn about it is here
+    val badTunnel = tunnels.indexOfFirst { !it.isValid() }
 
     val snackbarHostState = remember { SnackbarHostState() }
     var message by remember { mutableStateOf<String?>(null) }
@@ -225,9 +235,14 @@ private fun EditHostScreen(
                         showErrors = true
                         val valid = hostname.isNotBlank() && username.isNotBlank() &&
                             port != null && port in 1..65535 &&
-                            (authType != Host.AUTH_KEY || selectedKeyId != null)
+                            (authType != Host.AUTH_KEY || selectedKeyId != null) &&
+                            !socksError
                         if (!valid) {
                             message = "Check the highlighted fields"
+                            return@Button
+                        }
+                        if (badTunnel >= 0) {
+                            message = "Tunnel ${badTunnel + 1}: ports must be 1–65535 and the host non-empty"
                             return@Button
                         }
                         onSave(
@@ -242,7 +257,7 @@ private fun EditHostScreen(
                                 fontSizeSp = fontSizeText.toFloatOrNull() ?: 0f,
                                 keepAlive = keepAlive,
                                 tmuxAutoAttach = tmux,
-                                socksPort = socksPortText.toIntOrNull() ?: 0,
+                                socksPort = socksPort,
                                 jumpHostId = jumpHostId,
                                 forwardAgent = forwardAgent,
                                 safExpose = safExpose,
@@ -511,7 +526,11 @@ private fun EditHostScreen(
                 value = socksPortText,
                 onValueChange = { socksPortText = it },
                 label = { Text("SOCKS5 proxy port") },
-                supportingText = { Text("Blank = off. Point socks5-aware apps at 127.0.0.1:<port>.") },
+                supportingText = {
+                    val hint = "Blank = off. Point socks5-aware apps at 127.0.0.1:<port>."
+                    Text(if (socksError) "Port must be 1–65535" else hint)
+                },
+                isError = socksError,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = field
@@ -598,3 +617,19 @@ private fun TunnelCard(
         }
     }
 }
+
+/** A tunnel SshSession would actually start (its own skip rule, mirrored). */
+private fun Tunnel.isValid(): Boolean = localPort in 1..65535 && host.isNotBlank() && port in 1..65535
+
+/** Tunnels as saveable strings — one per tunnel, fields NUL-separated. */
+private val TunnelListSaver = androidx.compose.runtime.saveable.listSaver<SnapshotStateList<Tunnel>, String>(
+    save = { list -> list.map { "${it.localPort}\u0000${it.host}\u0000${it.port}\u0000${it.remote}" } },
+    restore = { saved ->
+        mutableStateListOf<Tunnel>().apply {
+            for (s in saved) {
+                val f = s.split('\u0000')
+                if (f.size == 4) add(Tunnel(f[0].toIntOrNull() ?: 0, f[1], f[2].toIntOrNull() ?: 0, f[3].toBoolean()))
+            }
+        }
+    },
+)

@@ -317,4 +317,29 @@ class SftpDocumentsProviderRobolectricTest {
             ctx.contentResolver.unregisterContentObserver(observer)
         }
     }
+
+    @Test
+    fun `display names are one path component - separators and dot-dot are refused`() {
+        // "../x" would pass a naive "$parent/" prefix check while the SFTP
+        // path escapes the granted subtree
+        for (bad in listOf("../escape", "a/b", "..", ".", "/abs")) {
+            try {
+                provider.createDocument(rootDocumentId(), "text/plain", bad)
+                throw AssertionError("createDocument accepted [$bad]")
+            } catch (_: IllegalArgumentException) {
+            }
+        }
+        val ok = provider.createDocument(rootDocumentId(), "text/plain", "fine.txt")
+        try {
+            provider.renameDocument(ok, "../moved")
+            throw AssertionError("renameDocument accepted a traversal")
+        } catch (_: IllegalArgumentException) {
+        }
+        assertTrue(backend.files.containsKey(SftpDocIds.pathOf(ok)))
+    }
+
+    @Test
+    fun `a bare root id is never a child of anything`() {
+        assertTrue(!provider.isChildDocument(rootDocumentId(), rootDocumentId()))
+    }
 }

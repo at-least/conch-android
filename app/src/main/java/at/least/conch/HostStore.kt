@@ -143,18 +143,20 @@ class HostStore(context: Context) {
     fun load(): MutableList<Host> {
         val list = mutableListOf<Host>()
         var migrated = false
+        var migrationFailed = false
         if (file.exists()) {
             try {
                 val wires = ConchJson.decodeFromString(ListSerializer(HostWire.serializer()), file.readText())
                 for (w in wires) {
+                    val host = w.toHost()
+                    // the host is kept whether or not its legacy password
+                    // moves: a keystore hiccup must neither drop the entry
+                    // nor (below) rewrite the file without it
+                    list.add(host)
                     try {
-                        val host = w.toHost()
                         if (migrateLegacyPassword(w, host)) migrated = true
-                        list.add(host)
                     } catch (_: Exception) {
-                        // one unreadable entry (keystore hiccup during the
-                        // legacy migration) must not drop the whole tail of
-                        // the list — the next save would persist the loss
+                        migrationFailed = true
                     }
                 }
             } catch (_: Exception) {
@@ -163,7 +165,10 @@ class HostStore(context: Context) {
                 preserveCorrupt()
             }
         }
-        if (migrated) {
+        // Re-save (which strips the plaintext field) only once EVERY legacy
+        // password made it into the keystore; otherwise the file keeps the
+        // password and the migration simply runs again on the next load.
+        if (migrated && !migrationFailed) {
             runCatching { save(list) }
         }
         return list

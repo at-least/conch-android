@@ -15,12 +15,22 @@ import kotlin.math.roundToInt
  */
 object TerminalScroll {
 
-    /** Drag: finger-down (distanceY < 0) scrolls deeper into history. */
-    fun afterDrag(current: Int, distanceY: Float, cellHeight: Float, max: Int): Int {
-        if (cellHeight <= 0f) return current
-        val lines = (distanceY / cellHeight).roundToInt()
-        if (lines == 0) return current
-        return (current - lines).coerceIn(0, max)
+    /** Drag: finger-down (distanceY < 0) scrolls deeper into history. Whole-event variant. */
+    fun afterDrag(current: Int, distanceY: Float, cellHeight: Float, max: Int): Int =
+        afterDrag(current, 0f, distanceY, cellHeight, max).first
+
+    /**
+     * Drag with carry: `onScroll` reports the delta since the LAST event,
+     * which at 120 Hz is a few pixels — rounding each one to whole lines
+     * left slow drags stuck at zero. The sub-cell remainder is returned and
+     * must be fed back on the next event (reset it on finger-down).
+     */
+    fun afterDrag(current: Int, remainder: Float, distanceY: Float, cellHeight: Float, max: Int): Pair<Int, Float> {
+        if (cellHeight <= 0f) return current to remainder
+        val acc = remainder + distanceY
+        val lines = (acc / cellHeight).toInt()
+        if (lines == 0) return current to acc
+        return (current - lines).coerceIn(0, max) to (acc - lines * cellHeight)
     }
 
     /** Fling: consumes the remaining velocity; finger-down fling goes deeper. */

@@ -52,7 +52,7 @@ class AtomicFileTest {
     }
 
     @Test
-    fun `keystore failure during legacy migration drops one entry not the tail`() {
+    fun `keystore failure during legacy migration keeps every entry and does not rewrite the file`() {
         val dir = tmpDir()
         val context = io.mockk.mockk<android.content.Context> {
             io.mockk.every { filesDir } returns dir
@@ -65,16 +65,19 @@ class AtomicFileTest {
                 {"id":"h3","hostname":"three","username":"u"}
             ]"""
         )
+        val before = file.readText()
         io.mockk.mockkObject(SecretsStore) {
             io.mockk.every { SecretsStore.get(any()) } returns null
             io.mockk.every { SecretsStore.put(any(), any()) } answers {
                 if (firstArg<String>() == "host-pw:h2") error("keystore hiccup")
             }
             val hosts = HostStore(context).load()
-            // h2's migration failed; h1 migrated, h3 needs nothing — the
-            // tail of the list must not vanish (the next save would
-            // otherwise persist the truncation).
-            assertEquals(listOf("h1", "h3"), hosts.map { it.id })
+            // h2's migration failed; h1 migrated, h3 needs nothing. Every
+            // host stays listed (dropping h2 and re-saving would have
+            // persisted the loss of its password), and the file is left as
+            // it was so the migration simply runs again next launch.
+            assertEquals(listOf("h1", "h2", "h3"), hosts.map { it.id })
         }
+        assertEquals("file must not be rewritten while a password is still unmigrated", before, file.readText())
     }
 }

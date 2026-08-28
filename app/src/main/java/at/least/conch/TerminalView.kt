@@ -33,6 +33,19 @@ class TerminalView @JvmOverloads constructor(
     /** Bytes typed by the user (to be written to the SSH channel). */
     var onData: ((ByteArray) -> Unit)? = null
 
+    /**
+     * Sink for bytes the VIEW generates on the user's behalf (ZMODEM
+     * frames, transfer cancels): they must reach the SSH channel but are
+     * not keystrokes, so they must stay out of command history. Falls
+     * back to [onData] when unset.
+     */
+    var onProtocol: ((ByteArray) -> Unit)? = null
+
+    private fun sendProtocol(bytes: ByteArray) {
+        if (bytes.isEmpty()) return
+        (onProtocol ?: onData)?.invoke(bytes)
+    }
+
     /** Terminal grid changed dimensions (cols, rows). */
     var onPtyResize: ((Int, Int) -> Unit)? = null
 
@@ -55,6 +68,10 @@ class TerminalView @JvmOverloads constructor(
 
     /** Alt latch (xterm meta): next single-char input gets an ESC prefix. */
     var altArmed = false
+        set(value) {
+            field = value
+            onAltStateChanged?.invoke(value)
+        }
 
     /**
      * Per-instance colors. Start as a copy of the shared defaults so themes
@@ -80,6 +97,9 @@ class TerminalView @JvmOverloads constructor(
 
     /** Notifies UI (e.g. Compose key row) that the Ctrl-armed state changed. */
     var onCtrlStateChanged: ((Boolean) -> Unit)? = null
+
+    /** Same for the Alt latch — without it the ALT button stayed lit after the view consumed the latch. */
+    var onAltStateChanged: ((Boolean) -> Unit)? = null
 
     var fontSizePx: Float = 15f * resources.displayMetrics.scaledDensity
         set(value) {
@@ -137,12 +157,24 @@ class TerminalView @JvmOverloads constructor(
                 }
                 return true
             }
-            val next = TerminalScroll.afterDrag(scrollOffset, distanceY, cellHeight, emu.scrollbackSize)
+            val (next, carry) = TerminalScroll.afterDrag(
+                scrollOffset,
+                dragRemainder,
+                distanceY,
+                cellHeight,
+                emu.scrollbackSize,
+            )
+            dragRemainder = carry
             if (next != scrollOffset) {
                 scrollOffset = next
                 invalidate()
             }
             return true
+        }
+
+        override fun onDown(e: MotionEvent): Boolean {
+            dragRemainder = 0f
+            return super.onDown(e)
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -220,6 +252,9 @@ class TerminalView @JvmOverloads constructor(
 
     /** Sub-cell remainder carried between onScroll wheel conversions. */
     private var wheelRemainder = 0f
+
+    /** Sub-cell carry between scrollback drag events (see TerminalScroll.afterDrag). */
+    private var dragRemainder = 0f
 
     /** Long-press drag armed while a mouse-tracking app wants drags. */
     private var mouseDragActive = false
@@ -319,12 +354,15 @@ class TerminalView @JvmOverloads constructor(
         if (tx != null) {
             // upload in progress: all bytes belong to the sender engine
             val res = tx.feed(data)
-            if (res.send.isNotEmpty()) onData?.invoke(res.send)
+            sendProtocol(res.send)
             for (e in res.events) senderEvent(e)
         } else {
+            // one receiver for the life of the view: it returns to sniffing
+            // after every finished/failed download, so it keeps watching
+            // for the next `sz` and never swallows the shell's output
             val zm = zmodemRx ?: ZmodemReceiver().also { zmodemRx = it }
             val res = zm.feed(data)
-            if (res.send.isNotEmpty()) onData?.invoke(res.send)
+            sendProtocol(res.send)
             for (e in res.events) zmodemEvent(e)
             if (res.display.isNotEmpty()) emulator?.feed(res.display)
         }
@@ -361,18 +399,20 @@ class TerminalView @JvmOverloads constructor(
     /** Pushes the SAF-picked file into a pending upload (after onZmodemUploadRequested). */
     fun beginZmodemUpload(name: String, bytes: ByteArray) {
         val tx = zmodemTx ?: return
-        onData?.invoke(tx.begin(name, bytes))
+        sendProtocol(tx.begin(name, bytes))
     }
 
     /** Aborts any in-flight transfer in either direction; harmless when idle. */
     fun cancelZmodem() {
         var had = false
         zmodemRx?.let {
-            onData?.invoke(it.cancel())
-            had = true
+            if (it.isActive) {
+                sendProtocol(it.cancel())
+                had = true
+            }
         }
         zmodemTx?.let {
-            onData?.invoke(it.cancel())
+            sendProtocol(it.cancel())
             had = true
         }
         zmodemRx = null
@@ -397,12 +437,10 @@ class TerminalView @JvmOverloads constructor(
             is ZmodemReceiver.Event.Complete -> {
                 emulator?.feed("\u001b[90m[zmodem] done — ${e.name} (${e.size} bytes)\u001b[0m\r\n")
                 zmodemSink?.onZmodemComplete(e.name, e.size)
-                zmodemRx = null
             }
             is ZmodemReceiver.Event.Failed -> {
                 emulator?.feed("\u001b[90m[zmodem] failed: ${e.reason}\u001b[0m\r\n")
                 zmodemSink?.onZmodemFailed(e.reason)
-                zmodemRx = null
             }
         }
     }
@@ -712,7 +750,10 @@ class TerminalView @JvmOverloads constructor(
                 return true
             }
             KeyEvent.KEYCODE_DEL -> {
-                onData?.invoke(byteArrayOf(0x08))
+                // DEL (0x7F), the PTY's default `erase` — what Termux and
+                // ConnectBot send. BS (0x08) only works in readline; `sudo`
+                // password prompts, `read`, `cat`, `less` insert a literal ^H
+                onData?.invoke(byteArrayOf(0x7F))
                 return true
             }
             KeyEvent.KEYCODE_FORWARD_DEL -> {
@@ -881,20 +922,19 @@ class TerminalView @JvmOverloads constructor(
          */
         fun urlInRow(emu: TerminalEmulator, externalRow: Int, col: Int): String? {
             val sb = StringBuilder()
-            val colOf = IntArray(emu.cols)
-            var idx = 0
+            // column per UTF-16 unit of [sb]: Matcher offsets are char
+            // indices, and an astral code point (emoji) is two of them —
+            // indexing per CELL shifted every URL after one by a column
+            val colOf = ArrayList<Int>()
             emu.forEachCell(externalRow) { c, cp, _ ->
-                if (idx < colOf.size) {
-                    colOf[idx] = c
-                    sb.appendCodePoint(cp)
-                    idx++
-                }
+                repeat(Character.charCount(cp)) { colOf.add(c) }
+                sb.appendCodePoint(cp)
             }
-            if (idx == 0) return null
+            if (colOf.isEmpty()) return null
             val matcher = URL_REGEX.matcher(sb.toString())
             while (matcher.find()) {
-                val startCol = colOf[matcher.start().coerceAtMost(idx - 1)]
-                val endCol = colOf[(matcher.end() - 1).coerceAtMost(idx - 1)]
+                val startCol = colOf[matcher.start().coerceAtMost(colOf.size - 1)]
+                val endCol = colOf[(matcher.end() - 1).coerceAtMost(colOf.size - 1)]
                 if (col in startCol..endCol) return matcher.group()
             }
             return null

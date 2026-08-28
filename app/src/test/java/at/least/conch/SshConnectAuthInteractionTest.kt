@@ -157,7 +157,8 @@ class SshConnectAuthInteractionTest {
             )
             fail("expected IllegalStateException")
         } catch (e: IllegalStateException) {
-            assertEquals("Host is set to key auth but no key is selected", e.message)
+            assertEquals("Edit this host: key auth is selected but no key is chosen", e.message)
+            assertTrue(SshSession.isTerminalFailure(SshConnectionFactory.describeError(e)))
         }
     }
 
@@ -177,7 +178,8 @@ class SshConnectAuthInteractionTest {
             )
             fail("expected IllegalStateException")
         } catch (e: IllegalStateException) {
-            assertEquals("No stored password — edit this host and save a password", e.message)
+            assertEquals("Edit this host: no stored password — save a password", e.message)
+            assertTrue(SshSession.isTerminalFailure(SshConnectionFactory.describeError(e)))
         }
     }
 
@@ -187,6 +189,10 @@ class SshConnectAuthInteractionTest {
         val ssh = connectTrusted(server, KnownHostsStore(dir), h)
         try {
             assertEquals(15, ssh.connection.keepAlive.keepAliveInterval)
+            // request/response keep-alive (not sshj's fire-and-forget
+            // heartbeat) — the only variant that notices a silently dead link
+            val runner = ssh.connection.keepAlive as net.schmizz.keepalive.KeepAliveRunner
+            assertEquals(SshConnectionFactory.KEEP_ALIVE_MAX_UNANSWERED, runner.maxAliveCount)
         } finally {
             ssh.disconnect()
         }

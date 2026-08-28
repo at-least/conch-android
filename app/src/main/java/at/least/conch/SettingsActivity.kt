@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -51,7 +52,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,38 +60,41 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import java.util.concurrent.Executors
 
 class SettingsActivity : ComponentActivity() {
 
     private val crashEnabled = mutableStateOf(false)
     private val keepScreenOn = mutableStateOf(false)
     private val appLock = mutableStateOf(false)
-    private val busy = mutableStateOf(false)
     private val commandHistory = mutableStateOf(true)
 
-    /** One-shot user-facing message, rendered as a Snackbar (was Toast). */
-    private val message = mutableStateOf<String?>(null)
+    /**
+     * Backup/sync flow state lives in a ViewModel so a rotation mid-flow
+     * keeps the picked file, the open dialog and the running worker.
+     */
+    private val vm: BackupFlowModel by viewModels()
 
-    // account-free sync (ScheduledBackup)
-    private val syncConfigured = mutableStateOf(false)
-    private val syncLastMs = mutableLongStateOf(0L)
-    private val syncBusy = mutableStateOf(false)
-    private val showSyncPass = mutableStateOf(false)
-    private val syncPassText = mutableStateOf("")
-    private var pendingSyncTree: Uri? = null
-
-    /** Pending SAF target once the user confirms the passphrase. */
-    private var pendingExport: Uri? = null
-    private var pendingImport: Uri? = null
-
-    private val showPassphrase = mutableStateOf(false)
-    private var passphraseText = mutableStateOf("")
-    private var passphraseModeExport = true
-
-    private val executor = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "conch-backup").apply { isDaemon = true }
-    }
+    private val busy get() = vm.busy
+    private val message get() = vm.message
+    private val syncConfigured get() = vm.syncConfigured
+    private val syncLastMs get() = vm.syncLastMs
+    private val syncBusy get() = vm.syncBusy
+    private val showSyncPass get() = vm.showSyncPass
+    private val syncPassText get() = vm.syncPassText
+    private var pendingSyncTree: Uri?
+        get() = vm.pendingSyncTree
+        set(value) { vm.pendingSyncTree = value }
+    private var pendingExport: Uri?
+        get() = vm.pendingExport
+        set(value) { vm.pendingExport = value }
+    private var pendingImport: Uri?
+        get() = vm.pendingImport
+        set(value) { vm.pendingImport = value }
+    private val showPassphrase get() = vm.showPassphrase
+    private val passphraseText get() = vm.passphraseText
+    private var passphraseModeExport: Boolean
+        get() = vm.passphraseModeExport
+        set(value) { vm.passphraseModeExport = value }
 
     private val exportLauncher =
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -137,11 +140,13 @@ class SettingsActivity : ComponentActivity() {
 
     private fun confirmPassphrase() {
         val pass = passphraseText.value
-        showPassphrase.value = false
         if (pass.length < MIN_PASSPHRASE) {
+            // keep the dialog and the picked target: closing here orphaned
+            // the URI (and, for export, the SAF-created empty file)
             message.value = "Passphrase must be at least $MIN_PASSPHRASE characters"
             return
         }
+        showPassphrase.value = false
         if (passphraseModeExport) {
             val uri = pendingExport ?: return
             pendingExport = null
@@ -154,64 +159,13 @@ class SettingsActivity : ComponentActivity() {
         passphraseText.value = ""
     }
 
-    private fun doExport(uri: Uri, pass: String) {
-        busy.value = true
-        executor.execute {
-            try {
-                val blob = BackupCodec.encrypt(BackupManager(this).collect(), pass.toCharArray())
-                contentResolver.openOutputStream(uri, "wt")?.use { it.write(blob) }
-                    ?: error("Cannot write file")
-                runOnUiThread {
-                    busy.value = false
-                    message.value = "Backup exported (${blob.size} bytes)"
-                }
-            } catch (e: Exception) {
-                CrashReporting.report(e)
-                runOnUiThread {
-                    busy.value = false
-                    message.value = "Export failed: ${e.message}"
-                }
-            }
-        }
-    }
+    private fun doExport(uri: Uri, pass: String) = vm.doExport(uri, pass)
 
-    private fun doImport(uri: Uri, pass: String) {
-        busy.value = true
-        executor.execute {
-            try {
-                val blob = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: error("Cannot read file")
-                val payload = BackupCodec.decrypt(blob, pass.toCharArray())
-                val result = BackupManager(this).restore(payload)
-                runOnUiThread {
-                    busy.value = false
-                    message.value =
-                        "Imported: ${result.hostsAdded} hosts, ${result.keysAdded} keys, " +
-                        "${result.snippetsAdded} snippets" +
-                        if (result.knownHostsMerged) ", known hosts merged" else ""
-                }
-            } catch (e: Exception) {
-                val wrongPass = e.isWrongPassphrase()
-                if (!wrongPass) CrashReporting.report(e) // wrong passphrases are user input, not bugs
-                runOnUiThread {
-                    busy.value = false
-                    message.value = if (wrongPass) {
-                        "Wrong passphrase or corrupted file"
-                    } else {
-                        "Import failed: ${e.message}"
-                    }
-                }
-            }
-        }
-    }
+    private fun doImport(uri: Uri, pass: String) = vm.doImport(uri, pass)
 
     // ------------------------------------------------- account-free sync
 
-    private fun refreshSync() {
-        val sb = ScheduledBackup(this)
-        syncConfigured.value = sb.isConfigured()
-        syncLastMs.longValue = sb.lastExportMs()
-    }
+    private fun refreshSync() = vm.refreshSync()
 
     private fun onSyncTarget(uri: Uri) {
         pendingSyncTree = uri
@@ -230,47 +184,12 @@ class SettingsActivity : ComponentActivity() {
         val tree = pendingSyncTree ?: return
         pendingSyncTree = null
         syncPassText.value = ""
-        syncBusy.value = true
-        executor.execute {
-            val sb = ScheduledBackup(this)
-            sb.configure(tree, pass)
-            val out = sb.exportNow()
-            runOnUiThread {
-                syncBusy.value = false
-                refreshSync()
-                message.value = syncMessage(out)
-            }
-        }
+        vm.configureSync(tree, pass)
     }
 
-    private fun doSyncNow() {
-        syncBusy.value = true
-        executor.execute {
-            val out = ScheduledBackup(this).exportNow()
-            runOnUiThread {
-                syncBusy.value = false
-                refreshSync()
-                message.value = syncMessage(out)
-            }
-        }
-    }
+    private fun doSyncNow() = vm.syncNow()
 
-    private fun doSyncStop() {
-        ScheduledBackup(this).disable()
-        refreshSync()
-        message.value = "Scheduled sync stopped"
-    }
-
-    private fun syncMessage(out: ScheduledBackup.Outcome): String = when (out) {
-        is ScheduledBackup.Outcome.Exported -> "Synced (${out.bytes} bytes)"
-        is ScheduledBackup.Outcome.Failed -> "Sync failed: ${out.reason}"
-        else -> "Sync skipped"
-    }
-
-    override fun onDestroy() {
-        executor.shutdownNow()
-        super.onDestroy()
-    }
+    private fun doSyncStop() = vm.stopSync()
 
     // ---------------------------------------------------------------- UI
 
@@ -637,9 +556,5 @@ class SettingsActivity : ComponentActivity() {
 
     private companion object {
         const val MIN_PASSPHRASE = 6
-
-        /** GCM tag failure at either depth = wrong passphrase (user input, not a bug). */
-        fun Throwable.isWrongPassphrase(): Boolean =
-            this is javax.crypto.AEADBadTagException || cause is javax.crypto.AEADBadTagException
     }
 }

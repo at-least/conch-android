@@ -57,4 +57,25 @@ class CrashReportingScrubberTest {
         assertEquals("TLS 1.2 handshake", CrashReporting.Scrubber.scrub("TLS 1.2 handshake"))
         assertEquals("error code 42", CrashReporting.Scrubber.scrub("error code 42"))
     }
+
+    @Test
+    fun `sentry exception values are scrubbed, not just the throwable`() {
+        // Sentry converts the throwable into event.exceptions BEFORE
+        // beforeSend runs — that list is what gets serialized
+        val event = io.sentry.SentryEvent(RuntimeException("Connection refused: prod.example.com:22"))
+        event.exceptions = listOf(
+            io.sentry.protocol.SentryException().apply {
+                type = "ConnectException"
+                value = "Connection refused: prod.example.com:22"
+            },
+        )
+        event.message = io.sentry.protocol.Message().apply {
+            message = "reaching 10.1.2.3:2222"
+            formatted = "reaching 10.1.2.3:2222"
+        }
+        val out = CrashReporting.scrub(event)!!
+        assertEquals("Connection refused: host:port", out.exceptions!!.single().value)
+        assertEquals("reaching host:port", out.message!!.message)
+        assertEquals("reaching host:port", out.message!!.formatted)
+    }
 }

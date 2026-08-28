@@ -73,9 +73,11 @@ object MonitorParser {
         val load = sections["LOAD"]?.firstOrNull { it.isNotBlank() }?.split(Regex("\\s+"))
         val up = sections["UP"]?.firstOrNull { it.isNotBlank() }?.split(Regex("\\s+"))
 
+        // DISK is optional: `df -B1` is the one probe piece busybox lacks
+        // (its error goes to stderr, so the section is simply empty). CPU,
+        // memory and load are still worth showing — 0/0 renders as "n/a".
         if (cpu == null) return null
         if (mem == null) return null
-        if (disk == null) return null
         if (load == null) return null
         if (up == null) return null
 
@@ -85,8 +87,8 @@ object MonitorParser {
             memUsedBytes = mem.getOrNull(2)?.toLongOrNull() ?: 0,
             swapTotalBytes = swap?.getOrNull(1)?.toLongOrNull() ?: 0,
             swapUsedBytes = swap?.getOrNull(2)?.toLongOrNull() ?: 0,
-            diskTotalBytes = disk.getOrNull(1)?.toLongOrNull() ?: 0,
-            diskUsedBytes = disk.getOrNull(2)?.toLongOrNull() ?: 0,
+            diskTotalBytes = disk?.getOrNull(1)?.toLongOrNull() ?: 0,
+            diskUsedBytes = disk?.getOrNull(2)?.toLongOrNull() ?: 0,
             load1 = load.getOrNull(0)?.toDoubleOrNull() ?: 0.0,
             load5 = load.getOrNull(1)?.toDoubleOrNull() ?: 0.0,
             load15 = load.getOrNull(2)?.toDoubleOrNull() ?: 0.0,
@@ -100,7 +102,9 @@ object MonitorParser {
     fun cpuUsage(sampleA: String, sampleB: String): Double {
         val a = cpuFields(sampleA) ?: return 0.0
         val b = cpuFields(sampleB) ?: return 0.0
-        val totalDelta = (b.sum() - a.sum()).coerceAtLeast(1)
+        // first 8 fields only: guest/guest_nice are already folded into
+        // user/nice, so summing them double-counts VM time
+        val totalDelta = (b.take(8).sum() - a.take(8).sum()).coerceAtLeast(1)
         val idleA = a.getOrNull(3) ?: 0
         val idleB = b.getOrNull(3) ?: 0
         val idleDelta = (idleB - idleA).coerceAtLeast(0)

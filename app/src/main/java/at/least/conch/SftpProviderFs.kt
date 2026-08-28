@@ -119,16 +119,22 @@ class SftpProviderFs(
             runCatching { Thread.sleep(SWEEP_MS) }
             if (closed) break
             val now = System.currentTimeMillis()
-            val doomed = pool.entries
-                .filter { it.value.inUse.get() == 0 && now - it.value.lastUsed > idleCloseMs }
-            for (entry in doomed) {
-                // remove(key, value) is atomic: a lease that got reused
-                // between filter and remove is left alone
-                if (pool.remove(entry.key, entry.value)) {
-                    runCatching { entry.value.sftp.close() }
-                    runCatching { entry.value.ssh.disconnect() }
+            val doomed = mutableListOf<Lease>()
+            for (key in pool.keys) {
+                // The idle test and the removal happen under the same bin
+                // lock acquire() uses, so a lease that acquire() just
+                // re-leased cannot be pulled out from under that operation
+                // (remove(key, value) only checked identity, not inUse).
+                pool.computeIfPresent(key) { _, lease ->
+                    if (lease.inUse.get() == 0 && now - lease.lastUsed > idleCloseMs) {
+                        doomed.add(lease)
+                        null
+                    } else {
+                        lease
+                    }
                 }
             }
+            doomed.forEach { closeLease(it) }
         }
     }.apply {
         name = "conch-saf-idle-close"
@@ -240,11 +246,16 @@ class SftpProviderFs(
         // compute() is atomic per key: a first connect runs under the bin
         // lock, so concurrent picker calls for the same host wait for that
         // one connection instead of racing to open duplicates
+        var dead: Lease? = null
         val lease = pool.compute(hostId) { _, existing ->
-            if (existing != null) {
+            if (existing != null && existing.ssh.isConnected) {
                 existing.inUse.incrementAndGet()
                 existing
             } else {
+                // A dropped transport is replaced, not retried against:
+                // every failing op used to refresh lastUsed, so as long as
+                // the user kept trying the dead lease never aged out.
+                dead = existing
                 val host = loadHost(hostId) ?: throw SFTPException("Unknown host")
                 val ssh = connectHost(host)
                 try {
@@ -258,8 +269,14 @@ class SftpProviderFs(
         // the remapping function above never maps to null, but compute()'s
         // signature allows it — checkNotNull keeps the null-safety honest
         checkNotNull(lease)
+        dead?.let { closeLease(it) }
         lease.lastUsed = System.currentTimeMillis()
         return lease
+    }
+
+    private fun closeLease(lease: Lease) {
+        runCatching { lease.sftp.close() }
+        runCatching { lease.ssh.disconnect() }
     }
 
     private fun release(lease: Lease) {
@@ -270,10 +287,7 @@ class SftpProviderFs(
     override fun close() {
         closed = true
         sweeper.interrupt()
-        pool.values.forEach {
-            runCatching { it.sftp.close() }
-            runCatching { it.ssh.disconnect() }
-        }
+        pool.values.forEach { closeLease(it) }
         pool.clear()
     }
 

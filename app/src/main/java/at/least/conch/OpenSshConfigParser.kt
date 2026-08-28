@@ -8,6 +8,8 @@ package at.least.conch
  */
 object OpenSshConfigParser {
 
+    private val KEY_VALUE_SEPARATOR = Regex("[\\s=]+")
+
     data class ParsedHost(
         val alias: String,
         var hostname: String = "",
@@ -30,8 +32,11 @@ object OpenSshConfigParser {
 
         for (rawLine in text.lines()) {
             val line = rawLine.substringBefore('#').trim()
-            val key = line.substringBefore(' ').lowercase()
-            val value = line.substringAfter(' ', "").trim()
+            // OpenSSH accepts "Key value", "Key\tvalue" and "Key=value";
+            // only the FIRST separator splits, so "-o Foo=bar" values survive
+            val parts = line.split(KEY_VALUE_SEPARATOR, limit = 2)
+            val key = parts[0].lowercase()
+            val value = parts.getOrElse(1) { "" }.trim()
             // also covers blank/comment-only lines: their value is empty
             if (value.isEmpty()) continue
             when (key) {
@@ -40,16 +45,25 @@ object OpenSshConfigParser {
                         hosts.add(it)
                     }
                 }
-                "hostname" -> current?.hostname = value
-                "user" -> current?.user = value
-                "port" -> current?.port = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: 22
-                "identityfile" -> current?.identityFile = value.trim('"')
-                "proxyjump" -> current?.proxyJump = firstProxyHop(value)
-                "forwardagent" -> current?.forwardAgent = value.equals("yes", ignoreCase = true)
-                else -> { /* ignored directive */ }
+                // a Match block's directives belong to that block, not to the
+                // Host that happened to precede it
+                "match" -> current = null
+                else -> current?.let { apply(it, key, value) }
             }
         }
         return hosts
+    }
+
+    private fun apply(host: ParsedHost, key: String, value: String) {
+        when (key) {
+            "hostname" -> host.hostname = value
+            "user" -> host.user = value
+            "port" -> host.port = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: 22
+            "identityfile" -> host.identityFile = value.trim('"')
+            "proxyjump" -> host.proxyJump = firstProxyHop(value)
+            "forwardagent" -> host.forwardAgent = value.equals("yes", ignoreCase = true)
+            else -> { /* ignored directive */ }
+        }
     }
 
     /** First non-wildcard alias token, or null for wildcard-only blocks. */
