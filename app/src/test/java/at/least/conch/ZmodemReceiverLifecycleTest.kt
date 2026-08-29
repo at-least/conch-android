@@ -38,6 +38,24 @@ class ZmodemReceiverLifecycleTest {
     }
 
     @Test
+    fun `lrzsz's CR 0x8A hex-frame terminator never reaches the screen`() {
+        // zm.c zsendhhdr ends every hex header with CR and LF|0x80. The
+        // receiver used to stop skipping at 0x0A, leaving 0x8A in the buffer
+        // to be shown as a stray byte after the transfer.
+        val rx = ZmodemReceiver()
+        rx.feed(zrqinit())
+        val ours = ZmodemReceiver.hexFrame(ZmodemReceiver.ZFIN)
+        assertEquals(0x0A, ours.last().toInt() and 0xFF)
+        val lrzszFin = ours.copyOf(ours.size - 1) + 0x8A.toByte()
+        val fin = rx.feed(lrzszFin)
+        assertFalse(fin.active)
+        assertEquals("nothing of the frame is shown", "", String(fin.display))
+        // without the fix the leftover 0x8A also stopped OO from being recognised
+        val out = rx.feed("OO$ ls\r\n".toByteArray())
+        assertEquals("$ ls\r\n", String(out.display))
+    }
+
+    @Test
     fun `OO is only swallowed when it is the very next thing sz says`() {
         val rx = ZmodemReceiver()
         rx.feed(zrqinit())

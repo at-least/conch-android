@@ -297,7 +297,7 @@ class ZmodemReceiver {
         while (i < buf.size) {
             val b = buf[i].toInt() and 0xFF
             if (b == ZPAD) break
-            if (b == 0x0D || b == 0x0A || b == ZDLE) {
+            if (isLineEnd(b) || b == ZDLE || b == 0x11) {
                 i++
                 continue
             }
@@ -380,7 +380,14 @@ class ZmodemReceiver {
 
     /** Tolerated between frame marker and hex digits (lrzsz pads with ZDLE). */
     private fun isHexPadding(c: Int): Boolean =
-        c == ZDLE || c == 0x0D || c == 0x0A || c == 0x20 || c == 0x09
+        c == ZDLE || isLineEnd(c) || c == 0x20 || c == 0x09
+
+    /**
+     * CR / LF, plus their high-bit twins: lrzsz terminates hex frames with
+     * `CR 0x8A` (LF | 0x80, zm.c zsendhhdr) — left in the buffer it lands on
+     * screen as a stray byte once the receiver goes back to sniffing.
+     */
+    private fun isLineEnd(c: Int): Boolean = c == 0x0D || c == 0x0A || c == 0x8D || c == 0x8A
 
     private fun parseHex(from: Int): Parsed? {
         // collect 14 hex digits (skipping ZDLE padding lrzsz inserts), then CRC hex, then CRLF
@@ -397,10 +404,10 @@ class ZmodemReceiver {
             }
         }
         if (digits.length < 14) return null
-        // trailing CR/LF (sz appends CR LF + sometimes XON padding)
+        // trailing CR/LF — lrzsz writes CR 0x8A (sometimes plus XON padding)
         while (i < buf.size) {
             val c = buf[i].toInt() and 0xFF
-            if (c == 0x0D || c == 0x0A) i++ else break
+            if (isLineEnd(c) || c == 0x11) i++ else break
         }
         val type = digits.substring(0, 2).toInt(16)
         val hdr = IntArray(4) { digits.substring(2 + it * 2, 4 + it * 2).toInt(16) }
