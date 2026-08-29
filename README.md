@@ -41,8 +41,12 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 
 ### Authentication & security
 - Password or **public-key auth**: generate **Ed25519** on-device, or import
-  **Ed25519 / ECDSA** keys (OpenSSH, PKCS#8/PKCS#5 PEM, PuTTY —
-  passphrase-protected included; wrong passphrase just re-prompts) and
+  **Ed25519 / ECDSA** keys — OpenSSH format (plain or the default
+  bcrypt + aes256-ctr encryption; wrong passphrase just re-prompts),
+  unencrypted PKCS#8 / SEC1 PEM, and PuTTY v3 `.ppk` — the same list Conch
+  iOS accepts; anything else (chacha20/cbc-encrypted OpenSSH, encrypted
+  PKCS#8, legacy `Proc-Type` PEM, PuTTY v1/v2) is refused with the exact
+  `ssh-keygen` / `puttygen` command that converts it — and
   export any key back out (`ssh -i` compatible). No lock-in. RSA keys are
   not accepted for login (modern OpenSSH rejects SHA-1 `ssh-rsa`; same
   policy as Conch iOS) — one restored from a backup is kept and exportable.

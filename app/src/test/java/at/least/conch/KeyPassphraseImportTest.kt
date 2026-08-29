@@ -34,13 +34,28 @@ class KeyPassphraseImportTest {
     }
 
     @Test
-    fun `sniff flags pkcs8-encrypted and legacy pem markers`() {
-        assertTrue(
+    fun `sniff does not prompt for encrypted forms the format policy refuses`() {
+        // these never reach the passphrase dialog: KeyPolicy rejects them first
+        assertFalse(
             KeyManager.looksEncrypted("-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc".toByteArray())
         )
+        assertFalse(
+            KeyManager.looksEncrypted(
+                "-----BEGIN EC PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-256-CBC".toByteArray()
+            )
+        )
+    }
+
+    @Test
+    fun `sniff flags an encrypted putty v3 file`() {
         assertTrue(
             KeyManager.looksEncrypted(
-                "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-256-CBC".toByteArray()
+                "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: aes256-cbc\nComment: x\n".toByteArray()
+            )
+        )
+        assertFalse(
+            KeyManager.looksEncrypted(
+                "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\nComment: x\n".toByteArray()
             )
         )
     }

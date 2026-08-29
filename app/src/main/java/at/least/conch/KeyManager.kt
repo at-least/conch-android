@@ -86,11 +86,88 @@ object LenientEpochMillisSerializer : KSerializer<Long> {
 object KeyPolicy {
     const val RSA_NOT_FOR_LOGIN =
         "RSA keys are not supported for login — generate an Ed25519 key instead (ssh-keygen -t ed25519)"
+    const val PKCS8_ENCRYPTED_UNSUPPORTED =
+        "Encrypted PKCS#8 keys are not supported; convert with: ssh-keygen -p -f <key>  " +
+            "(or openssl pkey -in <key> -out plain.pem)"
+    const val LEGACY_PEM_ENCRYPTED_UNSUPPORTED =
+        "Legacy encrypted PEM keys are not supported; convert with: ssh-keygen -p -f <key>"
+
+    /** The one OpenSSH v1 encryption both apps read: what `ssh-keygen -N` writes by default. */
+    const val OPENSSH_CIPHER = "aes256-ctr"
+    const val OPENSSH_KDF = "bcrypt"
 
     fun isLoginSupported(algorithm: String): Boolean = algorithm != "ssh-rsa"
 
     fun requireLoginSupported(algorithm: String) {
         require(isLoginSupported(algorithm)) { RSA_NOT_FOR_LOGIN }
+    }
+
+    fun cipherUnsupported(cipher: String): String =
+        "This key is encrypted with $cipher; re-encrypt it with: ssh-keygen -p -Z aes256-ctr -f <key>"
+
+    fun puttyVersionUnsupported(version: Int): String =
+        "PuTTY v$version keys are not supported; save it as v3 in puttygen " +
+            "(or export as OpenSSH: puttygen -O private-openssh)"
+
+    /**
+     * Shared format policy (iOS `PrivateKeyCodec` applies the same table):
+     * accepted are OpenSSH v1 (plain or bcrypt + aes256-ctr), unencrypted
+     * PKCS#8 and SEC1, and PuTTY v3. Everything else is refused HERE —
+     * before sshj parses it and before any passphrase prompt — with a
+     * message that names the conversion command. Reads only the PEM head
+     * and the openssh-key-v1 header, never a key body.
+     */
+    fun rejectUnsupportedFormat(pemBytes: ByteArray) {
+        val head = pemBytes.copyOfRange(0, minOf(pemBytes.size, 512)).toString(Charsets.ISO_8859_1)
+        val problem = when {
+            head.contains("PuTTY-User-Key-File-1") -> puttyVersionUnsupported(1)
+            head.contains("PuTTY-User-Key-File-2") -> puttyVersionUnsupported(2)
+            head.contains("BEGIN RSA PRIVATE KEY") -> RSA_NOT_FOR_LOGIN
+            head.contains("ENCRYPTED PRIVATE KEY") -> PKCS8_ENCRYPTED_UNSUPPORTED
+            head.contains("Proc-Type: 4,ENCRYPTED") -> LEGACY_PEM_ENCRYPTED_UNSUPPORTED
+            head.contains("OPENSSH PRIVATE KEY") -> openSshV1Header(head)
+                ?.takeIf { it.encrypted && !(it.cipher == OPENSSH_CIPHER && it.kdf == OPENSSH_KDF) }
+                ?.let { cipherUnsupported(it.cipher) }
+            else -> null
+        }
+        if (problem != null) throw IllegalArgumentException(problem)
+    }
+
+    /** The two names at the top of an openssh-key-v1 blob. */
+    data class OpenSshV1Header(val cipher: String, val kdf: String) {
+        val encrypted: Boolean get() = cipher != "none" || kdf != "none"
+    }
+
+    /**
+     * Decode enough base64 body to parse the openssh-key-v1 header: magic,
+     * then len-prefixed ciphername and kdfname. Null when [head] is not an
+     * OpenSSH v1 key (or is truncated before the names).
+     */
+    fun openSshV1Header(head: String): OpenSshV1Header? {
+        // a long cipher name (chacha20-poly1305@openssh.com) does not fit
+        // in the first 70-column line, so decode a few lines of body
+        val body = head.lineSequence().drop(1).filter { it.isNotBlank() && !it.startsWith("-----") }
+            .take(HEADER_LINES).joinToString("")
+        if (body.isEmpty()) return null
+        val bin = runCatching { Base64.getMimeDecoder().decode(body) }.getOrNull()
+            ?: return null
+        val magic = "openssh-key-v1\u0000".toByteArray(Charsets.ISO_8859_1)
+        if (bin.size < magic.size) return null
+        if (!bin.copyOfRange(0, magic.size).contentEquals(magic)) return null
+        val cipher = lengthPrefixedField(bin, magic.size) ?: return null
+        val kdf = lengthPrefixedField(bin, cipher.second) ?: return null
+        return OpenSshV1Header(cipher.first, kdf.first)
+    }
+
+    private const val HEADER_LINES = 3
+
+    /** Reads a 4-byte length-prefixed string at [i]; null when malformed. */
+    private fun lengthPrefixedField(bin: ByteArray, i: Int): Pair<String, Int>? {
+        if (i + 4 > bin.size) return null
+        var len = 0
+        for (k in 0 until 4) len = (len shl 8) or (bin[i + k].toInt() and 0xff)
+        if (len < 0 || len > 64 || i + 4 + len > bin.size) return null
+        return String(bin, i + 4, len, Charsets.ISO_8859_1) to i + 4 + len
     }
 }
 
@@ -156,14 +233,18 @@ class KeyManager(private val context: Context) {
     }
 
     /**
-     * Imports an existing private key of any format sshj understands
-     * (OpenSSH new format, PKCS#8/PKCS#5 PEM, PuTTY). Passphrase-encrypted
-     * keys are supported: [EncryptedKeyException] is thrown when a
-     * passphrase is required or the given one is wrong — supply it via
-     * [passphrase] and retry. Keys are stored decrypted (Keystore-encrypted
-     * at rest), so the passphrase is only needed at import time.
+     * Imports an existing private key in one of the formats both apps
+     * accept ([KeyPolicy.rejectUnsupportedFormat]: OpenSSH v1 plain or
+     * bcrypt + aes256-ctr, unencrypted PKCS#8 / SEC1, PuTTY v3).
+     * Passphrase-encrypted keys are supported: [EncryptedKeyException] is
+     * thrown when a passphrase is required or the given one is wrong —
+     * supply it via [passphrase] and retry. Keys are stored decrypted
+     * (Keystore-encrypted at rest), so the passphrase is only needed at
+     * import time.
      */
     fun import(name: String, pemBytes: ByteArray, passphrase: CharArray? = null): SshKeyInfo {
+        // refused formats never reach sshj or the passphrase prompt
+        KeyPolicy.rejectUnsupportedFormat(pemBytes)
         // parsed in memory: a temp file in cacheDir would put the plaintext
         // key on flash (and delete() does not wipe it)
         val provider = loadProvider(pemBytes, passphrase)
@@ -355,46 +436,21 @@ class KeyManager(private val context: Context) {
                 "restore or delete it before adding or removing keys"
 
         /**
-         * Cheap sniff for passphrase-protected key material, before handing
-         * it to sshj: legacy PEM (`Proc-Type: 4,ENCRYPTED`), PKCS#8 encrypted
-         * header, or OpenSSH v1 whose cipher/KDF is not "none" (what
-         * `ssh-keygen -N` writes). Headers only — key bodies are never read.
+         * Cheap sniff for passphrase-protected key material in a SUPPORTED
+         * format, before handing it to sshj: OpenSSH v1 whose cipher/KDF is
+         * not "none" (what `ssh-keygen -N` writes) or a PuTTY v3 file with
+         * `Encryption: aes256-cbc`. Unsupported encrypted forms (PKCS#8
+         * PBES2, legacy `Proc-Type`, non-aes256-ctr OpenSSH) are refused by
+         * [KeyPolicy.rejectUnsupportedFormat] before this runs. Headers
+         * only — key bodies are never read.
          */
         internal fun looksEncrypted(b: ByteArray): Boolean {
             if (b.size < "-----BEGIN".length) return false
             val head = b.copyOfRange(0, minOf(b.size, 512)).toString(Charsets.ISO_8859_1)
-            if (head.contains("ENCRYPTED PRIVATE KEY")) return true
-            if (head.contains("Proc-Type: 4,ENCRYPTED")) return true
+            if (head.contains("PuTTY-User-Key-File-3")) return head.contains("Encryption: aes256-cbc")
             if (!head.contains("OPENSSH PRIVATE KEY")) return false
-            return opensshV1BodyEncrypted(head)
-        }
-
-        /**
-         * Decode enough base64 body to parse the openssh-key-v1 header:
-         * magic, then len-prefixed ciphername and kdfname. Encrypted iff
-         * either is not "none" (what `ssh-keygen -N` writes).
-         */
-        private fun opensshV1BodyEncrypted(head: String): Boolean {
-            val body = head.lineSequence().drop(1).firstOrNull { it.isNotBlank() } ?: return false
-            val bin = runCatching { Base64.getMimeDecoder().decode(body.take(400)) }.getOrNull()
-                ?: return false
-            val magic = "openssh-key-v1\u0000".toByteArray(Charsets.ISO_8859_1)
-            if (bin.size < magic.size) return false
-            if (!bin.copyOfRange(0, magic.size).contentEquals(magic)) return false
-            var i = magic.size
-            val cipher = lengthPrefixedField(bin, i) ?: return false
-            i = cipher.second
-            val kdf = lengthPrefixedField(bin, i) ?: return false
-            return cipher.first != "none" || kdf.first != "none"
-        }
-
-        /** Reads a 4-byte length-prefixed string at [i]; null when malformed. */
-        private fun lengthPrefixedField(bin: ByteArray, i: Int): Pair<String, Int>? {
-            if (i + 4 > bin.size) return null
-            var len = 0
-            for (k in 0 until 4) len = (len shl 8) or (bin[i + k].toInt() and 0xff)
-            if (len < 0 || len > 64 || i + 4 + len > bin.size) return null
-            return String(bin, i + 4, len, Charsets.ISO_8859_1) to i + 4 + len
+            val header = KeyPolicy.openSshV1Header(head) ?: return false
+            return header.cipher == KeyPolicy.OPENSSH_CIPHER && header.kdf == KeyPolicy.OPENSSH_KDF
         }
 
         private fun mentionsEncryption(e: Throwable): Boolean {

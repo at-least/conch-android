@@ -2,6 +2,13 @@
 
 ## 0.9.1 (unreleased)
 
+- **Private-key formats are now an explicit, shared list** (same on Conch
+  iOS): OpenSSH v1 (plain or bcrypt + aes256-ctr), unencrypted PKCS#8 /
+  SEC1, PuTTY v3. Other encrypted forms sshj happened to read (chacha20 or
+  cbc-encrypted OpenSSH, PKCS#8 PBES2, legacy `Proc-Type` PEM) and PuTTY
+  v1/v2 are refused before any passphrase prompt, each with the
+  `ssh-keygen -p` / `puttygen` command that converts it
+
 - **ssh-agent forwarding removed** (shared decision with Conch iOS, which
   never had it): multi-hop ProxyJump covers the bastion → inner-host case
   and is what OpenSSH recommends over `-A`, while forwarding hands your
