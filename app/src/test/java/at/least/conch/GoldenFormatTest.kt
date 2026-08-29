@@ -258,6 +258,7 @@ class GoldenFormatTest {
     // ---------------------------------------------------------------- backup
 
     @Test
+    @Suppress("MaxLineLength")
     fun `golden backup payload json is canonical`() {
         // Model → BackupSchema → canonical JSON. Pins the MAPPING (tunnels
         // → forwards incl. the dynamic one, socksPort, secrets embedded,
@@ -278,7 +279,14 @@ class GoldenFormatTest {
             hosts = listOf(BackupHost.from(host, null), BackupHost.from(pwHost, "s3cret-パスワード🔑")),
             keys = listOf(
                 BackupKey.from(
-                    SshKeyInfo("k1", "my-phone", "ssh-ed25519", 1735689600123L, "ssh-ed25519 AAAA… my-phone", "SHA256:xxx"),
+                    SshKeyInfo(
+                        id = "k1",
+                        name = "my-phone",
+                        algorithm = "ssh-ed25519",
+                        createdAt = 1735689600123L,
+                        publicLine = "ssh-ed25519 AAAA… my-phone",
+                        fingerprint = "SHA256:xxx",
+                    ),
                     "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n",
                 ),
             ),

@@ -51,8 +51,9 @@ class ScheduledBackupTest {
 
     @Test
     fun `fingerprint is stable for identical payloads and moves when data changes`() {
-        val a = BackupPayload(snippets = listOf(BackupSnippet("s", "a", "b")))
-        val sameData = BackupPayload(exportedAt = "2030-01-01T00:00:00Z", snippets = listOf(BackupSnippet("s", "a", "b")))
+        val snippets = listOf(BackupSnippet("s", "a", "b"))
+        val a = BackupPayload(snippets = snippets)
+        val sameData = BackupPayload(exportedAt = "2030-01-01T00:00:00Z", snippets = snippets)
         val edited = a.copy(hosts = listOf(BackupHost(id = "h1", hostname = "x", username = "u")))
         assertEquals(BackupCodec.fingerprint(a), BackupCodec.fingerprint(sameData))
         assertNotEquals(BackupCodec.fingerprint(a), BackupCodec.fingerprint(edited))

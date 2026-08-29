@@ -67,17 +67,7 @@ object BackupCodec {
     }
 
     fun decrypt(blob: ByteArray, passphrase: CharArray): BackupPayload {
-        if (blob.size <= HEADER_LEN + TAG_LEN) throw FormatException("Not a Conch backup (too short)")
-        if (String(blob, 0, MAGIC.length, Charsets.US_ASCII) != MAGIC) throw FormatException("Not a Conch backup (bad magic)")
-        val buf = ByteBuffer.wrap(blob, MAGIC.length, HEADER_LEN - MAGIC.length)
-        val version = buf.short.toInt() and 0xFFFF
-        val kdf = buf.get().toInt() and 0xFF
-        val cipherId = buf.get().toInt() and 0xFF
-        val iterations = buf.int
-        if (version != FORMAT_VERSION) throw FormatException("Unsupported backup version $version")
-        if (kdf != KDF_PBKDF2_HMAC_SHA256 || cipherId != CIPHER_AES_256_GCM || iterations !in 1..MAX_ITERATIONS) {
-            throw FormatException("Unsupported backup parameters")
-        }
+        val iterations = checkHeader(blob)
         val header = blob.copyOfRange(0, HEADER_LEN)
         val salt = blob.copyOfRange(16, 16 + SALT_LEN)
         val nonce = blob.copyOfRange(32, 32 + NONCE_LEN)
@@ -88,6 +78,33 @@ object BackupCodec {
         cipher.updateAAD(header)
         val plain = cipher.doFinal(ct) // AEADBadTagException: wrong passphrase or tampered
         return payloadFromJson(String(plain, Charsets.UTF_8))
+    }
+
+    /**
+     * Rejects, in spec order and before any key derivation: too short, bad
+     * magic, unknown version, unknown KDF/cipher or an iteration count out
+     * of range. Returns the iteration count to derive with.
+     */
+    private fun checkHeader(blob: ByteArray): Int {
+        val problem = when {
+            blob.size <= HEADER_LEN + TAG_LEN -> "Not a Conch backup (too short)"
+            String(blob, 0, MAGIC.length, Charsets.US_ASCII) != MAGIC -> "Not a Conch backup (bad magic)"
+            else -> null
+        }
+        if (problem != null) throw FormatException(problem)
+        val buf = ByteBuffer.wrap(blob, MAGIC.length, HEADER_LEN - MAGIC.length)
+        val version = buf.short.toInt() and 0xFFFF
+        val kdf = buf.get().toInt() and 0xFF
+        val cipherId = buf.get().toInt() and 0xFF
+        val iterations = buf.int
+        val unsupported = when {
+            version != FORMAT_VERSION -> "Unsupported backup version $version"
+            kdf != KDF_PBKDF2_HMAC_SHA256 || cipherId != CIPHER_AES_256_GCM -> "Unsupported backup parameters"
+            iterations !in 1..MAX_ITERATIONS -> "Unsupported backup parameters"
+            else -> null
+        }
+        if (unsupported != null) throw FormatException(unsupported)
+        return iterations
     }
 
     private fun header(iterations: Int, salt: ByteArray, nonce: ByteArray): ByteArray =
@@ -110,8 +127,10 @@ object BackupCodec {
     // --------------------------------------------------------------- json
 
     /** Canonical JSON (§2): sorted keys, no whitespace, raw non-ASCII. */
-    fun payloadToJson(p: BackupPayload): String =
-        json.encodeToString(JsonElement.serializer(), canonical(json.encodeToJsonElement(BackupPayload.serializer(), p)))
+    fun payloadToJson(p: BackupPayload): String {
+        val tree = json.encodeToJsonElement(BackupPayload.serializer(), p)
+        return json.encodeToString(JsonElement.serializer(), canonical(tree))
+    }
 
     fun payloadFromJson(text: String): BackupPayload =
         json.decodeFromString(BackupPayload.serializer(), text)

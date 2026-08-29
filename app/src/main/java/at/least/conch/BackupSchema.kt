@@ -110,7 +110,13 @@ data class BackupHost(
                     Tunnel(f.listenPort, f.targetHost ?: "", f.targetPort ?: 0),
                 )
                 BackupForward.TYPE_REMOTE -> host.tunnels.add(
-                    Tunnel(f.listenPort, f.targetHost ?: "", f.targetPort ?: 0, remote = true, bindHost = f.listenHost ?: ""),
+                    Tunnel(
+                        localPort = f.listenPort,
+                        host = f.targetHost ?: "",
+                        port = f.targetPort ?: 0,
+                        remote = true,
+                        bindHost = f.listenHost ?: "",
+                    ),
                 )
                 // dynamic handled above; unknown types ignored (forward compat)
             }

@@ -145,7 +145,9 @@ class BackupManager(private val context: Context) {
             val existingIds = existingKeys.map { it.id }.toSet()
             val importIds = keyIdsToImport(existingIds, payload.keys)
             keysAdded = importIds.size
-            keysSkipped = payload.keys.count { it.id.isNotBlank() && it.id !in existingIds && it.privateKey.isNullOrEmpty() }
+            keysSkipped = payload.keys.count {
+                it.id.isNotBlank() && it.id !in existingIds && it.privateKey.isNullOrEmpty()
+            }
             if (keysAdded > 0) {
                 val byId = payload.keys.associateBy { it.id }
                 val merged = mutableListOf<SshKeyInfo>()
