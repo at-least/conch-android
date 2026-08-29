@@ -271,52 +271,9 @@ class DockerOpenSshIntegrationTest {
     }
 
     @Test
-    fun `agent forwarding serves identities and signatures to real openssh`() {
-        DockerMatrix.requireMatrix()
-        val keyAFile = DockerMatrix.keyFile("keyA")
-        val keyBlob = SSHClient().use { ssh ->
-            val pub = ssh.loadKeys(keyAFile.absolutePath).public
-            net.schmizz.sshj.common.Buffer.PlainBuffer().putPublicKey(pub).getCompactData()
-        }
-        val source = object : AgentKeySource {
-            override fun identities() = listOf(SshAgentIdentity(keyBlob, "keyA"))
-            override fun sign(blob: ByteArray, data: ByteArray, flags: Int): ByteArray? {
-                if (!blob.contentEquals(keyBlob)) return null
-                return SSHClient().use { ssh ->
-                    SshAgentSigner.sign(ssh.loadKeys(keyAFile.absolutePath).private, data, flags)
-                }
-            }
-        }
-        val host = DockerMatrix.pwHost(DockerMatrix.FORWARDING_PORT) { forwardAgent = true }
-        SshConnectionFactory.connect(
-            host = host,
-            prompt = DockerMatrix.acceptPrompt,
-            store = newStore(),
-            keyProvider = { _, _ -> error("password auth in this test") },
-            password = { DockerMatrix.PW_PASSWORD },
-            agentKeys = source,
-        ).use { ssh ->
-            // listing = the identities path (auth-agent channel + protocol)
-            val listing = DockerMatrix.exec(ssh, "ssh-add -l 2>&1", forwardAgent = true)
-            assertTrue(
-                "agent identities not listed: '$listing'",
-                listing.contains(KeyManager.fingerprintOfBlob(keyBlob)),
-            )
-            // sign-through: ssh INSIDE the container authenticates to :2223 as
-            // bothuser with no local key — only via the forwarded agent
-            val hop = DockerMatrix.exec(
-                ssh,
-                "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes " +
-                    "-p ${DockerMatrix.CONTAINER_SSH_PORT} bothuser@127.0.0.1 echo AGENT_SIGN_OK",
-                30_000,
-                forwardAgent = true,
-            )
-            assertTrue("agent sign-through failed: '$hop'", hop.contains("AGENT_SIGN_OK"))
-        }
-    }
-
-    @Test
-    fun `agent is not forwarded unless the host asks for it`() {
+    fun `no agent is ever forwarded to the server`() {
+        // agent forwarding is offered by neither app (ProxyJump covers the
+        // use case); the server must never see an SSH_AUTH_SOCK from us
         DockerMatrix.requireMatrix()
         connectPw().use { ssh ->
             val out = DockerMatrix.exec(ssh, "test -n \"\$SSH_AUTH_SOCK\" && echo SOCK || echo NO_SOCK")

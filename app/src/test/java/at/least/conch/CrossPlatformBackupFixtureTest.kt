@@ -63,7 +63,6 @@ class CrossPlatformBackupFixtureTest {
         assertEquals("h-bastion", prod.jumpHostId)
         assertEquals("Production", prod.group)
         assertEquals(listOf(7000, 8000, 9000), prod.knockPorts)
-        assertTrue(prod.forwardAgent)
         assertTrue(prod.safExpose)
         assertEquals(
             listOf(
@@ -86,7 +85,6 @@ class CrossPlatformBackupFixtureTest {
         assertTrue(bastion.knockPorts.isEmpty())
         assertTrue(bastion.tunnels.isEmpty())
         assertEquals(0, bastion.socksPort)
-        assertFalse(bastion.forwardAgent)
         assertFalse(bastion.safExpose)
 
         val v6 = p.hosts[2].toHost()
@@ -152,7 +150,6 @@ class CrossPlatformBackupFixtureTest {
         assertEquals(0f, h.fontSizeSp)
         assertTrue(h.keepAlive)
         assertTrue(h.tmuxAutoAttach)
-        assertFalse(h.forwardAgent)
         assertFalse(h.safExpose)
 
         assertEquals(1, p.keys.size)

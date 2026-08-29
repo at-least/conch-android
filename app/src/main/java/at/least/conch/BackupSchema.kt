@@ -79,7 +79,6 @@ data class BackupHost(
     val fontSize: Double? = null,
     val keepAlive: Boolean = true,
     val tmuxAutoAttach: Boolean = true,
-    val forwardAgent: Boolean = false,
     /** Android: SAF DocumentsProvider exposure (`Host.safExpose`). */
     val exposeFiles: Boolean = false,
 ) {
@@ -99,7 +98,6 @@ data class BackupHost(
             tmuxAutoAttach = tmuxAutoAttach,
             socksPort = forwards.firstOrNull { it.type == BackupForward.TYPE_DYNAMIC }?.listenPort ?: 0,
             jumpHostId = jumpHostId?.takeIf { it.isNotEmpty() },
-            forwardAgent = forwardAgent,
             safExpose = exposeFiles,
             group = group.trim(),
             knockPorts = knockPorts.filter(PortKnocker::isValidPort),
@@ -152,7 +150,6 @@ data class BackupHost(
                 fontSize = h.fontSizeSp.toDouble().takeIf { it > 0.0 },
                 keepAlive = h.keepAlive,
                 tmuxAutoAttach = h.tmuxAutoAttach,
-                forwardAgent = h.forwardAgent,
                 exposeFiles = h.safExpose,
             )
         }

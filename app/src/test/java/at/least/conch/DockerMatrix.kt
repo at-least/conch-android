@@ -342,10 +342,8 @@ object DockerMatrix {
         ssh: SSHClient,
         command: String,
         timeoutMs: Long = 15_000,
-        forwardAgent: Boolean = false,
     ): String {
         ssh.startSession().use { session ->
-            if (forwardAgent) AgentForwarding.requestOn(session)
             val cmd = session.exec(command)
             val holder = java.util.concurrent.atomic.AtomicReference("")
             val reader = Thread {
@@ -353,9 +351,8 @@ object DockerMatrix {
                 try {
                     val buf = ByteArray(4096)
                     val deadline = System.currentTimeMillis() + 120_000
-                    // poll with available(): blocking read() on sshj channel
-                    // streams deadlocks when an agent-forwarding request is
-                    // pending on the same channel
+                    // poll with available(): a blocking read() on sshj
+                    // channel streams can hang when the channel closes
                     while (System.currentTimeMillis() < deadline) {
                         var progressed = false
                         for (stream in listOf(cmd.inputStream, cmd.errorStream)) {

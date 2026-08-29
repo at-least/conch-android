@@ -2,6 +2,13 @@
 
 ## 0.9.1 (unreleased)
 
+- **ssh-agent forwarding removed** (shared decision with Conch iOS, which
+  never had it): multi-hop ProxyJump covers the bastion → inner-host case
+  and is what OpenSSH recommends over `-A`, while forwarding hands your
+  keys to root on the bastion. The per-host toggle, the on-device agent,
+  the sshj channel patch and the `ForwardAgent` config-import mapping are
+  gone; the `forwardAgent` backup field was dropped from the shared format
+  before release. Hosts saved with the flag simply lose it
 - **RSA keys are no longer accepted for login** (shared policy with Conch
   iOS): import refuses them with a hint to generate an Ed25519 key; RSA
   keys restored from a backup are kept and exportable but labelled

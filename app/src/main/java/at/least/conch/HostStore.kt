@@ -76,8 +76,6 @@ data class HostWire(
     /** Other host id to connect through (ProxyJump). Omitted when null so the JSON stays byte-compatible. */
     @EncodeDefault(Mode.NEVER) val jumpHostId: String? = null,
     @EncodeDefault(Mode.NEVER) val password: String? = null,
-    /** ssh-agent forwarding; omitted when false for byte-compatible backups. */
-    @EncodeDefault(Mode.NEVER) val forwardAgent: Boolean = false,
     /** Expose this host to system file pickers via the SAF DocumentsProvider. */
     @EncodeDefault(Mode.NEVER) val safExpose: Boolean = false,
     /** Host-list group ("" = ungrouped). Shared with iOS; omitted when empty. */
@@ -99,7 +97,6 @@ data class HostWire(
             tmuxAutoAttach = tmuxAutoAttach,
             socksPort = socksPort,
             jumpHostId = jumpHostId,
-            forwardAgent = forwardAgent,
             safExpose = safExpose,
             group = group.trim(),
             knockPorts = knockPorts.filter(PortKnocker::isValidPort),
@@ -123,7 +120,6 @@ data class HostWire(
             socksPort = h.socksPort,
             tunnels = h.tunnels.map { TunnelWire.from(it) },
             jumpHostId = h.jumpHostId,
-            forwardAgent = h.forwardAgent,
             safExpose = h.safExpose,
             group = h.group.trim(),
             knockPorts = h.knockPorts,
@@ -148,8 +144,6 @@ data class Host(
     var socksPort: Int = 0, // local SOCKS5 proxy (0 = off)
     /** ProxyJump: id of another saved host to tunnel this connection through (null = direct). */
     var jumpHostId: String? = null,
-    /** ssh-agent forwarding (-A): the server may ask this device to sign with stored keys. */
-    var forwardAgent: Boolean = false,
     /** Expose this host's files to system file pickers (SAF DocumentsProvider). */
     var safExpose: Boolean = false,
     /** Optional host-list group; blank = the ungrouped section (see [HostGrouping]). */

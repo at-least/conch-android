@@ -122,11 +122,6 @@ class DockerOpenSshConfigOracleTest {
                     val refJump = ref.fields["proxyjump"]?.firstOrNull() ?: "none"
                     val expectedJump = if (refJump == "none") "" else refJump.substringBefore(',')
                     assertEquals("proxyjump for ${host.alias}", expectedJump, host.proxyJump)
-                    assertEquals(
-                        "forwardagent for ${host.alias}",
-                        ref.one("forwardagent") == "yes",
-                        host.forwardAgent,
-                    )
                 }
                 // the Match block did not bleed into "db" (its directives are
                 // not applied by ssh either, because the user is not nobody)

@@ -31,7 +31,6 @@ FULL = {
             "fontSize": 14.5,
             "keepAlive": False,
             "tmuxAutoAttach": True,
-            "forwardAgent": True,
             "exposeFiles": True,
         },
         {
@@ -46,7 +45,6 @@ FULL = {
             "forwards": [],
             "keepAlive": True,
             "tmuxAutoAttach": False,
-            "forwardAgent": False,
             "exposeFiles": False,
         },
         {
@@ -61,7 +59,6 @@ FULL = {
             "forwards": [],
             "keepAlive": True,
             "tmuxAutoAttach": True,
-            "forwardAgent": False,
             "exposeFiles": False,
         },
     ],

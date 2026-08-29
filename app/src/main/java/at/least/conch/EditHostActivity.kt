@@ -174,7 +174,6 @@ private fun EditHostScreen(
     }
     var keepAlive by rememberSaveable { mutableStateOf(initial?.keepAlive ?: true) }
     var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
-    var forwardAgent by rememberSaveable { mutableStateOf(initial?.forwardAgent ?: false) }
     var safExpose by rememberSaveable { mutableStateOf(initial?.safExpose ?: false) }
     var group by rememberSaveable { mutableStateOf(initial?.group.orEmpty()) }
     var groupMenuOpen by rememberSaveable { mutableStateOf(false) }
@@ -268,7 +267,6 @@ private fun EditHostScreen(
                                 tmuxAutoAttach = tmux,
                                 socksPort = socksPort,
                                 jumpHostId = jumpHostId,
-                                forwardAgent = forwardAgent,
                                 safExpose = safExpose,
                                 group = group.trim(),
                                 knockPorts = PortKnocker.parse(knockText),
@@ -556,17 +554,6 @@ private fun EditHostScreen(
                 supporting = "Runs tmux new -A -s conch on connect, so a dropped session resumes where it left off.",
                 checked = tmux,
                 onCheckedChange = { tmux = it },
-            )
-            SwitchRow(
-                title = "Agent forwarding",
-                supporting = if (forwardAgent) {
-                    "This server can ask your device to sign with EVERY stored key — enable only on servers you trust."
-                } else {
-                    "Offer your stored keys to this server's own ssh/git hops."
-                },
-                supportingColor = if (forwardAgent) MaterialTheme.colorScheme.error else Color.Unspecified,
-                checked = forwardAgent,
-                onCheckedChange = { forwardAgent = it },
             )
             SwitchRow(
                 title = "Files in system picker",

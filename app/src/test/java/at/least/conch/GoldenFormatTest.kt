@@ -118,24 +118,6 @@ class GoldenFormatTest {
     }
 
     @Test
-    fun `golden host json - forwardAgent omitted unless true, old backups decode false`() {
-        // @EncodeDefault(NEVER): false must not appear, so the golden strings
-        // above (which never mention forwardAgent) stay byte-identical.
-        val host = Host(id = "fa-1", hostname = "h", username = "u")
-        val jsonOff = canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host)))
-        assertFalse(jsonOff.contains("forwardAgent"))
-        host.forwardAgent = true
-        val jsonOn = canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host)))
-        assertTrue(jsonOn.contains("\"forwardAgent\":true"))
-        // pre-feature backup without the field decodes to the safe default
-        val back = ConchJson.decodeFromString(
-            HostWire.serializer(),
-            """{"id":"x","hostname":"h","username":"u"}""",
-        ).toHost()
-        assertEquals(false, back.forwardAgent)
-    }
-
-    @Test
     @Suppress("MaxLineLength")
     fun `golden host json - group knockPorts bindHost omitted at default, written when set`() {
         // Shared-format fields (docs/backup-format.md): absent == default,
@@ -294,7 +276,7 @@ class GoldenFormatTest {
             knownHosts = listOfNotNull(BackupKnownHost.parseLine("[prod.example.com]:2222 ssh-ed25519 $ED25519_BLOB")),
         )
         assertEquals(
-            """{"exportedAt":"2026-08-29T05:30:00Z","hosts":[{"auth":{"keyId":"k1","method":"key"},"exposeFiles":false,"fontSize":14.5,"forwardAgent":false,"forwards":[{"listenPort":8080,"targetHost":"db.internal","targetPort":5432,"type":"local"},{"listenHost":"0.0.0.0","listenPort":9000,"targetHost":"127.0.0.1","targetPort":9001,"type":"remote"},{"listenPort":1080,"type":"dynamic"}],"group":"","hostname":"prod.example.com","id":"h1","keepAlive":false,"knockPorts":[],"name":"prod","port":2222,"tmuxAutoAttach":false,"username":"alice"},{"auth":{"method":"password","password":"s3cret-パスワード🔑"},"exposeFiles":false,"forwardAgent":false,"forwards":[],"group":"","hostname":"b.example.com","id":"h2","keepAlive":true,"knockPorts":[],"name":"","port":22,"tmuxAutoAttach":true,"username":"bob"}],"keys":[{"algorithm":"ssh-ed25519","createdAt":"2025-01-01T00:00:00.123Z","fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n","publicKey":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":[{"algorithm":"ssh-ed25519","host":"prod.example.com","port":2222,"publicKey":"$ED25519_BLOB"}],"origin":{"appVersion":"0.9.1","platform":"android"},"snippets":[{"command":"df -h","id":"s1","label":"disk"}]}""",
+            """{"exportedAt":"2026-08-29T05:30:00Z","hosts":[{"auth":{"keyId":"k1","method":"key"},"exposeFiles":false,"fontSize":14.5,"forwards":[{"listenPort":8080,"targetHost":"db.internal","targetPort":5432,"type":"local"},{"listenHost":"0.0.0.0","listenPort":9000,"targetHost":"127.0.0.1","targetPort":9001,"type":"remote"},{"listenPort":1080,"type":"dynamic"}],"group":"","hostname":"prod.example.com","id":"h1","keepAlive":false,"knockPorts":[],"name":"prod","port":2222,"tmuxAutoAttach":false,"username":"alice"},{"auth":{"method":"password","password":"s3cret-パスワード🔑"},"exposeFiles":false,"forwards":[],"group":"","hostname":"b.example.com","id":"h2","keepAlive":true,"knockPorts":[],"name":"","port":22,"tmuxAutoAttach":true,"username":"bob"}],"keys":[{"algorithm":"ssh-ed25519","createdAt":"2025-01-01T00:00:00.123Z","fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n","publicKey":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":[{"algorithm":"ssh-ed25519","host":"prod.example.com","port":2222,"publicKey":"$ED25519_BLOB"}],"origin":{"appVersion":"0.9.1","platform":"android"},"snippets":[{"command":"df -h","id":"s1","label":"disk"}]}""",
             BackupCodec.payloadToJson(payload),
         )
     }

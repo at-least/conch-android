@@ -37,7 +37,6 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Port forwarding**: local (-L) and remote (-R, with server bind address) tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
 - **ProxyJump, multi-hop** — "Connect via" a saved host whose own jump host is followed too (up to 3 hops); every hop uses its own credentials and host-key pin, failures name the hop, and the editor refuses choices that would form a cycle
 - **UDP port knocking** — an ordered knock sequence sent before every dial, for firewalls that hide the SSH port
-- **ssh-agent forwarding** (`-A`) per host — offer your stored keys to the server's own `ssh`/`git` hops; off by default with an explicit trust warning
 - Keep-alive, per-host terminal font size, OSC window-title tracking
 
 ### Authentication & security
@@ -185,7 +184,7 @@ runs many sshd configs on 127.0.0.1 with fixed users and throwaway test keys:
 |---|---|---|
 | 2233 | password + pubkey | auth, TOFU, host-key change/RSA pin, SFTP + stress (large / many / non-ASCII / symlink / disk-full / permission), PTY, tmux, ZMODEM (real lrzsz), Monitor probe, throughput + exit codes + SIGWINCH, Docker tab (host docker socket mounted); also on `[::1]` for IPv6 |
 | 2234 | pubkey only | key auth (ed25519 / RSA-3072 / ECDSA-P256), refused password, unknown key, FIDO2 `sk-ssh-ed25519` authorized_keys entry |
-| 2235 | forwarding allowed | -L/-R tunnels, ssh-agent forwarding, ProxyJump into the container's inner sshd, SOCKS5 |
+| 2235 | forwarding allowed | -L/-R tunnels, ProxyJump into the container's inner sshd, SOCKS5 |
 | 2236 | keyboard-interactive only (PAM) | the 2FA-prompt server shape through the plain password path |
 | 2237 | gated by knockd | port knocking: opens for 8 s after UDP 2260,2261,2262 |
 | 2238 | hardened | login `Banner`, CA-trusted certificate user, forced-command / `restrict` / `no-pty` authorized_keys keys, `MaxSessions 2`, `PermitOpen`, chrooted `internal-sftp` account |

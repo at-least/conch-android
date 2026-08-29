@@ -113,24 +113,19 @@ class OpenSshConfigParserTest {
     }
 
     @Test
-    fun `parses forwardagent yes and ignores anything else`() {
+    fun `forwardagent is an ignored directive like any other unknown one`() {
+        // agent forwarding is offered by neither app; the directive must
+        // neither fail the import nor leak into the host
         val config = """
             Host trusted
               HostName a.example.com
               ForwardAgent yes
-
-            Host untrusted
-              HostName b.example.com
-              forwardagent no
-
-            Host ask
-              HostName c.example.com
-              ForwardAgent ask
+              User deploy
         """.trimIndent()
         val hosts = OpenSshConfigParser.parse(config)
-        org.junit.Assert.assertTrue(hosts[0].forwardAgent)
-        org.junit.Assert.assertFalse(hosts[1].forwardAgent)
-        org.junit.Assert.assertFalse(hosts[2].forwardAgent)
+        assertEquals(1, hosts.size)
+        assertEquals("a.example.com", hosts[0].hostname)
+        assertEquals("deploy", hosts[0].user)
     }
 
     @Test

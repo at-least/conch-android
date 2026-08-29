@@ -53,7 +53,6 @@ object SshConnectionFactory {
         context: Context,
         host: Host,
         prompt: KeyPrompt? = null,
-        agentKeys: AgentKeySource? = null,
     ): SSHClient {
         // Resolved here, once, for every caller (terminal, Files tab, SAF
         // provider, share target): a broken chain (deleted jump host,
@@ -62,7 +61,6 @@ object SshConnectionFactory {
             is ProxyJumpResolver.Resolution.Chain -> r.jumps
             is ProxyJumpResolver.Resolution.Broken -> error("$HOST_CONFIG_PREFIX${ProxyJumpResolver.BROKEN_MESSAGE}")
         }
-        val keys = agentKeys ?: if (host.forwardAgent) KeyManagerAgentSource(context) else null
         return connect(
             host = host,
             jumps = jumps,
@@ -71,7 +69,6 @@ object SshConnectionFactory {
             keyProvider = { ssh, keyId -> KeyManager(context).loadKeyProvider(ssh, keyId) },
             password = { h -> SecretsStore.get("host-pw:${h.id}") },
             mainHandler = mainHandler,
-            agentKeys = keys,
         )
     }
 
@@ -89,8 +86,6 @@ object SshConnectionFactory {
      *                 does). Every hop authenticates with its own
      *                 credentials and is TOFU-verified against its own
      *                 endpoint.
-     * @param agentKeys key source for ssh-agent forwarding; the Android
-     *                 overload defaults it when the host opts in.
      */
     fun connect(
         host: Host,
@@ -100,7 +95,6 @@ object SshConnectionFactory {
         password: (Host) -> String?,
         mainHandler: Handler? = null,
         jumpHost: Host? = null,
-        agentKeys: AgentKeySource? = null,
         jumps: List<Host>? = null,
     ): SSHClient {
         val chain = jumps ?: listOfNotNull(jumpHost)
@@ -110,10 +104,10 @@ object SshConnectionFactory {
         var previous: SSHClient? = null
         for (hop in chain) {
             previous = attributing(hop) {
-                buildClient(hop, prompt, store, keyProvider, password, mainHandler, previous, agentKeys = null)
+                buildClient(hop, prompt, store, keyProvider, password, mainHandler, previous)
             }
         }
-        return buildClient(host, prompt, store, keyProvider, password, mainHandler, previous, agentKeys)
+        return buildClient(host, prompt, store, keyProvider, password, mainHandler, previous)
     }
 
     /**
@@ -164,7 +158,6 @@ object SshConnectionFactory {
         password: (Host) -> String?,
         mainHandler: Handler?,
         jump: SSHClient? = null,
-        agentKeys: AgentKeySource? = null,
     ): SSHClient {
         val config = DefaultConfig().apply { keepAliveProvider = KeepAliveProvider.KEEP_ALIVE }
         val ssh = if (jump != null) JumpedClient(config, jump) else SSHClient(config)
@@ -191,13 +184,6 @@ object SshConnectionFactory {
                 ssh.connection.keepAlive.apply {
                     keepAliveInterval = KEEP_ALIVE_INTERVAL_SECONDS
                     (this as? KeepAliveRunner)?.maxAliveCount = KEEP_ALIVE_MAX_UNANSWERED
-                }
-            }
-            if (host.forwardAgent && agentKeys != null) {
-                // a refusing server must not kill the session (tunnel policy)
-                try {
-                    AgentForwarding.attach(ssh, agentKeys)
-                } catch (_: Exception) {
                 }
             }
         } catch (e: Exception) {
