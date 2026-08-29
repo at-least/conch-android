@@ -6,9 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The "strict" sshd on :2239 (bookworm, OpenSSH 9.2): `MaxAuthTries 1`,
@@ -50,7 +47,7 @@ class DockerStrictServerTest {
 
         // and the correct password still logs in right afterwards (the one
         // failed try did not lock the account out for this client)
-        DockerMatrix.connect(newStore(), DockerMatrix.STRICT_PORT, "pwuser", password = "conch-pw-1").use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.STRICT_PORT).use { ssh ->
             assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
     }
@@ -58,66 +55,32 @@ class DockerStrictServerTest {
     @Test(timeout = 60_000)
     fun `an idle shell reaped by the server surfaces as a disconnect`() {
         DockerMatrix.requireMatrix()
-        // pin the host key first so the background-shaped SshSession connect is promptless
-        DockerMatrix.connect(newStore(), DockerMatrix.STRICT_PORT, "pwuser", password = "conch-pw-1").use { }
-
         val store = newStore()
-        DockerMatrix.connect(store, DockerMatrix.STRICT_PORT, "pwuser", password = "conch-pw-1").use { }
-        val host = Host(
-            hostname = "127.0.0.1",
-            username = "pwuser",
-            authType = Host.AUTH_PASSWORD,
-            tmuxAutoAttach = false, // stay idle: an attach line would be channel traffic
-        ).apply { port = DockerMatrix.STRICT_PORT }
+        // pin the host key first so the background-shaped SshSession connect is promptless
+        DockerMatrix.pinHostKey(store, DockerMatrix.STRICT_PORT)
+        // stay idle: a tmux attach line would be channel traffic
+        val host = DockerMatrix.pwHost(DockerMatrix.STRICT_PORT) { tmuxAutoAttach = false }
 
-        val connected = CountDownLatch(1)
-        val disconnected = CountDownLatch(1)
-        val reason = AtomicReference<String>()
-        val gotEcho = CountDownLatch(1)
-        val text = StringBuilder()
+        val cb = RecordingCallbacks()
         val session = SshSession(
             context = null,
             host = host,
             initialCols = 80,
             initialRows = 24,
-            callbacks = object : SshSession.Callbacks {
-                override fun onConnected() = connected.countDown()
-                override fun onData(data: ByteArray) {
-                    synchronized(text) { text.append(String(data)) }
-                    if (synchronized(text) { text.contains("IDLE-READY") }) gotEcho.countDown()
-                }
-                override fun onDisconnected(r: String) {
-                    reason.set(r)
-                    disconnected.countDown()
-                }
-            },
+            callbacks = cb,
             tofuPrompt = null,
             post = { it.run() },
-            connector = { h, _ ->
-                SshConnectionFactory.connect(
-                    host = h,
-                    prompt = null,
-                    store = store,
-                    keyProvider = { _, _ -> error("password auth in this test") },
-                    password = { "conch-pw-1" },
-                )
-            },
+            connector = { h, _ -> DockerMatrix.connect(store, h, prompt = null) },
         )
         session.connect()
         try {
-            assertTrue("session never connected", connected.await(30, TimeUnit.SECONDS))
+            cb.awaitConnected(30_000)
             session.write("echo IDLE-'READY'\r".toByteArray())
-            assertTrue("shell never answered before idling", gotEcho.await(15, TimeUnit.SECONDS))
+            cb.awaitText("IDLE-READY", 15_000)
             // now go fully idle: the server's ChannelTimeout (12 s) reaps the
             // shell, the reader loop hits EOF, and the app reports a disconnect
-            assertTrue(
-                "server-reaped idle shell did not surface as a disconnect",
-                disconnected.await(25, TimeUnit.SECONDS),
-            )
-            assertTrue(
-                "a reaped shell must not read as a clean user exit: ${reason.get()}",
-                !reason.get().isNullOrBlank(),
-            )
+            val reason = cb.awaitDisconnected(25_000)
+            assertTrue("a reaped shell must not read as a clean user exit: $reason", reason.isNotBlank())
         } finally {
             session.disconnect("test done")
         }
@@ -128,19 +91,8 @@ class DockerStrictServerTest {
         DockerMatrix.requireMatrix()
         // no channel is ever opened; keep-alive off so nothing resets the
         // server's UnusedConnectionTimeout (5 s) clock
-        val host = Host(
-            hostname = "127.0.0.1",
-            username = "pwuser",
-            authType = Host.AUTH_PASSWORD,
-            keepAlive = false,
-        ).apply { port = DockerMatrix.STRICT_PORT }
-        val ssh: SSHClient = SshConnectionFactory.connect(
-            host = host,
-            prompt = DockerMatrix.acceptPrompt,
-            store = newStore(),
-            keyProvider = { _, _ -> error("password auth in this test") },
-            password = { "conch-pw-1" },
-        )
+        val host = DockerMatrix.pwHost(DockerMatrix.STRICT_PORT) { keepAlive = false }
+        val ssh: SSHClient = DockerMatrix.connect(newStore(), host)
         try {
             // wait past UnusedConnectionTimeout with no channel open
             Thread.sleep(9_000)

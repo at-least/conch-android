@@ -17,7 +17,6 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -43,7 +42,7 @@ class DockerOpenSshIntegrationTest {
     private fun newStore() = KnownHostsStore(tmp.newFolder())
 
     private fun connectPw(port: Int = DockerMatrix.PW_AND_KEY_PORT): SSHClient =
-        DockerMatrix.connect(newStore(), port, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), port)
 
     @Test
     fun `sftp round-trips a file against real internal-sftp`() {
@@ -126,18 +125,13 @@ class DockerOpenSshIntegrationTest {
     fun `real pty receives TERM and dimensions from the pty request`() {
         DockerMatrix.requireMatrix()
         connectPw().use { ssh ->
-            val session = ssh.startSession()
-            session.allocatePTY("xterm-256color", 120, 40, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
+            DockerMatrix.withPtyShell(ssh, cols = 120, rows = 40) { shell ->
                 // the echo of this command line contains the QUOTED marker,
                 // only real output produces the unquoted one
                 writeShell(shell, "echo TERM=\$TERM; stty size; echo PTY'DONE'\r")
                 val acc = readUntil(shell.inputStream, "PTYDONE")
                 assertTrue("TERM missing: $acc", acc.contains("TERM=xterm-256color"))
                 assertTrue("stty size missing: $acc", acc.contains("40 120"))
-            } finally {
-                session.close()
             }
         }
     }
@@ -146,16 +140,14 @@ class DockerOpenSshIntegrationTest {
     fun `real tmux session can be created and listed over a pty`() {
         DockerMatrix.requireMatrix()
         connectPw().use { ssh ->
-            val session = ssh.startSession()
-            session.allocatePTY("xterm-256color", 120, 40, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
-                writeShell(shell, "tmux new -d -s conchtest 'sleep 60'; tmux ls; echo TMX'DONE'\r")
-                val acc = readUntil(shell.inputStream, "TMXDONE")
-                assertTrue("tmux session not listed: $acc", acc.contains("conchtest"))
-            } finally {
-                runCatching { writeShell(shell, "tmux kill-session -t conchtest\r") }
-                session.close()
+            DockerMatrix.withPtyShell(ssh, cols = 120, rows = 40) { shell ->
+                try {
+                    writeShell(shell, "tmux new -d -s conchtest 'sleep 60'; tmux ls; echo TMX'DONE'\r")
+                    val acc = readUntil(shell.inputStream, "TMXDONE")
+                    assertTrue("tmux session not listed: $acc", acc.contains("conchtest"))
+                } finally {
+                    runCatching { writeShell(shell, "tmux kill-session -t conchtest\r") }
+                }
             }
         }
     }
@@ -295,18 +287,13 @@ class DockerOpenSshIntegrationTest {
                 }
             }
         }
-        val host = Host(
-            hostname = "127.0.0.1",
-            username = "pwuser",
-            authType = Host.AUTH_PASSWORD,
-            forwardAgent = true,
-        ).apply { port = DockerMatrix.FORWARDING_PORT }
+        val host = DockerMatrix.pwHost(DockerMatrix.FORWARDING_PORT) { forwardAgent = true }
         SshConnectionFactory.connect(
             host = host,
             prompt = DockerMatrix.acceptPrompt,
             store = newStore(),
             keyProvider = { _, _ -> error("password auth in this test") },
-            password = { "conch-pw-1" },
+            password = { DockerMatrix.PW_PASSWORD },
             agentKeys = source,
         ).use { ssh ->
             // listing = the identities path (auth-agent channel + protocol)
@@ -341,23 +328,10 @@ class DockerOpenSshIntegrationTest {
     fun `saf backend round-trips against real openssh`() {
         DockerMatrix.requireMatrix()
         val store = newStore()
-        val host = Host(
-            id = "saf-docker",
-            hostname = "127.0.0.1",
-            username = "pwuser",
-            authType = Host.AUTH_PASSWORD,
-        ).apply { port = DockerMatrix.PW_AND_KEY_PORT }
+        val host = DockerMatrix.pwHost().copy(id = "saf-docker")
         val fs = SftpProviderFs(
             loadHost = { if (it == host.id) host else null },
-            connectHost = { h ->
-                SshConnectionFactory.connect(
-                    host = h,
-                    prompt = DockerMatrix.acceptPrompt,
-                    store = store,
-                    keyProvider = { _, _ -> error("password auth in this test") },
-                    password = { "conch-pw-1" },
-                )
-            },
+            connectHost = { h -> DockerMatrix.connect(store, h) },
         )
         try {
             val home = fs.homePath(host.id)
@@ -380,14 +354,4 @@ class DockerOpenSshIntegrationTest {
             fs.close()
         }
     }
-
-    private fun writeShell(shell: net.schmizz.sshj.connection.channel.direct.Session.Shell, data: String) {
-        synchronized(shell.outputStream) {
-            shell.outputStream.write(data.toByteArray())
-            shell.outputStream.flush()
-        }
-    }
-
-    private fun sha256Hex(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }

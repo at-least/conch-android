@@ -8,7 +8,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import java.security.MessageDigest
 
 /**
  * Mobile-grade links, produced with `tc netem` on the matrix container's
@@ -46,12 +45,7 @@ class DockerSlowNetworkTest {
     }
 
     private fun connect() =
-        DockerMatrix.connect(
-            KnownHostsStore(tmp.newFolder()),
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1"
-        )
+        DockerMatrix.connectPw(KnownHostsStore(tmp.newFolder()), DockerMatrix.PW_AND_KEY_PORT)
 
     @Test(timeout = 180_000)
     fun `sftp round-trip stays byte-exact over a lossy high-latency link`() {
@@ -67,10 +61,10 @@ class DockerSlowNetworkTest {
                 sftp.getFileTransfer().upload(local.absolutePath, "slow.bin")
                 sftp.getFileTransfer().download("slow.bin", back.absolutePath)
                 println("slow-link sftp 1 MB up+down: ${System.currentTimeMillis() - t0} ms")
-                assertEquals(sha256(payload), sha256(back.readBytes()))
+                assertEquals(sha256Hex(payload), sha256Hex(back.readBytes()))
                 // server-side hash agrees too (the upload was not silently truncated)
                 val remote = DockerMatrix.exec(ssh, "sha256sum slow.bin | cut -d' ' -f1", 30_000).trim()
-                assertEquals(sha256(payload), remote)
+                assertEquals(sha256Hex(payload), remote)
                 sftp.rm("slow.bin")
             } finally {
                 sftp.close()
@@ -86,22 +80,11 @@ class DockerSlowNetworkTest {
             repeat(5) { i ->
                 assertEquals("SLOW_$i", DockerMatrix.exec(ssh, "echo SLOW_$i", 30_000).trim())
             }
-            val session = ssh.startSession()
-            session.allocatePTY("xterm-256color", 100, 30, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
-                synchronized(shell.outputStream) {
-                    shell.outputStream.write("stty size; echo PTY'SLOW'\r".toByteArray())
-                    shell.outputStream.flush()
-                }
+            DockerMatrix.withPtyShell(ssh, cols = 100, rows = 30) { shell ->
+                writeShell(shell, "stty size; echo PTY'SLOW'\r")
                 val acc = readUntil(shell.inputStream, "PTYSLOW", 30_000)
                 assertTrue("stty size missing: $acc", acc.contains("30 100"))
-            } finally {
-                session.close()
             }
         }
     }
-
-    private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }

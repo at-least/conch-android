@@ -1,5 +1,6 @@
 package at.least.conch
 
+import net.schmizz.sshj.SSHClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -65,7 +66,20 @@ class DockerOpenSshConfigOracleTest {
         fun one(key: String): String = fields[key]?.first() ?: error("ssh -G printed no '$key': $fields")
     }
 
-    private fun resolve(ssh: net.schmizz.sshj.SSHClient, alias: String): Resolved {
+    /** Uploads [text] as [remotePath] for the duration of [block], then removes it. */
+    private fun withRemoteConfig(ssh: SSHClient, remotePath: String, text: String, block: () -> Unit) {
+        ssh.newSFTPClient().use { sftp ->
+            val local = tmp.newFile().apply { writeText(text + "\n") }
+            sftp.getFileTransfer().upload(local.absolutePath, remotePath)
+        }
+        try {
+            block()
+        } finally {
+            DockerMatrix.exec(ssh, "rm -f $remotePath")
+        }
+    }
+
+    private fun resolve(ssh: SSHClient, alias: String): Resolved {
         val out = DockerMatrix.exec(ssh, "ssh -G -F /tmp/conch-oracle.cfg $alias 2>&1")
         assertTrue("ssh -G failed for $alias: $out", !out.contains("Bad configuration", true))
         val map = mutableMapOf<String, MutableList<String>>()
@@ -83,17 +97,8 @@ class DockerOpenSshConfigOracleTest {
         val parsed = OpenSshConfigParser.parse(config)
         assertEquals(listOf("web", "bastion", "app", "db"), parsed.map { it.alias })
 
-        DockerMatrix.connect(
-            KnownHostsStore(tmp.newFolder()),
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1"
-        )
-            .use { ssh ->
-                ssh.newSFTPClient().use { sftp ->
-                    val local = tmp.newFile("oracle.cfg").apply { writeText(config + "\n") }
-                    sftp.getFileTransfer().upload(local.absolutePath, "/tmp/conch-oracle.cfg")
-                }
+        DockerMatrix.connectPw(KnownHostsStore(tmp.newFolder())).use { ssh ->
+            withRemoteConfig(ssh, "/tmp/conch-oracle.cfg", config) {
                 for (host in parsed) {
                     val ref = resolve(ssh, host.alias)
                     assertEquals("hostname for ${host.alias}", ref.one("hostname"), host.hostname)
@@ -106,9 +111,10 @@ class DockerOpenSshConfigOracleTest {
                         // parser keeps the path verbatim, so compare on the
                         // portion after a leading ~/
                         val tail = host.identityFile.removePrefix("~/")
+                        val refFiles = ref.fields["identityfile"].orEmpty()
                         assertTrue(
-                            "identityfile for ${host.alias}: parser='${host.identityFile}' ssh=${ref.fields["identityfile"]}",
-                            ref.fields["identityfile"].orEmpty().any { it.endsWith(tail) },
+                            "identityfile for ${host.alias}: parser='${host.identityFile}' ssh=$refFiles",
+                            refFiles.any { it.endsWith(tail) },
                         )
                     }
                     // ssh -G prints proxyjump only when set (older builds omit
@@ -126,8 +132,8 @@ class DockerOpenSshConfigOracleTest {
                 // not applied by ssh either, because the user is not nobody)
                 val db = resolve(ssh, "db")
                 assertEquals("22", db.one("port"))
-                DockerMatrix.exec(ssh, "rm -f /tmp/conch-oracle.cfg")
             }
+        }
     }
 
     /**
@@ -156,25 +162,17 @@ class DockerOpenSshConfigOracleTest {
         assertEquals("bastion", app.proxyJump)
 
         // real ssh -G, however, drops it because the global ProxyCommand wins
-        DockerMatrix.connect(
-            KnownHostsStore(tmp.newFolder()),
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1",
-        ).use { ssh ->
-            ssh.newSFTPClient().use { sftp ->
-                val local = tmp.newFile("suppress.cfg").apply { writeText(cfg + "\n") }
-                sftp.getFileTransfer().upload(local.absolutePath, "/tmp/conch-suppress.cfg")
+        DockerMatrix.connectPw(KnownHostsStore(tmp.newFolder())).use { ssh ->
+            withRemoteConfig(ssh, "/tmp/conch-suppress.cfg", cfg) {
+                val ref = DockerMatrix.exec(ssh, "ssh -G -F /tmp/conch-suppress.cfg app 2>&1")
+                val proxyjump = ref.lineSequence()
+                    .firstOrNull { it.startsWith("proxyjump ") }
+                    ?.substringAfter(' ')?.trim()
+                assertTrue(
+                    "ssh -G unexpectedly kept proxyjump ('$proxyjump') — the documented divergence no longer holds",
+                    proxyjump == null || proxyjump == "none",
+                )
             }
-            val ref = DockerMatrix.exec(ssh, "ssh -G -F /tmp/conch-suppress.cfg app 2>&1")
-            val proxyjump = ref.lineSequence()
-                .firstOrNull { it.startsWith("proxyjump ") }
-                ?.substringAfter(' ')?.trim()
-            assertTrue(
-                "ssh -G unexpectedly kept proxyjump ('$proxyjump') — the documented divergence no longer holds",
-                proxyjump == null || proxyjump == "none",
-            )
-            DockerMatrix.exec(ssh, "rm -f /tmp/conch-suppress.cfg")
         }
     }
 }

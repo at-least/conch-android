@@ -1,6 +1,7 @@
 package at.least.conch
 
 import net.schmizz.sshj.SSHClient
+import net.schmizz.sshj.connection.channel.direct.Session
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import java.io.File
@@ -66,6 +67,10 @@ object DockerMatrix {
     /** Forwarding-enabled sshd port INSIDE the container. */
     const val CONTAINER_FWD_PORT = 2225
 
+    /** The password account every base instance carries (also on the variants and alt servers). */
+    const val PW_USER = "pwuser"
+    const val PW_PASSWORD = "conch-pw-1"
+
     /** authorized_keys-option / certificate accounts on the hardened instance (:2238). */
     const val CERT_PRINCIPAL = "certuser"
     const val CMD_USER = "cmduser"
@@ -95,6 +100,8 @@ object DockerMatrix {
         val base: String,
         val pwPort: Int,
         val container: String = "$CONTAINER_NAME-$name",
+        /** run.sh mounts the host's docker socket into this container (Docker tab tests). */
+        val dockerSocket: Boolean = false,
     ) {
         val keyOnlyPort: Int get() = pwPort + 1
         val forwardingPort: Int get() = pwPort + 2
@@ -102,7 +109,8 @@ object DockerMatrix {
     }
 
     /** The default container as a matrix row (bookworm, ports 2233..2235). */
-    val DEFAULT_VARIANT = Variant("bookworm", "debian:bookworm-slim", PW_AND_KEY_PORT, CONTAINER_NAME)
+    val DEFAULT_VARIANT =
+        Variant("bookworm", "debian:bookworm-slim", PW_AND_KEY_PORT, CONTAINER_NAME, dockerSocket = true)
 
     /** Keep in step with VARIANTS in run.sh. */
     val VARIANTS = listOf(
@@ -164,63 +172,52 @@ object DockerMatrix {
         Socket().use { s ->
             s.connect(InetSocketAddress("127.0.0.1", port), 1_000)
             s.soTimeout = 2_000
-            val buf = ByteArray(8)
-            var got = 0
-            while (got < buf.size) {
-                val n = s.getInputStream().read(buf, got, buf.size - got)
-                if (n < 0) break
-                got += n
-            }
-            String(buf, 0, got, Charsets.US_ASCII).startsWith("SSH-2.0")
+            String(s.getInputStream().readNBytes(8), Charsets.US_ASCII).startsWith("SSH-2.0")
         }
     } catch (_: Exception) {
         false
     }
 
     fun waitForSshd(port: Int, timeoutMs: Long = 30_000) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (sshdAnswers(port)) return
-            Thread.sleep(250)
-        }
-        throw AssertionError("sshd on 127.0.0.1:$port did not come back within ${timeoutMs}ms")
+        awaitTrue("sshd on 127.0.0.1:$port did not come back within ${timeoutMs}ms", timeoutMs) { sshdAnswers(port) }
     }
 
     /**
-     * Distro-variant gate: skips unless the default matrix is opted in; with
-     * [DISTRO_FLAG] a missing variant FAILS (CI started them all), otherwise
-     * a variant that is not running just skips — a developer may bring up
-     * one base at a time (run.sh --variant NAME).
+     * Opt-in gate shared by the distro variants and the alternate servers:
+     * skips unless the default matrix is opted in; with [DISTRO_FLAG] a
+     * missing instance FAILS (CI started them all), otherwise one that is
+     * not running just skips — a developer may bring up one at a time.
      */
-    fun requireVariant(v: Variant) {
+    private fun requireInstance(label: String, port: Int, startAll: String, startOne: String) {
         assumeTrue("opt-in test: pass -D$FLAG=true", optedIn())
         if (distroOptedIn()) {
-            assertTrue(
-                "variant $v not reachable on 127.0.0.1:${v.pwPort} — start it: tools/sshd-matrix/run.sh --variants",
-                reachable(v.pwPort),
-            )
+            assertTrue("$label not reachable on 127.0.0.1:$port — start it: $startAll", reachable(port))
         } else {
-            assumeTrue("variant $v not running (tools/sshd-matrix/run.sh --variant ${v.name})", reachable(v.pwPort))
+            assumeTrue("$label not running ($startOne)", reachable(port))
         }
     }
 
+    /** Distro-variant gate (tools/sshd-matrix/run.sh --variant NAME). */
+    fun requireVariant(v: Variant) = requireInstance(
+        "variant $v",
+        v.pwPort,
+        "tools/sshd-matrix/run.sh --variants",
+        "tools/sshd-matrix/run.sh --variant ${v.name}",
+    )
+
     /**
-     * Alternate-server gate (tools/sshd-matrix/run.sh --server NAME): same
-     * opt-in shape as [requireVariant]. [port] is the server port under test
-     * (a server does not run every role — 0 means "this server has no such
-     * instance", which always skips).
+     * Alternate-server gate (tools/sshd-matrix/run.sh --server NAME). [port]
+     * is the server port under test (a server does not run every role — 0
+     * means "this server has no such instance", which always skips).
      */
     fun requireServer(s: Server, port: Int) {
-        assumeTrue("opt-in test: pass -D$FLAG=true", optedIn())
         assumeTrue("server ${s.name} has no instance for this role", port != 0)
-        if (distroOptedIn()) {
-            assertTrue(
-                "server ${s.name} not reachable on 127.0.0.1:$port — start it: tools/sshd-matrix/run.sh --servers",
-                reachable(port),
-            )
-        } else {
-            assumeTrue("server ${s.name} not running (tools/sshd-matrix/run.sh --server ${s.name})", reachable(port))
-        }
+        requireInstance(
+            "server ${s.name}",
+            port,
+            "tools/sshd-matrix/run.sh --servers",
+            "tools/sshd-matrix/run.sh --server ${s.name}",
+        )
     }
 
     /**
@@ -274,6 +271,27 @@ object DockerMatrix {
         return f
     }
 
+    /** The [PW_USER] password account on a matrix port, with any extra [Host] fields a test needs. */
+    fun pwHost(port: Int = PW_AND_KEY_PORT, hostname: String = "127.0.0.1", configure: Host.() -> Unit = {}): Host =
+        Host(hostname = hostname, username = PW_USER, authType = Host.AUTH_PASSWORD)
+            .apply { this.port = port }
+            .apply(configure)
+
+    /** App-path connection (SshConnectionFactory) for an arbitrary [host] with matrix credentials. */
+    fun connect(
+        store: KnownHostsStore,
+        host: Host,
+        password: String? = PW_PASSWORD,
+        keyFile: File? = null,
+        prompt: KeyPrompt? = acceptPrompt,
+    ): SSHClient = SshConnectionFactory.connect(
+        host = host,
+        prompt = prompt,
+        store = store,
+        keyProvider = { ssh, _ -> ssh.loadKeys(checkNotNull(keyFile) { "password auth in this test" }.absolutePath) },
+        password = { password },
+    )
+
     /** App-path connection (SshConnectionFactory) against a matrix port. */
     fun connect(
         store: KnownHostsStore,
@@ -290,13 +308,33 @@ object DockerMatrix {
             authType = authType,
             keyId = if (authType == Host.AUTH_KEY) "matrix-key" else null,
         ).apply { this.port = port }
-        return SshConnectionFactory.connect(
-            host = host,
-            prompt = prompt,
-            store = store,
-            keyProvider = { ssh, _ -> ssh.loadKeys(keyFile!!.absolutePath) },
-            password = { password },
-        )
+        return connect(store, host, password, keyFile, prompt)
+    }
+
+    /** [PW_USER] / [PW_PASSWORD] on [port] — the connection most matrix tests start from. */
+    fun connectPw(store: KnownHostsStore, port: Int = PW_AND_KEY_PORT, prompt: KeyPrompt? = acceptPrompt): SSHClient =
+        connect(store, port, PW_USER, password = PW_PASSWORD, prompt = prompt)
+
+    /** TOFU once (interactive) so later promptless, background-shaped connects through [store] succeed. */
+    fun pinHostKey(store: KnownHostsStore, port: Int = PW_AND_KEY_PORT) {
+        connectPw(store, port).use { }
+    }
+
+    /** Runs [block] on a fresh PTY shell of [ssh]; the session is closed afterwards. */
+    fun <T> withPtyShell(
+        ssh: SSHClient,
+        term: String = "xterm-256color",
+        cols: Int = 80,
+        rows: Int = 24,
+        block: (Session.Shell) -> T,
+    ): T {
+        val session = ssh.startSession()
+        return try {
+            session.allocatePTY(term, cols, rows, 0, 0, emptyMap())
+            block(session.startShell())
+        } finally {
+            runCatching { session.close() }
+        }
     }
 
     /** One-shot exec over an authenticated connection; returns full stdout. */

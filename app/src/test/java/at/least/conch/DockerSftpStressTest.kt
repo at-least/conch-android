@@ -9,7 +9,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.IOException
-import java.security.MessageDigest
 
 /**
  * SFTP edge cases through the app's real SAF backend ([SftpProviderFs]) and
@@ -36,23 +35,10 @@ class DockerSftpStressTest {
     fun setUp() {
         DockerMatrix.requireMatrix()
         val store = KnownHostsStore(tmp.newFolder())
-        host = Host(
-            id = "sftp-stress",
-            hostname = "127.0.0.1",
-            username = "pwuser",
-            authType = Host.AUTH_PASSWORD,
-        ).apply { port = DockerMatrix.PW_AND_KEY_PORT }
+        host = DockerMatrix.pwHost().copy(id = "sftp-stress")
         fs = SftpProviderFs(
             loadHost = { if (it == host.id) host else null },
-            connectHost = { h ->
-                SshConnectionFactory.connect(
-                    host = h,
-                    prompt = DockerMatrix.acceptPrompt,
-                    store = store,
-                    keyProvider = { _, _ -> error("password auth in this test") },
-                    password = { "conch-pw-1" },
-                )
-            },
+            connectHost = { h -> DockerMatrix.connect(store, h) },
         )
         home = fs.homePath(host.id)
         work = "$home/stress-${System.nanoTime()}"
@@ -62,16 +48,10 @@ class DockerSftpStressTest {
     @After
     fun tearDown() {
         if (this::fs.isInitialized) {
-            runCatching { DockerMatrix.dockerExec(
-                "rm -rf '$work' /mnt/tiny/* 2>/dev/null || true",
-                allowFailure = true
-            ) }
+            DockerMatrix.dockerExec("rm -rf '$work' /mnt/tiny/*", allowFailure = true)
             fs.close()
         }
     }
-
-    private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     @Test(timeout = 180_000)
     fun `a large file round-trips byte-exact through the saf backend`() {
@@ -87,10 +67,10 @@ class DockerSftpStressTest {
         }
         val back = fs.openRead(host.id, path).use { it.readBytes() }
         assertEquals("size mismatch", payload.size, back.size)
-        assertEquals(sha256(payload), sha256(back))
+        assertEquals(sha256Hex(payload), sha256Hex(back))
         // server-side hash agrees (no silent truncation on the wire)
         val remote = DockerMatrix.dockerExec("sha256sum '$path' | cut -d' ' -f1").trim()
-        assertEquals(sha256(payload), remote)
+        assertEquals(sha256Hex(payload), remote)
     }
 
     @Test(timeout = 120_000)

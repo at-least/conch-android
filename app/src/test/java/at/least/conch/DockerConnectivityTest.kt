@@ -36,8 +36,7 @@ class DockerConnectivityTest {
 
     /** App-path jump: the saved jump host dials the target; both keys TOFU'd. */
     private fun jumpConnect(jumpPort: Int, targetUser: String = "bothuser"): SSHClient {
-        val jumpHost = Host(hostname = "127.0.0.1", username = "pwuser", authType = Host.AUTH_PASSWORD)
-            .apply { port = jumpPort }
+        val jumpHost = DockerMatrix.pwHost(jumpPort)
         // the target is the container's INNER :2223, unreachable from the
         // host except through the jump's direct-tcpip
         val target = Host(
@@ -52,7 +51,7 @@ class DockerConnectivityTest {
             prompt = DockerMatrix.acceptPrompt,
             store = newStore(),
             keyProvider = { ssh, _ -> ssh.loadKeys(DockerMatrix.keyFile("keyA").absolutePath) },
-            password = { h -> if (h === jumpHost) "conch-pw-1" else null },
+            password = { h -> if (h === jumpHost) DockerMatrix.PW_PASSWORD else null },
             jumpHost = jumpHost,
         )
     }
@@ -86,7 +85,7 @@ class DockerConnectivityTest {
         )
         // the jump transport itself must not be left authenticated: a healthy
         // probe connection still works (no port/fd exhaustion from leaks)
-        DockerMatrix.connect(newStore(), DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), DockerMatrix.PW_AND_KEY_PORT)
             .use { probe ->
                 assertEquals("OK", DockerMatrix.exec(probe, "echo OK").trim())
             }
@@ -95,25 +94,19 @@ class DockerConnectivityTest {
     @Test(timeout = 60_000)
     fun `socks5 proxy bridges to a container service by ip and by domain name`() {
         DockerMatrix.requireMatrix()
-        DockerMatrix.connect(newStore(), DockerMatrix.FORWARDING_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), DockerMatrix.FORWARDING_PORT)
             .use { ssh ->
                 val proxy = SocksProxy(ssh)
                 val port = proxy.start(0)
                 try {
                     val socks = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
                     // ATYP 1 (IPv4)
-                    assertEquals(
-                        "SSH-2.0",
-                        bannerVia(socks, InetSocketAddress("127.0.0.1", DockerMatrix.CONTAINER_SSH_PORT))
-                    )
+                    assertSshBannerVia(socks, InetSocketAddress("127.0.0.1", DockerMatrix.CONTAINER_SSH_PORT))
                     // ATYP 3 (domain): the JDK sends unresolved names as-is, the
                     // container resolves "localhost" on its side
-                    assertEquals(
-                        "SSH-2.0",
-                        bannerVia(
-                            socks,
-                            InetSocketAddress.createUnresolved("localhost", DockerMatrix.CONTAINER_FWD_PORT)
-                        ),
+                    assertSshBannerVia(
+                        socks,
+                        InetSocketAddress.createUnresolved("localhost", DockerMatrix.CONTAINER_FWD_PORT),
                     )
                 } finally {
                     proxy.stop()
@@ -124,7 +117,7 @@ class DockerConnectivityTest {
     @Test(timeout = 60_000)
     fun `socks5 connect to a closed container port is refused not hung`() {
         DockerMatrix.requireMatrix()
-        DockerMatrix.connect(newStore(), DockerMatrix.FORWARDING_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), DockerMatrix.FORWARDING_PORT)
             .use { ssh ->
                 val proxy = SocksProxy(ssh)
                 val port = proxy.start(0)
@@ -145,7 +138,7 @@ class DockerConnectivityTest {
     @Test(timeout = 60_000)
     fun `keyboard-interactive only server accepts the stored password`() {
         DockerMatrix.requireMatrix()
-        DockerMatrix.connect(newStore(), DockerMatrix.KBD_INTERACTIVE_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), DockerMatrix.KBD_INTERACTIVE_PORT)
             .use { ssh ->
                 assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
                 // and the server really did not offer "password"
@@ -168,12 +161,12 @@ class DockerConnectivityTest {
         assertTrue(SshSession.isTerminalFailure(SshConnectionFactory.describeError(e as Exception)))
     }
 
-    private fun bannerVia(proxy: Proxy, target: InetSocketAddress): String =
+    private fun assertSshBannerVia(proxy: Proxy, target: InetSocketAddress) {
         Socket(proxy).use { s ->
             s.connect(target, 10_000)
             s.soTimeout = 10_000
             val line = BufferedReader(InputStreamReader(s.getInputStream())).readLine()
             assertTrue("unexpected banner via SOCKS: $line", line != null && line.startsWith("SSH-2.0-OpenSSH"))
-            "SSH-2.0"
         }
+    }
 }

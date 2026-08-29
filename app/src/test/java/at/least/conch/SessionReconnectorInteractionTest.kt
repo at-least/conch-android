@@ -210,12 +210,3 @@ class SessionReconnectorInteractionTest {
         }
     }
 }
-
-private fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
-    val deadline = System.currentTimeMillis() + timeoutMs
-    while (System.currentTimeMillis() < deadline) {
-        if (condition()) return
-        Thread.sleep(20)
-    }
-    throw AssertionError(message)
-}

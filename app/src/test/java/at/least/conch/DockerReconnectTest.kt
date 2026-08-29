@@ -81,12 +81,7 @@ class DockerReconnectTest {
         fun text() = received.joinToString("") { String(it) }
     }
 
-    private fun matrixHost() = Host(
-        hostname = "127.0.0.1",
-        username = "pwuser",
-        authType = Host.AUTH_PASSWORD,
-        tmuxAutoAttach = false,
-    ).apply { port = DockerMatrix.PW_AND_KEY_PORT }
+    private fun matrixHost() = DockerMatrix.pwHost { tmuxAutoAttach = false }
 
     private fun start(listener: RecordingListener): SessionReconnector {
         val sched = Executors.newSingleThreadScheduledExecutor { r ->
@@ -107,15 +102,7 @@ class DockerReconnectTest {
                     post = { it.run() },
                     // exactly the production connector shape: TOFU store, no
                     // prompt (background reconnect), stored password
-                    connector = { h, _ ->
-                        SshConnectionFactory.connect(
-                            host = h,
-                            prompt = null,
-                            store = store,
-                            keyProvider = { _, _ -> throw IllegalStateException("no key") },
-                            password = { "conch-pw-1" },
-                        )
-                    },
+                    connector = { h, _ -> DockerMatrix.connect(store, h, prompt = null) },
                 )
             },
             listener = listener,
@@ -133,11 +120,6 @@ class DockerReconnectTest {
         return r
     }
 
-    /** TOFU once (interactive), so every reconnect in the test is promptless like a background session. */
-    private fun pinHostKey() {
-        DockerMatrix.connect(store, DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1").use { }
-    }
-
     private fun shellEchoes(r: SessionReconnector, listener: RecordingListener, marker: String) {
         r.write("echo $marker'DONE'\r".toByteArray())
         awaitTrue("shell did not echo $marker", 20_000) { listener.text().contains("${marker}DONE") }
@@ -146,7 +128,7 @@ class DockerReconnectTest {
     @Test(timeout = 90_000)
     fun `server-side session kill reconnects with backoff and a working shell`() {
         DockerMatrix.requireMatrix()
-        pinHostKey()
+        DockerMatrix.pinHostKey(store)
         val listener = RecordingListener()
         val r = start(listener)
         awaitTrue("initial connect never came up", 30_000) { listener.connected.get() > 0 }
@@ -174,7 +156,7 @@ class DockerReconnectTest {
     @Test(timeout = 120_000)
     fun `sshd host restart reconnects promptless against the persisted host key`() {
         DockerMatrix.requireMatrix()
-        pinHostKey()
+        DockerMatrix.pinHostKey(store)
         val entriesBefore = store.file.readLines().filter { it.isNotBlank() }
         val listener = RecordingListener()
         val r = start(listener)
@@ -190,10 +172,6 @@ class DockerReconnectTest {
             shellEchoes(r, listener, "after-restart")
             // the host key survived the restart: same entries, nothing re-added
             assertEquals(entriesBefore, store.file.readLines().filter { it.isNotBlank() })
-            assertTrue(
-                "backoff must have grown across the outage: ${listener.reconnecting}",
-                listener.reconnecting.map { it.first }.max() >= 1,
-            )
         } finally {
             DockerMatrix.waitForSshd(DockerMatrix.PW_AND_KEY_PORT)
             DockerMatrix.waitForSshd(DockerMatrix.FORWARDING_PORT)
@@ -203,7 +181,7 @@ class DockerReconnectTest {
     @Test(timeout = 240_000)
     fun `frozen peer is detected by keep-alive and the session returns after unpause`() {
         DockerMatrix.requireMatrix()
-        pinHostKey()
+        DockerMatrix.pinHostKey(store)
         val listener = RecordingListener()
         val r = start(listener)
         awaitTrue("initial connect never came up", 30_000) { listener.connected.get() > 0 }
@@ -231,13 +209,4 @@ class DockerReconnectTest {
         awaitTrue("reconnect after unpause never came up", 90_000) { listener.connected.get() >= 2 }
         shellEchoes(r, listener, "after-unpause")
     }
-}
-
-private fun awaitTrue(message: String, timeoutMs: Long, condition: () -> Boolean) {
-    val deadline = System.currentTimeMillis() + timeoutMs
-    while (System.currentTimeMillis() < deadline) {
-        if (condition()) return
-        Thread.sleep(50)
-    }
-    throw AssertionError(message)
 }

@@ -121,6 +121,10 @@ server_ports() { # name
     printf '%s\n' "$SERVERS" | awk -F= -v n="$1" '$1 == n { print $2 }'
 }
 
+names_of() { # table  — the name column, space separated
+    printf '%s\n' "$1" | cut -d= -f1 | tr '\n' ' '
+}
+
 running_mount_source() {
     docker inspect "$1" --format '{{range .Mounts}}{{if eq .Destination "/keys"}}{{.Source}}{{end}}{{end}}' 2>/dev/null
 }
@@ -198,59 +202,55 @@ start_default() {
     fi
 }
 
+# start_aux NAME PORT_SPEC READY_FN READY_ARG BUILD_ARG...  — one auxiliary
+# container (variant or alternate server): reuse it if running, else build
+# its image from BUILD_ARGs, start it with PORT_SPEC and the keys mount, and
+# wait until READY_FN CNAME READY_ARG succeeds.
+start_aux() {
+    cname="$NAME-$1"
+    image="conch-android-sshd:$1"
+    ports=$2
+    ready_fn=$3
+    ready_arg=$4
+    shift 4
+    if [ "$FORCE" != 1 ] && is_running "$cname"; then
+        log "reusing running $cname ($ports)"
+        return 0
+    fi
+    log "building $image"
+    docker build -q "$@" -t "$image" >/dev/null
+    docker rm -f "$cname" >/dev/null 2>&1 || true
+    log "starting $cname on $ports"
+    docker run -d --init --name "$cname" \
+        -p "$ports" \
+        -v "$KEYS_DIR":/keys:ro \
+        "$image" >/dev/null
+    # shellcheck disable=SC2086
+    if ! "$ready_fn" "$cname" $ready_arg; then
+        log "$cname did not become ready; logs:"
+        docker logs "$cname" || true
+        exit 1
+    fi
+}
+
 start_variant() { # name
     base=$(variant_field "$1" 2)
     port=$(variant_field "$1" 3)
     [ -n "$base" ] || { log "unknown variant '$1'"; exit 2; }
-    cname="$NAME-$1"
-    image="conch-android-sshd:$1"
-    build_image "$image" "$base"
-    if [ "$FORCE" != 1 ] && is_running "$cname"; then
-        log "reusing running variant $cname (127.0.0.1:$port-$((port + 2)))"
-        return 0
-    fi
-    docker rm -f "$cname" >/dev/null 2>&1 || true
-    log "starting variant $cname ($base) on 127.0.0.1:$port-$((port + 2))"
-    docker run -d --init --name "$cname" \
-        -p "127.0.0.1:$port-$((port + 2)):2223-2225" \
-        -v "$KEYS_DIR":/keys:ro \
-        "$image" >/dev/null
-    if ! wait_ready "$cname"; then
-        log "variant $cname did not become ready; logs:"
-        docker logs "$cname" || true
-        exit 1
-    fi
+    start_aux "$1" "127.0.0.1:$port-$((port + 2)):2223-2225" wait_ready "" --build-arg "BASE=$base" "$HERE"
 }
 
 start_server() { # name
     ports=$(server_ports "$1")
     [ -n "$ports" ] || { log "unknown server '$1'"; exit 2; }
-    cname="$NAME-$1"
-    image="conch-android-sshd:$1"
-    log "building $image (servers/$1)"
-    docker build -q -t "$image" "$HERE/servers/$1" >/dev/null
-    if [ "$FORCE" != 1 ] && is_running "$cname"; then
-        log "reusing running server $cname ($ports)"
-        return 0
-    fi
-    docker rm -f "$cname" >/dev/null 2>&1 || true
-    log "starting server $cname on $ports"
-    docker run -d --init --name "$cname" \
-        -p "$ports" \
-        -v "$KEYS_DIR":/keys:ro \
-        "$image" >/dev/null
     inner_port=${ports##*:}
     inner_port=${inner_port%%-*}
-    if ! wait_port_answers "$cname" "$inner_port"; then
-        log "server $cname did not start listening on $inner_port; logs:"
-        docker logs "$cname" || true
-        exit 1
-    fi
+    start_aux "$1" "$ports" wait_port_answers "$inner_port" "$HERE/servers/$1"
 }
 
 stop_all() {
     docker rm -f "$NAME" >/dev/null 2>&1 || true
-    for v in $(printf '%s\n' "$VARIANTS" | cut -d= -f1) $(printf '%s\n' "$SERVERS" | cut -d= -f1); do
+    for v in $(names_of "$VARIANTS") $(names_of "$SERVERS"); do
         docker rm -f "$NAME-$v" >/dev/null 2>&1 || true
     done
     log "matrix stopped"
@@ -264,9 +264,9 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --rebuild) FORCE=1 ;;
         --stop) stop_all; exit 0 ;;
-        --variants) WANT_VARIANTS=$(printf '%s\n' "$VARIANTS" | cut -d= -f1 | tr '\n' ' ') ;;
+        --variants) WANT_VARIANTS=$(names_of "$VARIANTS") ;;
         --variant) shift; WANT_VARIANTS="$WANT_VARIANTS $1"; WANT_DEFAULT=0 ;;
-        --servers) WANT_SERVERS=$(printf '%s\n' "$SERVERS" | cut -d= -f1 | tr '\n' ' ') ;;
+        --servers) WANT_SERVERS=$(names_of "$SERVERS") ;;
         --server) shift; WANT_SERVERS="$WANT_SERVERS $1"; WANT_DEFAULT=0 ;;
         --no-default) WANT_DEFAULT=0 ;;
         *) log "usage: $0 [--rebuild] [--variants | --variant NAME]... [--servers | --server NAME]... [--no-default] [--stop]"; exit 2 ;;
@@ -277,10 +277,7 @@ done
 generate_keys
 
 if [ "$WANT_DEFAULT" = 1 ]; then
-    build_image "$IMAGE" debian:bookworm-slim
-    if [ "$FORCE" = 1 ]; then
-        start_default
-    elif is_running "$NAME"; then
+    if [ "$FORCE" != 1 ] && is_running "$NAME"; then
         mounted=$(running_mount_source "$NAME")
         if [ "$mounted" = "$KEYS_DIR" ]; then
             log "reusing running container $NAME (ports 127.0.0.1:2233-2242)"
@@ -289,6 +286,7 @@ if [ "$WANT_DEFAULT" = 1 ]; then
             log "         Fix with: $0 --rebuild"
         fi
     else
+        build_image "$IMAGE" debian:bookworm-slim
         start_default
     fi
 fi

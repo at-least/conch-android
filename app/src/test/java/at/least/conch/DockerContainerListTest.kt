@@ -33,12 +33,7 @@ class DockerContainerListTest {
     }
 
     private fun connect() =
-        DockerMatrix.connect(
-            KnownHostsStore(tmp.newFolder()),
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1"
-        )
+        DockerMatrix.connectPw(KnownHostsStore(tmp.newFolder()), DockerMatrix.PW_AND_KEY_PORT)
 
     private fun requireSocket(ssh: net.schmizz.sshj.SSHClient) {
         val probe = DockerMatrix.exec(ssh, "test -S /var/run/docker.sock && echo SOCK || echo NO_SOCK").trim()
@@ -56,9 +51,10 @@ class DockerContainerListTest {
         DockerMatrix.requireMatrix()
         connect().use { ssh ->
             requireSocket(ssh)
-            val self = list(ssh).firstOrNull { it.names == DockerMatrix.CONTAINER_NAME }
-            assertTrue("matrix container missing from its own docker ps", self != null)
-            assertEquals("running", self!!.state)
+            val self = checkNotNull(list(ssh).firstOrNull { it.names == DockerMatrix.CONTAINER_NAME }) {
+                "matrix container missing from its own docker ps"
+            }
+            assertEquals("running", self.state)
             assertTrue("status should read Up…: ${self.status}", self.status.startsWith("Up"))
             assertTrue("image should be the matrix image: ${self.image}", self.image.startsWith("conch-android-sshd"))
             assertEquals(12, self.id.length)
@@ -77,9 +73,7 @@ class DockerContainerListTest {
             )
             spawned = true
 
-            val c = list(ssh).firstOrNull { it.names == longName }
-            assertTrue("long-named container not parsed", c != null)
-            c!!
+            val c = checkNotNull(list(ssh).firstOrNull { it.names == longName }) { "long-named container not parsed" }
             assertEquals("running", c.state)
 
             // exact shapes SessionTabs runs

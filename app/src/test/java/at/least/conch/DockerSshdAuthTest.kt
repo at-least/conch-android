@@ -33,12 +33,7 @@ class DockerSshdAuthTest {
     @Test
     fun `password authenticates and execs on the password port`() {
         DockerMatrix.requireMatrix()
-        DockerMatrix.connect(
-            newStore(),
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1",
-        ).use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.PW_AND_KEY_PORT).use { ssh ->
             DockerMatrix.exec(ssh, "echo MATRIX_OK").let {
                 assertEquals("MATRIX_OK", it.trim())
             }
@@ -107,22 +102,11 @@ class DockerSshdAuthTest {
         DockerMatrix.requireMatrix()
         val store = newStore()
         // first connect: unknown host key, prompt accepts (TOFU add)
-        DockerMatrix.connect(
-            store,
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1",
-        ).use { ssh ->
+        DockerMatrix.connectPw(store, DockerMatrix.PW_AND_KEY_PORT).use { ssh ->
             assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
         // reconnect like a background session: no prompt allowed anymore
-        DockerMatrix.connect(
-            store,
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1",
-            prompt = null,
-        ).use { ssh ->
+        DockerMatrix.connectPw(store, DockerMatrix.PW_AND_KEY_PORT, prompt = null).use { ssh ->
             assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
     }

@@ -31,19 +31,9 @@ class DockerAltServerTest {
 
     private fun newStore() = KnownHostsStore(tmp.newFolder())
 
-    private fun ptyTerm(ssh: SSHClient, term: String = "xterm-256color"): String {
-        val session = ssh.startSession()
-        session.allocatePTY(term, 100, 30, 0, 0, emptyMap())
-        val shell = session.startShell()
-        return try {
-            synchronized(shell.outputStream) {
-                shell.outputStream.write("echo TERM=\$TERM; echo PTY'DONE'\r".toByteArray())
-                shell.outputStream.flush()
-            }
-            readUntil(shell.inputStream, "PTYDONE", 20_000)
-        } finally {
-            runCatching { session.close() }
-        }
+    private fun ptyTerm(ssh: SSHClient): String = DockerMatrix.withPtyShell(ssh, cols = 100, rows = 30) { shell ->
+        writeShell(shell, "echo TERM=\$TERM; echo PTY'DONE'\r")
+        readUntil(shell.inputStream, "PTYDONE", 20_000)
     }
 
     // ---- Dropbear -------------------------------------------------------
@@ -51,7 +41,7 @@ class DockerAltServerTest {
     @Test(timeout = 60_000)
     fun `dropbear accepts a password and execs`() {
         DockerMatrix.requireServer(DockerMatrix.DROPBEAR, DockerMatrix.DROPBEAR.pwPort)
-        DockerMatrix.connect(newStore(), DockerMatrix.DROPBEAR.pwPort, "pwuser", password = "conch-pw-1").use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.DROPBEAR.pwPort).use { ssh ->
             assertEquals("DB_OK", DockerMatrix.exec(ssh, "echo DB_OK").trim())
         }
     }
@@ -73,12 +63,7 @@ class DockerAltServerTest {
     @Test(timeout = 60_000)
     fun `dropbear serves a real pty with TERM set`() {
         DockerMatrix.requireServer(DockerMatrix.DROPBEAR, DockerMatrix.DROPBEAR.forwardingPort)
-        DockerMatrix.connect(
-            newStore(),
-            DockerMatrix.DROPBEAR.forwardingPort,
-            "pwuser",
-            password = "conch-pw-1"
-        ).use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.DROPBEAR.forwardingPort).use { ssh ->
             val acc = ptyTerm(ssh)
             assertTrue("dropbear pty did not carry TERM: $acc", acc.contains("TERM=xterm-256color"))
         }
@@ -109,7 +94,7 @@ class DockerAltServerTest {
     @Test(timeout = 60_000)
     fun `x-crypto server negotiates its own banner and execs by password and key`() {
         DockerMatrix.requireServer(DockerMatrix.GOSSH, DockerMatrix.GOSSH.pwPort)
-        DockerMatrix.connect(newStore(), DockerMatrix.GOSSH.pwPort, "pwuser", password = "conch-pw-1").use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.GOSSH.pwPort).use { ssh ->
             // a non-OpenSSH identification string must not trip the app up
             assertTrue(
                 "unexpected server ident: ${ssh.transport.serverVersion}",
@@ -131,16 +116,11 @@ class DockerAltServerTest {
     @Test(timeout = 60_000)
     fun `x-crypto server carries TERM through a pty request`() {
         DockerMatrix.requireServer(DockerMatrix.GOSSH, DockerMatrix.GOSSH.pwPort)
-        DockerMatrix.connect(newStore(), DockerMatrix.GOSSH.pwPort, "pwuser", password = "conch-pw-1").use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.GOSSH.pwPort).use { ssh ->
             // this server echoes the negotiated TERM on shell start
-            val session = ssh.startSession()
-            session.allocatePTY("screen-256color", 90, 30, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
+            DockerMatrix.withPtyShell(ssh, term = "screen-256color", cols = 90, rows = 30) { shell ->
                 val acc = readUntil(shell.inputStream, "TERM=screen-256color", 15_000)
                 assertTrue("x/crypto pty TERM missing: $acc", acc.contains("TERM=screen-256color"))
-            } finally {
-                runCatching { session.close() }
             }
         }
     }
@@ -150,7 +130,7 @@ class DockerAltServerTest {
     @Test(timeout = 60_000)
     fun `paramiko server execs by password and key`() {
         DockerMatrix.requireServer(DockerMatrix.PARAMIKO, DockerMatrix.PARAMIKO.pwPort)
-        DockerMatrix.connect(newStore(), DockerMatrix.PARAMIKO.pwPort, "pwuser", password = "conch-pw-1").use { ssh ->
+        DockerMatrix.connectPw(newStore(), DockerMatrix.PARAMIKO.pwPort).use { ssh ->
             assertEquals("PARA_OK", DockerMatrix.exec(ssh, "echo PARA_OK").trim())
         }
         DockerMatrix.connect(
@@ -167,15 +147,10 @@ class DockerAltServerTest {
     @Test(timeout = 60_000)
     fun `paramiko server carries TERM through a pty request`() {
         DockerMatrix.requireServer(DockerMatrix.PARAMIKO, DockerMatrix.PARAMIKO.pwPort)
-        DockerMatrix.connect(newStore(), DockerMatrix.PARAMIKO.pwPort, "pwuser", password = "conch-pw-1").use { ssh ->
-            val session = ssh.startSession()
-            session.allocatePTY("tmux-256color", 90, 30, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
+        DockerMatrix.connectPw(newStore(), DockerMatrix.PARAMIKO.pwPort).use { ssh ->
+            DockerMatrix.withPtyShell(ssh, term = "tmux-256color", cols = 90, rows = 30) { shell ->
                 val acc = readUntil(shell.inputStream, "TERM=tmux-256color", 15_000)
                 assertTrue("paramiko pty TERM missing: $acc", acc.contains("TERM=tmux-256color"))
-            } finally {
-                runCatching { session.close() }
             }
         }
     }

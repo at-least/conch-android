@@ -23,12 +23,7 @@ class DockerThroughputTest {
     val tmp = TemporaryFolder()
 
     private fun connect(): SSHClient =
-        DockerMatrix.connect(
-            KnownHostsStore(tmp.newFolder()),
-            DockerMatrix.PW_AND_KEY_PORT,
-            "pwuser",
-            password = "conch-pw-1"
-        )
+        DockerMatrix.connectPw(KnownHostsStore(tmp.newFolder()), DockerMatrix.PW_AND_KEY_PORT)
 
     @Test(timeout = 120_000)
     fun `a multi-megabyte exec burst arrives without loss and feeds the emulator`() {
@@ -83,29 +78,18 @@ class DockerThroughputTest {
     fun `a pty resize delivers SIGWINCH and the remote stty size updates`() {
         DockerMatrix.requireMatrix()
         connect().use { ssh ->
-            val session = ssh.startSession()
-            session.allocatePTY("xterm-256color", 80, 24, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
+            DockerMatrix.withPtyShell(ssh) { shell ->
                 // interactive size before the resize
-                synchronized(shell.outputStream) {
-                    shell.outputStream.write("stty size; echo SIZE'ONE'\r".toByteArray())
-                    shell.outputStream.flush()
-                }
+                writeShell(shell, "stty size; echo SIZE'ONE'\r")
                 val before = readUntil(shell.inputStream, "SIZEONE", 15_000)
                 assertTrue("initial size wrong: $before", before.contains("24 80"))
 
                 // the app calls changeWindowDimensions on a rotate / keyboard
                 // show; the remote must see the new size via SIGWINCH
                 shell.changeWindowDimensions(120, 40, 0, 0)
-                synchronized(shell.outputStream) {
-                    shell.outputStream.write("stty size; echo SIZE'TWO'\r".toByteArray())
-                    shell.outputStream.flush()
-                }
+                writeShell(shell, "stty size; echo SIZE'TWO'\r")
                 val after = readUntil(shell.inputStream, "SIZETWO", 15_000)
                 assertTrue("resize not reflected by stty size: $after", after.contains("40 120"))
-            } finally {
-                runCatching { session.close() }
             }
         }
     }

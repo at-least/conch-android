@@ -62,9 +62,7 @@ class AddHostFormInstrumentedTest {
 
     @After
     fun tearDown() {
-        val store = HostStore(context)
-        store.load().filter { it.alias == alias }.forEach { SecretsStore.delete("host-pw:${it.id}") }
-        store.save(store.load().filterNot { it.alias == alias })
+        MatrixDevice.removeHosts(context) { it.alias == alias }
     }
 
     private fun editField(label: String) = compose.onNode(hasSetTextAction() and hasText(label))
@@ -80,10 +78,7 @@ class AddHostFormInstrumentedTest {
 
         // the form wrote through to the real stores (Save also finish()es)
         val store = HostStore(context)
-        val deadline = System.currentTimeMillis() + 10_000
-        while (System.currentTimeMillis() < deadline && store.load().none { it.alias == alias }) {
-            Thread.sleep(100)
-        }
+        MatrixDevice.awaitTrue("host never landed in HostStore") { store.load().any { it.alias == alias } }
         val saved = store.load().first { it.alias == alias }
         assertEquals("example.test", saved.hostname)
         assertEquals("deploy", saved.username)

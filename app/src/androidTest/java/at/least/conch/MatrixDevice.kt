@@ -1,5 +1,6 @@
 package at.least.conch
 
+import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -44,6 +45,8 @@ object MatrixDevice {
     /** TOFU prompt that accepts any unknown host key. */
     val acceptPrompt: KeyPrompt = { _, done -> done(true) }
 
+    const val PW_PASSWORD = "conch-pw-1"
+
     fun passwordHost(alias: String = "matrix", safExpose: Boolean = false) = Host(
         alias = alias,
         hostname = host,
@@ -52,4 +55,35 @@ object MatrixDevice {
         tmuxAutoAttach = false,
         safExpose = safExpose,
     ).apply { port = PW_AND_KEY_PORT }
+
+    /** Saves [host] (replacing any same-alias entry) plus its Keystore password, the way the form would. */
+    fun seedHost(context: Context, host: Host, password: String = PW_PASSWORD) {
+        SecretsStore.init(context)
+        val store = HostStore(context)
+        store.save(store.load().filterNot { it.alias == host.alias } + host)
+        SecretsStore.put("host-pw:${host.id}", password)
+    }
+
+    /** Removes every saved host matching [predicate] together with its stored password. */
+    fun removeHosts(context: Context, predicate: (Host) -> Boolean) {
+        val store = HostStore(context)
+        val all = store.load()
+        all.filter(predicate).forEach { SecretsStore.delete("host-pw:${it.id}") }
+        store.save(all.filterNot(predicate))
+    }
+
+    /**
+     * Polls [condition] until true or [timeoutMs] elapses. inline: a non-inline
+     * lambda passed from a spaced-backtick @Test method is synthesized into a
+     * class whose SimpleName carries the method's spaces, which DEX < 040
+     * (minSdk 26) rejects. Inlining emits no such class.
+     */
+    inline fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return
+            Thread.sleep(100)
+        }
+        throw AssertionError(message)
+    }
 }

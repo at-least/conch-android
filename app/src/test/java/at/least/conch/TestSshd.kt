@@ -27,12 +27,14 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.security.KeyPair
 import java.security.KeyPairGenerator
+import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.Security
 import java.security.spec.ECGenParameterSpec
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /** Canned response of the in-process sshd to one exec command. */
@@ -403,6 +405,67 @@ fun readUntil(input: InputStream, expected: String, timeoutMs: Long = 10_000): S
         Thread.sleep(20)
     }
     throw AssertionError("timed out waiting for \"$expected\", got: \"$acc\"")
+}
+
+/** Polls [condition] until true or [timeoutMs] elapses, then fails with [message]. */
+fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < deadline) {
+        if (condition()) return
+        Thread.sleep(20)
+    }
+    throw AssertionError(message)
+}
+
+fun sha256Hex(bytes: ByteArray): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+/** Writes [data] to a shell channel the way the app does: one locked write + flush. */
+fun writeShell(shell: net.schmizz.sshj.connection.channel.direct.Session.Shell, data: String) {
+    synchronized(shell.outputStream) {
+        shell.outputStream.write(data.toByteArray())
+        shell.outputStream.flush()
+    }
+}
+
+/** [SshSession.Callbacks] that records everything, with await helpers for tests. */
+class RecordingCallbacks : SshSession.Callbacks {
+    val connected = AtomicInteger(0)
+    val disconnected = AtomicInteger(0)
+    val reasons = ConcurrentLinkedQueue<String>()
+    val received = ConcurrentLinkedQueue<ByteArray>()
+
+    override fun onConnected() {
+        connected.incrementAndGet()
+    }
+
+    override fun onData(data: ByteArray) {
+        received.add(data)
+    }
+
+    override fun onDisconnected(reason: String) {
+        disconnected.incrementAndGet()
+        reasons.add(reason)
+    }
+
+    fun text() = received.joinToString("") { String(it) }
+
+    fun awaitConnected(timeoutMs: Long = 10_000) {
+        awaitTrue("never got onConnected", timeoutMs) { connected.get() > 0 }
+    }
+
+    fun awaitText(expected: String, timeoutMs: Long = 10_000) {
+        awaitTrue("waiting for \"$expected\", got \"${text()}\"", timeoutMs) {
+            text().contains(expected)
+        }
+    }
+
+    fun awaitDisconnected(timeoutMs: Long = 10_000): String {
+        awaitTrue("never got onDisconnected (reasons so far: $reasons)", timeoutMs) {
+            disconnected.get() > 0
+        }
+        return reasons.first()
+    }
 }
 
 /** Temp file holding an Ed25519 OpenSSH PEM, plus the sshj-loaded public key. */

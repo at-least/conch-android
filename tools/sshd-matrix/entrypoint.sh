@@ -113,78 +113,60 @@ HostKey /etc/ssh/ssh_host_ed25519_key
 HostKey /etc/ssh/ssh_host_rsa_key
 '
 
-{
-    echo 'Port 2223'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_pwpub.pid'
-} > /etc/ssh/sshd_config_pwpub
+# write_cfg NAME PORT PASSWORD_AUTH [DIRECTIVE...] → /etc/ssh/sshd_config_NAME:
+# Port, the instance's own directives, then the defaults every instance
+# shares unless a DIRECTIVE already set them (keyboard-interactive off, all
+# host keys), the shared block and the PidFile. Instance lines come before
+# the shared block because OpenSSH is first-match-wins. A Match block, which
+# must end the file, is appended by the caller.
+write_cfg() {
+    name=$1; port=$2; pwauth=$3; shift 3
+    own_hostkey=0; own_kbd=0
+    {
+        echo "Port $port"
+        echo "PasswordAuthentication $pwauth"
+        for d in "$@"; do
+            case "$d" in
+                HostKey*) own_hostkey=1 ;;
+                KbdInteractiveAuthentication*) own_kbd=1 ;;
+            esac
+            echo "$d"
+        done
+        [ "$own_kbd" = 1 ] || echo 'KbdInteractiveAuthentication no'
+        [ "$own_hostkey" = 1 ] || echo "$hostkeys_all"
+        echo "$common_cfg"
+        echo "PidFile /run/sshd_$name.pid"
+    } > "/etc/ssh/sshd_config_$name"
+}
 
-{
-    echo 'Port 2224'
-    echo 'PasswordAuthentication no'
-    echo 'KbdInteractiveAuthentication no'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_keyonly.pid'
-} > /etc/ssh/sshd_config_keyonly
-
-{
-    echo 'Port 2225'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo 'AllowTcpForwarding yes'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_fwd.pid'
-} > /etc/ssh/sshd_config_fwd
+write_cfg pwpub 2223 yes
+write_cfg keyonly 2224 no
+write_cfg fwd 2225 yes 'AllowTcpForwarding yes'
 
 # Keyboard-interactive ONLY (the shape of every 2FA / PAM-prompt server):
 # plain "password" auth is refused; the client must answer the PAM prompt.
-{
-    echo 'Port 2226'
-    echo 'UsePAM yes'
-    echo 'PasswordAuthentication no'
-    echo 'KbdInteractiveAuthentication yes'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_kbd.pid'
-} > /etc/ssh/sshd_config_kbd
+write_cfg kbd 2226 no 'UsePAM yes' 'KbdInteractiveAuthentication yes'
 
 # Gated instance: nothing listens on 2227 until knockd sees the sequence.
-{
-    echo 'Port 2227'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_gated.pid'
-} > /etc/ssh/sshd_config_gated
+write_cfg gated 2227 yes
 
 # Hardened: the policy knobs real admins turn. PermitOpen lets tunnels reach
 # only the inner sshd; MaxSessions 2 = shell + one more channel; the CA
 # makes certificate auth possible for certuser; the Match block turns
 # sftponly into a chrooted SFTP-only account.
-{
-    echo 'Port 2228'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo 'AllowTcpForwarding yes'
-    echo 'PermitOpen 127.0.0.1:2223'
-    echo 'MaxSessions 2'
-    echo 'Banner /etc/ssh/banner.txt'
-    echo 'TrustedUserCAKeys /keys/ca.pub'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_hardened.pid'
-    echo 'Match User sftponly'
-    echo '    ChrootDirectory /srv/sftp/%u'
-    echo '    ForceCommand internal-sftp'
-    echo '    AllowTcpForwarding no'
-    echo '    PermitTTY no'
-} > /etc/ssh/sshd_config_hardened
+write_cfg hardened 2228 yes \
+    'AllowTcpForwarding yes' \
+    'PermitOpen 127.0.0.1:2223' \
+    'MaxSessions 2' \
+    'Banner /etc/ssh/banner.txt' \
+    'TrustedUserCAKeys /keys/ca.pub'
+cat >> /etc/ssh/sshd_config_hardened <<'MATCH'
+Match User sftponly
+    ChrootDirectory /srv/sftp/%u
+    ForceCommand internal-sftp
+    AllowTcpForwarding no
+    PermitTTY no
+MATCH
 
 # Strict: one auth attempt, idle shells reaped by the server, idle
 # transports closed. ChannelTimeouts / UnusedConnectionTimeout need
@@ -192,65 +174,32 @@ HostKey /etc/ssh/ssh_host_rsa_key
 # probed by validating the FULL config with `sshd -t` (host keys already
 # exist from ssh-keygen -A above) — `sshd -T -f /dev/null` is unreliable
 # because it fails for reasons unrelated to the option under test.
-{
-    echo 'Port 2229'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo 'MaxAuthTries 1'
-    echo 'ChannelTimeout session:shell=12s session:command=12s'
-    echo 'UnusedConnectionTimeout 5s'
-    echo "$hostkeys_all"
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_strict.pid'
-} > /etc/ssh/sshd_config_strict
+write_cfg strict 2229 yes \
+    'MaxAuthTries 1' \
+    'ChannelTimeout session:shell=12s session:command=12s' \
+    'UnusedConnectionTimeout 5s'
 if ! /usr/sbin/sshd -t -f /etc/ssh/sshd_config_strict >/dev/null 2>&1; then
     echo "strict: ChannelTimeout/UnusedConnectionTimeout unsupported by $(sshd -V 2>&1 | head -1) — dropped"
     grep -vE 'ChannelTimeout|UnusedConnectionTimeout' /etc/ssh/sshd_config_strict > /etc/ssh/sshd_config_strict.tmp
     mv /etc/ssh/sshd_config_strict.tmp /etc/ssh/sshd_config_strict
 fi
 
-{
-    echo 'Port 2230'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo 'HostKey /etc/ssh/ssh_host_ecdsa_key'
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_ecdsa.pid'
-} > /etc/ssh/sshd_config_ecdsa
-
-{
-    echo 'Port 2231'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo 'HostKey /etc/ssh/ssh_host_rsa_key'
-    echo 'LogLevel DEBUG1'
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_rsa.pid'
-} > /etc/ssh/sshd_config_rsa
+write_cfg ecdsa 2230 yes 'HostKey /etc/ssh/ssh_host_ecdsa_key'
+write_cfg rsa 2231 yes 'HostKey /etc/ssh/ssh_host_rsa_key' 'LogLevel DEBUG1'
 
 # Legacy appliance: SHA-1 kex, CBC ciphers, SHA-1 MAC, SHA-1 RSA host-key
 # signature — every algorithm modern sshd disables by default. OpenSSH 10
 # has dropped some of them entirely; the instance then does not start.
-{
-    echo 'Port 2232'
-    echo 'PasswordAuthentication yes'
-    echo 'KbdInteractiveAuthentication no'
-    echo 'HostKey /etc/ssh/ssh_host_rsa_key'
-    echo 'KexAlgorithms diffie-hellman-group14-sha1'
-    echo 'Ciphers aes256-cbc,aes128-cbc'
-    echo 'MACs hmac-sha1'
-    echo 'HostKeyAlgorithms ssh-rsa'
-    echo "$common_cfg"
-    echo 'PidFile /run/sshd_legacy.pid'
-} > /etc/ssh/sshd_config_legacy
+write_cfg legacy 2232 yes \
+    'HostKey /etc/ssh/ssh_host_rsa_key' \
+    'KexAlgorithms diffie-hellman-group14-sha1' \
+    'Ciphers aes256-cbc,aes128-cbc' \
+    'MACs hmac-sha1' \
+    'HostKeyAlgorithms ssh-rsa'
 
-/usr/sbin/sshd -f /etc/ssh/sshd_config_pwpub -E /var/log/sshd_pwpub.log
-/usr/sbin/sshd -f /etc/ssh/sshd_config_fwd -E /var/log/sshd_fwd.log
-/usr/sbin/sshd -f /etc/ssh/sshd_config_gated -E /var/log/sshd_gated.log
-/usr/sbin/sshd -f /etc/ssh/sshd_config_hardened -E /var/log/sshd_hardened.log
-/usr/sbin/sshd -f /etc/ssh/sshd_config_strict -E /var/log/sshd_strict.log
-/usr/sbin/sshd -f /etc/ssh/sshd_config_ecdsa -E /var/log/sshd_ecdsa.log
-/usr/sbin/sshd -f /etc/ssh/sshd_config_rsa -E /var/log/sshd_rsa.log
+for i in pwpub fwd gated hardened strict ecdsa rsa; do
+    /usr/sbin/sshd -f "/etc/ssh/sshd_config_$i" -E "/var/log/sshd_$i.log"
+done
 /usr/sbin/sshd -f /etc/ssh/sshd_config_legacy -E /var/log/sshd_legacy.log \
     || echo "legacy instance (:2232) not started: this OpenSSH no longer offers SHA-1/CBC"
 

@@ -4,8 +4,8 @@ import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.userauth.UserAuthException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -42,7 +42,7 @@ class DockerDistroMatrixTest(private val v: DockerMatrix.Variant) {
     private fun newStore() = KnownHostsStore(tmp.newFolder())
 
     private fun connectPw(): SSHClient =
-        DockerMatrix.connect(newStore(), v.pwPort, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), v.pwPort)
 
     @Test(timeout = 60_000)
     fun `password auth negotiates and execs`() {
@@ -101,19 +101,11 @@ class DockerDistroMatrixTest(private val v: DockerMatrix.Variant) {
     fun `pty carries TERM and dimensions`() {
         DockerMatrix.requireVariant(v)
         connectPw().use { ssh ->
-            val session = ssh.startSession()
-            session.allocatePTY("xterm-256color", 132, 43, 0, 0, emptyMap())
-            val shell = session.startShell()
-            try {
-                synchronized(shell.outputStream) {
-                    shell.outputStream.write("echo TERM=\$TERM; stty size; echo PTY'DONE'\r".toByteArray())
-                    shell.outputStream.flush()
-                }
+            DockerMatrix.withPtyShell(ssh, cols = 132, rows = 43) { shell ->
+                writeShell(shell, "echo TERM=\$TERM; stty size; echo PTY'DONE'\r")
                 val acc = readUntil(shell.inputStream, "PTYDONE")
                 assertTrue("[$v] TERM missing: $acc", acc.contains("TERM=xterm-256color"))
                 assertTrue("[$v] stty size missing: $acc", acc.contains("43 132"))
-            } finally {
-                session.close()
             }
         }
     }
@@ -123,9 +115,7 @@ class DockerDistroMatrixTest(private val v: DockerMatrix.Variant) {
         DockerMatrix.requireVariant(v)
         connectPw().use { ssh ->
             val raw = DockerMatrix.exec(ssh, MonitorParser.PROBE, 30_000)
-            val snap = MonitorParser.parse(raw)
-            assertNotNull("[$v] probe output did not parse:\n$raw", snap)
-            snap!!
+            val snap = checkNotNull(MonitorParser.parse(raw)) { "[$v] probe output did not parse:\n$raw" }
             assertTrue("[$v] cpu out of range: ${snap.cpuPercent}", snap.cpuPercent in 0.0..100.0)
             assertTrue("[$v] mem total missing:\n$raw", snap.memTotalBytes > 0)
             assertTrue("[$v] mem used > total:\n$raw", snap.memUsedBytes in 0..snap.memTotalBytes)
@@ -140,7 +130,8 @@ class DockerDistroMatrixTest(private val v: DockerMatrix.Variant) {
     @Test(timeout = 60_000)
     fun `docker list command degrades to no containers without a daemon`() {
         DockerMatrix.requireVariant(v)
-        if (v == DockerMatrix.DEFAULT_VARIANT) return // has the host socket; see DockerContainerListTest
+        // a row with the host socket has a daemon; see DockerContainerListTest
+        assumeFalse("[$v] has the host docker socket mounted", v.dockerSocket)
         connectPw().use { ssh ->
             val raw = DockerMatrix.exec(ssh, "${DockerParser.LIST_COMMAND} 2>&1", 30_000)
             assertTrue(

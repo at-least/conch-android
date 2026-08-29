@@ -7,7 +7,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -26,9 +25,7 @@ class TerminalActivityInstrumentedTest {
 
     @After
     fun tearDown() {
-        val store = HostStore(context)
-        store.load().filter { it.alias == alias }.forEach { SecretsStore.delete("host-pw:${it.id}") }
-        store.save(store.load().filterNot { it.alias == alias })
+        MatrixDevice.removeHosts(context) { it.alias == alias }
     }
 
     @Test
@@ -36,9 +33,7 @@ class TerminalActivityInstrumentedTest {
         MatrixDevice.requireMatrix()
         // seed a host the way the form would, plus its password
         val host = MatrixDevice.passwordHost(alias = alias)
-        val store = HostStore(context)
-        store.save(store.load() + host)
-        SecretsStore.put("host-pw:${host.id}", "conch-pw-1")
+        MatrixDevice.seedHost(context, host)
         // pin the host key once so the Activity's background connect is promptless
         SshConnectionFactory.connect(context, host, MatrixDevice.acceptPrompt).disconnect()
 
@@ -46,14 +41,9 @@ class TerminalActivityInstrumentedTest {
         ActivityScenario.launch<TerminalActivity>(intent).use {
             // the Activity built a real SshSession; on connect it registers in
             // LiveSessions — the end-to-end proof the screen is wired to SSH
-            val deadline = System.currentTimeMillis() + 30_000
-            while (System.currentTimeMillis() < deadline && LiveSessions.countForHost(host.id) == 0) {
-                Thread.sleep(200)
+            MatrixDevice.awaitTrue("the terminal screen never produced a live session for the host", 30_000) {
+                LiveSessions.countForHost(host.id) > 0
             }
-            assertTrue(
-                "the terminal screen never produced a live session for the host",
-                LiveSessions.countForHost(host.id) > 0,
-            )
             val live = LiveSessions.all().firstOrNull { it.hostId == host.id }
             assertNotNull("no LiveSessions entry for the connected host", live)
             // tearing it down through the same registry the UI uses works too

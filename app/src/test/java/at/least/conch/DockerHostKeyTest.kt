@@ -30,7 +30,7 @@ class DockerHostKeyTest {
     private fun newStore() = KnownHostsStore(tmp.newFolder())
 
     private fun serverKey(pubFile: String): PublicKey {
-        DockerMatrix.connect(newStore(), DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1")
+        DockerMatrix.connectPw(newStore(), DockerMatrix.PW_AND_KEY_PORT)
             .use { ssh ->
                 val line = DockerMatrix.exec(ssh, "cat $pubFile").trim()
                 val blob = Base64.getDecoder().decode(line.split(" ")[1])
@@ -54,7 +54,7 @@ class DockerHostKeyTest {
         store.add("127.0.0.1", DockerMatrix.PW_AND_KEY_PORT, rsa)
         // prompt = null: any UNKNOWN/MISMATCH verdict would fail the handshake,
         // so success proves the ed25519-preferring server was steered to RSA
-        DockerMatrix.connect(store, DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1", prompt = null)
+        DockerMatrix.connectPw(store, DockerMatrix.PW_AND_KEY_PORT, prompt = null)
             .use { ssh ->
                 assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
             }
@@ -69,7 +69,7 @@ class DockerHostKeyTest {
         // a key the server never had, recorded for this endpoint = "changed"
         store.add("127.0.0.1", DockerMatrix.PW_AND_KEY_PORT, TestSshd.hostKeyEd25519().public)
         val e = runCatching {
-            DockerMatrix.connect(store, DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1", prompt = null)
+            DockerMatrix.connectPw(store, DockerMatrix.PW_AND_KEY_PORT, prompt = null)
                 .use { }
         }.exceptionOrNull()
         assertTrue("expected the handshake to be refused, got: $e", e is TransportException)
@@ -88,7 +88,7 @@ class DockerHostKeyTest {
             seen.set(req)
             done(true)
         }
-        DockerMatrix.connect(store, DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1", prompt = prompt)
+        DockerMatrix.connectPw(store, DockerMatrix.PW_AND_KEY_PORT, prompt = prompt)
             .use { ssh ->
                 assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
             }
@@ -98,7 +98,7 @@ class DockerHostKeyTest {
         assertEquals("127.0.0.1:${DockerMatrix.PW_AND_KEY_PORT}", req.endpoint)
         // accepted variant is recorded next to the stale one → next connect is promptless
         assertEquals(2, store.file.readLines().count { it.isNotBlank() })
-        DockerMatrix.connect(store, DockerMatrix.PW_AND_KEY_PORT, "pwuser", password = "conch-pw-1", prompt = null)
+        DockerMatrix.connectPw(store, DockerMatrix.PW_AND_KEY_PORT, prompt = null)
             .use { }
     }
 

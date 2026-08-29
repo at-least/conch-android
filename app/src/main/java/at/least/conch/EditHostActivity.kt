@@ -351,8 +351,10 @@ private fun EditHostScreen(
             // Free text plus a picker of existing groups (iOS parity): a
             // typo would otherwise silently create a second, near-duplicate
             // section in the host list.
+            val canPickGroup = existingGroups.isNotEmpty()
+            val groupMenuExpanded = groupMenuOpen && canPickGroup
             ExposedDropdownMenuBox(
-                expanded = groupMenuOpen && existingGroups.isNotEmpty(),
+                expanded = groupMenuExpanded,
                 onExpandedChange = { groupMenuOpen = it },
             ) {
                 OutlinedTextField(
@@ -361,7 +363,7 @@ private fun EditHostScreen(
                     label = { Text("Group") },
                     supportingText = { Text("Optional — hosts with the same group are listed together") },
                     singleLine = true,
-                    trailingIcon = if (existingGroups.isNotEmpty()) {
+                    trailingIcon = if (canPickGroup) {
                         { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupMenuOpen) }
                     } else {
                         null
@@ -369,7 +371,7 @@ private fun EditHostScreen(
                     modifier = field.menuAnchor(MenuAnchorType.PrimaryEditable)
                 )
                 ExposedDropdownMenu(
-                    expanded = groupMenuOpen && existingGroups.isNotEmpty(),
+                    expanded = groupMenuExpanded,
                     onDismissRequest = { groupMenuOpen = false },
                 ) {
                     existingGroups.forEach { name ->
@@ -692,26 +694,25 @@ private fun TunnelCard(
 /** A tunnel SshSession would actually start (its own skip rule, mirrored). */
 private fun Tunnel.isValid(): Boolean = localPort in 1..65535 && host.isNotBlank() && port in 1..65535
 
-/** Tunnels as saveable strings — one per tunnel, fields NUL-separated. */
+/**
+ * Tunnels as saveable strings — one JSON [TunnelWire] per tunnel, so a new
+ * tunnel field is saved as soon as it is on the wire type (defaults cover
+ * an older saved state).
+ */
 private val TunnelListSaver = androidx.compose.runtime.saveable.listSaver<SnapshotStateList<Tunnel>, String>(
     save = { list ->
-        list.map { "${it.localPort}\u0000${it.host}\u0000${it.port}\u0000${it.remote}\u0000${it.bindHost}" }
+        // not TunnelWire.from: that drops bindHost on local tunnels, and an
+        // in-progress edit must survive rotation exactly as typed
+        list.map { t ->
+            val wire = TunnelWire(t.localPort, t.host, t.port, t.remote, t.bindHost)
+            ConchJson.encodeToString(TunnelWire.serializer(), wire)
+        }
     },
     restore = { saved ->
         mutableStateListOf<Tunnel>().apply {
             for (s in saved) {
-                val f = s.split('\u0000')
-                if (f.size >= 4) {
-                    add(
-                        Tunnel(
-                            f[0].toIntOrNull() ?: 0,
-                            f[1],
-                            f[2].toIntOrNull() ?: 0,
-                            f[3].toBoolean(),
-                            f.getOrElse(4) { "" },
-                        )
-                    )
-                }
+                runCatching { ConchJson.decodeFromString(TunnelWire.serializer(), s).toTunnel() }
+                    .onSuccess { add(it) }
             }
         }
     },

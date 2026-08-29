@@ -31,20 +31,17 @@ class RealSshInstrumentedTest {
 
     @Before
     fun setUp() {
-        SecretsStore.init(context)
         // known_hosts persists in the app's filesDir across runs on a device;
         // clearing it makes the "TOFU grew known_hosts" assertion hermetic
         // instead of only passing on the very first connect to this endpoint.
         KnownHostsStore(context.filesDir).file.delete()
         host = MatrixDevice.passwordHost()
-        HostStore(context).save(HostStore(context).load().filterNot { it.alias == host.alias } + host)
-        SecretsStore.put("host-pw:${host.id}", "conch-pw-1")
+        MatrixDevice.seedHost(context, host)
     }
 
     @After
     fun tearDown() {
-        HostStore(context).save(HostStore(context).load().filterNot { it.id == host.id })
-        SecretsStore.delete("host-pw:${host.id}")
+        MatrixDevice.removeHosts(context) { it.id == host.id }
     }
 
     @Test

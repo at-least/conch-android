@@ -102,7 +102,7 @@ data class HostWire(
             forwardAgent = forwardAgent,
             safExpose = safExpose,
             group = group.trim(),
-            knockPorts = knockPorts.filter { it in 1..65535 },
+            knockPorts = knockPorts.filter(PortKnocker::isValidPort),
         )
         host.tunnels.addAll(tunnels.map { it.toTunnel() })
         return host

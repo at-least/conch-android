@@ -33,18 +33,6 @@ class SessionServiceInstrumentedTest {
 
     private val nm get() = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    // inline: a non-inline lambda passed from a spaced-backtick @Test method
-    // is synthesized into a class whose SimpleName carries the method's spaces,
-    // which DEX < 040 (minSdk 26) rejects. Inlining emits no such class.
-    private inline fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (condition()) return
-            Thread.sleep(100)
-        }
-        throw AssertionError(message)
-    }
-
     @After
     fun tearDown() {
         SessionService.stop(context, "dev-a")
@@ -56,19 +44,19 @@ class SessionServiceInstrumentedTest {
     fun `starting_two_sessions_posts_two_ongoing_notifications_and_stopping_removes_them`() {
         SessionService.start(context, "dev-a", "alpha")
         SessionService.start(context, "dev-b", "beta")
-        awaitTrue("session notifications not posted: ${nm.activeNotifications.map { it.id }}") {
+        MatrixDevice.awaitTrue("session notifications not posted: ${nm.activeNotifications.map { it.id }}") {
             nm.activeNotifications.count { it.isOngoing } >= 2
         }
         assertTrue(SessionService.Registry.entries().map { it.second }.containsAll(listOf("alpha", "beta")))
 
         SessionService.stop(context, "dev-a")
-        awaitTrue("alpha's notification not removed") {
+        MatrixDevice.awaitTrue("alpha's notification not removed") {
             nm.activeNotifications.count { it.isOngoing } == 1
         }
         SessionService.stop(context, "dev-b")
-        awaitTrue("beta's notification not removed") {
+        MatrixDevice.awaitTrue("beta's notification not removed") {
             nm.activeNotifications.none { it.isOngoing }
         }
-        awaitTrue("registry not drained") { SessionService.Registry.isEmpty() }
+        MatrixDevice.awaitTrue("registry not drained") { SessionService.Registry.isEmpty() }
     }
 }

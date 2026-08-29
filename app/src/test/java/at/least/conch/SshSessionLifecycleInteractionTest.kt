@@ -9,8 +9,6 @@ import java.io.File
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.nio.file.Files
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * SshSession lifecycle over a real connection — the exact object
@@ -35,41 +33,6 @@ class SshSessionLifecycleInteractionTest {
     fun tearDown() {
         server.close()
         dir.deleteRecursively()
-    }
-
-    private class RecordingCallbacks : SshSession.Callbacks {
-        val connected = AtomicInteger(0)
-        val disconnected = AtomicInteger(0)
-        val reasons = ConcurrentLinkedQueue<String>()
-        val received = ConcurrentLinkedQueue<ByteArray>()
-
-        override fun onConnected() {
-            connected.incrementAndGet()
-        }
-
-        override fun onData(data: ByteArray) {
-            received.add(data)
-        }
-
-        override fun onDisconnected(reason: String) {
-            disconnected.incrementAndGet()
-            reasons.add(reason)
-        }
-
-        fun text() = received.joinToString("") { String(it) }
-
-        fun awaitText(expected: String, timeoutMs: Long = 10_000) {
-            awaitTrue("waiting for \"$expected\", got \"${text()}\"", timeoutMs) {
-                text().contains(expected)
-            }
-        }
-
-        fun awaitDisconnected(timeoutMs: Long = 10_000): String {
-            awaitTrue("never got onDisconnected (reasons so far: $reasons)", timeoutMs) {
-                disconnected.get() > 0
-            }
-            return reasons.first()
-        }
     }
 
     private fun testHost(port: Int = server.port): Host =
@@ -322,13 +285,4 @@ class SshSessionLifecycleInteractionTest {
         assertTrue("expected refused mapping, got: [$reason]", reason.startsWith("Connection refused"))
         assertEquals(0, cb.connected.get())
     }
-}
-
-private fun awaitTrue(message: String, timeoutMs: Long = 10_000, condition: () -> Boolean) {
-    val deadline = System.currentTimeMillis() + timeoutMs
-    while (System.currentTimeMillis() < deadline) {
-        if (condition()) return
-        Thread.sleep(20)
-    }
-    throw AssertionError(message)
 }

@@ -29,10 +29,8 @@ class SftpProviderInstrumentedTest {
 
     @Before
     fun setUp() {
-        SecretsStore.init(context)
         host = MatrixDevice.passwordHost(alias = "matrix-saf", safExpose = true)
-        HostStore(context).save(HostStore(context).load().filterNot { it.alias == host.alias } + host)
-        SecretsStore.put("host-pw:${host.id}", "conch-pw-1")
+        MatrixDevice.seedHost(context, host)
         // the provider connects promptless: pin the host key first
         MatrixDevice.requireMatrix()
         SshConnectionFactory.connect(context, host, MatrixDevice.acceptPrompt).disconnect()
@@ -40,8 +38,7 @@ class SftpProviderInstrumentedTest {
 
     @After
     fun tearDown() {
-        HostStore(context).save(HostStore(context).load().filterNot { it.id == host.id })
-        SecretsStore.delete("host-pw:${host.id}")
+        MatrixDevice.removeHosts(context) { it.id == host.id }
     }
 
     private fun childrenOf(docId: String): Map<String, String> {

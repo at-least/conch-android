@@ -58,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -177,8 +178,11 @@ class MainActivity : FragmentActivity() {
         var search by rememberSaveable { mutableStateOf("") }
         val snackbarHostState = remember { SnackbarHostState() }
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-        val filtered = HostGrouping.filter(hosts, search)
-        val sections = HostGrouping.sections(filtered)
+        // derivedStateOf, not remember(hosts, search): the SnapshotStateList's
+        // identity never changes, so only snapshot reads can key the recompute
+        val sections by remember {
+            derivedStateOf { HostGrouping.sections(HostGrouping.filter(hosts, search)) }
+        }
         val grouped = sections.any { it.title != null }
 
         // Snackbar, not a dialog: an import summary is feedback on a finished
@@ -303,7 +307,7 @@ class MainActivity : FragmentActivity() {
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                     )
-                    if (filtered.isEmpty()) {
+                    if (sections.isEmpty()) {
                         NoSearchResults(search, Modifier.weight(1f))
                     } else {
                         LazyColumn(

@@ -2,7 +2,7 @@ package at.least.conch
 
 import net.schmizz.sshj.DefaultConfig
 import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.transport.verification.HostKeyVerifier
+import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,13 +39,8 @@ import kotlin.concurrent.thread
  */
 class DockerHandshakeTimeoutTest {
 
-    private val acceptAll = object : HostKeyVerifier {
-        override fun verify(hostname: String?, port: Int, key: java.security.PublicKey?) = true
-        override fun findExistingAlgorithms(hostname: String?, port: Int): List<String> = emptyList()
-    }
-
     private fun boundedClient(): SSHClient = SSHClient(DefaultConfig()).apply {
-        addHostKeyVerifier(acceptAll)
+        addHostKeyVerifier(PromiscuousVerifier())
         connectTimeout = 6_000
         timeout = 6_000
     }

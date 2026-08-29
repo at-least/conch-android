@@ -21,27 +21,16 @@ class DockerPortKnockTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private fun gatedHost(knock: Boolean) = Host(
-        hostname = "127.0.0.1",
-        username = "pwuser",
-        authType = Host.AUTH_PASSWORD,
+    private fun gatedHost(knock: Boolean) = DockerMatrix.pwHost(DockerMatrix.GATED_PORT).copy(
         knockPorts = if (knock) DockerMatrix.KNOCK_PORTS else emptyList(),
-    ).apply { port = DockerMatrix.GATED_PORT }
-
-    private fun connectGated(knock: Boolean) = SshConnectionFactory.connect(
-        host = gatedHost(knock),
-        prompt = DockerMatrix.acceptPrompt,
-        store = KnownHostsStore(tmp.newFolder()),
-        keyProvider = { _, _ -> error("password auth in this test") },
-        password = { "conch-pw-1" },
     )
+
+    private fun connectGated(knock: Boolean) = DockerMatrix.connect(KnownHostsStore(tmp.newFolder()), gatedHost(knock))
 
     private fun gateClosed(): Boolean = !DockerMatrix.sshdAnswers(DockerMatrix.GATED_PORT)
 
     private fun awaitGateClosed() {
-        val deadline = System.currentTimeMillis() + 15_000
-        while (System.currentTimeMillis() < deadline && !gateClosed()) Thread.sleep(250)
-        assertTrue("gated sshd still listening — knockd cmd_timeout did not fire", gateClosed())
+        awaitTrue("gated sshd still listening — knockd cmd_timeout did not fire", 15_000) { gateClosed() }
     }
 
     @Test(timeout = 90_000)

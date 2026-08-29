@@ -32,7 +32,7 @@ class DockerHostKeyAlgoTest {
     private fun pinAndReconnect(port: Int, expectedHostKeyType: String) {
         val store = newStore()
         // first connect: unknown host key, TOFU accepts and pins it
-        DockerMatrix.connect(store, port, "pwuser", password = "conch-pw-1").use { ssh ->
+        DockerMatrix.connectPw(store, port).use { ssh ->
             assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
         val pinned = store.file.readLines().filter { it.isNotBlank() }
@@ -43,7 +43,7 @@ class DockerHostKeyAlgoTest {
         )
         // reconnect like a background session: no prompt allowed. Success
         // proves the pinned type was re-offered and matched.
-        DockerMatrix.connect(store, port, "pwuser", password = "conch-pw-1", prompt = null).use { ssh ->
+        DockerMatrix.connectPw(store, port, prompt = null).use { ssh ->
             assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
         assertEquals("no second host key added", pinned, store.file.readLines().filter { it.isNotBlank() })
@@ -102,7 +102,7 @@ class DockerHostKeyAlgoTest {
             "OpenSSH 10 refuses to offer SHA-1 kex / CBC ciphers",
         )
         val e = runCatching {
-            DockerMatrix.connect(newStore(), DockerMatrix.LEGACY_PORT, "pwuser", password = "conch-pw-1").use { ssh ->
+            DockerMatrix.connectPw(newStore(), DockerMatrix.LEGACY_PORT).use { ssh ->
                 assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
             }
         }.exceptionOrNull()

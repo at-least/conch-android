@@ -22,21 +22,9 @@ class DockerNetworkFailureTest {
 
     private fun newStore() = KnownHostsStore(tmp.newFolder())
 
-    private fun host(hostname: String, port: Int) = Host(
-        hostname = hostname,
-        username = "pwuser",
-        authType = Host.AUTH_PASSWORD,
-    ).apply { this.port = port }
-
     private fun connectExpectingFailure(hostname: String, port: Int): Exception {
         val e = runCatching {
-            SshConnectionFactory.connect(
-                host = host(hostname, port),
-                prompt = DockerMatrix.acceptPrompt,
-                store = newStore(),
-                keyProvider = { _, _ -> error("password auth in this test") },
-                password = { "conch-pw-1" },
-            ).use { }
+            DockerMatrix.connect(newStore(), DockerMatrix.pwHost(port, hostname)).use { }
         }.exceptionOrNull()
         assertTrue("expected the connect to fail", e is Exception)
         return e as Exception
@@ -46,27 +34,15 @@ class DockerNetworkFailureTest {
     fun `the full connect auth and exec path works over IPv6 loopback`() {
         DockerMatrix.requireMatrix()
         val store = newStore()
-        val h = host("::1", DockerMatrix.PW_AND_KEY_PORT)
-        SshConnectionFactory.connect(
-            host = h,
-            prompt = DockerMatrix.acceptPrompt,
-            store = store,
-            keyProvider = { _, _ -> error("password auth in this test") },
-            password = { "conch-pw-1" },
-        ).use { ssh ->
+        val h = DockerMatrix.pwHost(DockerMatrix.PW_AND_KEY_PORT, hostname = "::1")
+        DockerMatrix.connect(store, h).use { ssh ->
             assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
         // TOFU recorded the v6 endpoint in OpenSSH's bracketed [::1]:port form
         val line = store.file.readLines().first { it.isNotBlank() }
         assertTrue("v6 host key not bracketed: $line", line.startsWith("[::1]:${DockerMatrix.PW_AND_KEY_PORT} "))
         // promptless reconnect matches the pinned v6 entry
-        SshConnectionFactory.connect(
-            host = h,
-            prompt = null,
-            store = store,
-            keyProvider = { _, _ -> error("password auth in this test") },
-            password = { "conch-pw-1" },
-        ).close()
+        DockerMatrix.connect(store, h, prompt = null).close()
     }
 
     @Test(timeout = 30_000)
