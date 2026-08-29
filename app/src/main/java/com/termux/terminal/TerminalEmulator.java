@@ -2035,6 +2035,9 @@ public final class TerminalEmulator {
             case 2: // Change window title to T.
                 setTitle(textParameter);
                 break;
+            case 7: // CONCH PATCH: current working directory (file://host/path), see TerminalOutput.
+                mSession.onCurrentDirectoryChanged(textParameter);
+                break;
             case 4:
                 // P s = 4 ; c ; spec → Change Color Number c to the color specified by spec. This can be a name or RGB
                 // specification as per XParseColor. Any number of c name pairs may be given. The color numbers correspond

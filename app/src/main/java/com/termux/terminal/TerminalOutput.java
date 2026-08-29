@@ -29,4 +29,11 @@ public abstract class TerminalOutput {
 
     public abstract void onColorsChanged();
 
+    /**
+     * CONCH PATCH: OSC 7 — the shell reported its working directory as a
+     * {@code file://host/path} URL (or a bare path). Default no-op so
+     * existing clients are unaffected.
+     */
+    public void onCurrentDirectoryChanged(String value) {}
+
 }

@@ -24,10 +24,22 @@ object LiveSessions {
         private val disconnectFn: () -> Unit,
         /** Bring the owning Activity's task to the foreground. Safe to call from any thread. */
         private val focusFn: () -> Unit = {},
+        /** The shell's OSC 7 working directory, null until reported (share-to-host destination). */
+        private val cwdFn: () -> String? = { null },
+        /**
+         * A fresh SFTP client on this session's connection, null when not
+         * connected. Blocking — call off the main thread. Still not the SSH
+         * client itself: the caller gets one channel it must close.
+         */
+        private val sftpFn: () -> net.schmizz.sshj.sftp.SFTPClient? = { null },
     ) {
         fun disconnect() = disconnectFn()
 
         fun focus() = focusFn()
+
+        fun cwd(): String? = cwdFn()
+
+        fun openSftp(): net.schmizz.sshj.sftp.SFTPClient? = sftpFn()
     }
 
     private val sessions = ConcurrentHashMap<String, Live>()

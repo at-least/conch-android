@@ -2,6 +2,13 @@
 
 ## 0.9.1 (unreleased)
 
+- **Share to host** (iOS drag-and-drop parity) — Conch is a share-sheet
+  target ("Upload to SSH host"): files shared from any app upload into a
+  live session's current directory (the shell's OSC 7 cwd, now tracked by
+  the terminal like the title), or into the remote home of a saved host
+  that is not connected. Multiple files upload in order; a same-named file
+  gets a `(2)` suffix instead of being overwritten; the result is a
+  snackbar, errors included
 - **Bundled JetBrains Mono Nerd Font** (iOS parity) — Settings › Terminal
   › Terminal font picks between the system monospace and the bundled Nerd
   Font, so tmux/htop/starship box-drawing and powerline glyphs render

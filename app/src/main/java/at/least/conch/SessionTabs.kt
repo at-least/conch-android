@@ -745,22 +745,13 @@ fun SftpTab(
         status = "Uploading…"
         scope.launch {
             val msg = withContext(Dispatchers.IO) {
-                var tmp: File? = null
                 try {
-                    val name = displayNameOf(context, uri) ?: "upload.bin"
-                    tmp = File.createTempFile("up", null, context.cacheDir).also { t ->
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            t.outputStream().use { input.copyTo(it) }
-                        } ?: error("Cannot read file")
-                    }
-                    val remote = path.trimEnd('/') + "/" + name
-                    sftp.getFileTransfer().upload(tmp.absolutePath, remote)
+                    val name = displayNameOf(context, uri) ?: ShareUpload.FALLBACK_NAME
+                    uploadUri(context, sftp, uri, ShareUpload.remotePath(path, name))
                     "Uploaded: $name"
                 } catch (e: Exception) {
                     CrashReporting.report(e)
                     "Upload failed: ${e.message}"
-                } finally {
-                    tmp?.delete()
                 }
             }
             busy = false

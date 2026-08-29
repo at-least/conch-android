@@ -61,6 +61,10 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Sessions switcher** — list every live terminal session, tap to switch,
   swipe to disconnect that session only
 - **SFTP** — browse, download, upload, rename, delete, mkdir/new-file, sort by name/size/time
+- **Share to host** — any app's share sheet → "Upload to SSH host": pick a
+  live session and the files land in that shell's current directory
+  (tracked via OSC 7), or a saved host to upload into its home; never
+  overwrites — a same-named file gets a numbered suffix
 - **SAF file provider** — expose any host to Android's system file pickers
   (opt-in per host): every app can open/save remote files through Conch,
   like a mounted drive

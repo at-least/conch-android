@@ -59,6 +59,11 @@ class TerminalEmulator(cols: Int, rows: Int) {
             titleListener?.invoke(newTitle)
         }
 
+        override fun onCurrentDirectoryChanged(value: String?) {
+            cwd = ShareUpload.remotePathFromOsc7(value)
+            cwdListener?.invoke(cwd)
+        }
+
         override fun onCopyTextToClipboard(text: String) {}
         override fun onPasteTextFromClipboard() {}
         override fun onBell() = bellListener?.invoke() ?: Unit
@@ -72,6 +77,16 @@ class TerminalEmulator(cols: Int, rows: Int) {
 
     var bellListener: (() -> Unit)? = null
     var titleListener: ((String) -> Unit)? = null
+
+    /**
+     * Remote working directory from OSC 7 (iOS parity: `TerminalBridge.
+     * remoteDirectory`); null until the shell reports one. Share-to-host
+     * uploads land here.
+     */
+    @Volatile
+    var cwd: String? = null
+        private set
+    var cwdListener: ((String?) -> Unit)? = null
 
     /** Device-originated bytes (DSR/CPR/DA replies) to write to the SSH channel. */
     var onResponse: ((ByteArray) -> Unit)? = null

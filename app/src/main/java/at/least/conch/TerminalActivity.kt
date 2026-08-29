@@ -223,6 +223,8 @@ class TerminalActivity : FragmentActivity() {
                     startedAt = System.currentTimeMillis(),
                     disconnectFn = { runOnUiThread { disconnectAndFinish() } },
                     focusFn = { runOnUiThread { bringToFront() } },
+                    cwdFn = { emulator?.cwd },
+                    sftpFn = { reconnector?.sftpClient() },
                 )
             )
         }

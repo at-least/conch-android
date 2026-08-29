@@ -52,6 +52,24 @@
             android:launchMode="standard"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|fontScale" />
 
+        <!-- Share sheet → upload into a host's shell cwd (iOS drag-and-drop parity). -->
+        <activity
+            android:name=".ShareToHostActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/share_to_host_label">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <activity android:name=".KeysActivity" android:exported="false" />
         <activity android:name=".SnippetsActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
