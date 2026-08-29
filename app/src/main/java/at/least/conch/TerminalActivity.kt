@@ -327,7 +327,7 @@ class TerminalActivity : FragmentActivity() {
         }
         zmodemPickLauncherRef = { zmodemPickLauncher }
         var snippets by remember { mutableStateOf(listOf<Snippet>()) }
-        var tab by remember { mutableStateOf(SessionTab.TERMINAL) }
+        var tab by remember { mutableStateOf(initialTab(intent.getStringExtra(EXTRA_TAB))) }
         val snackbarHostState = remember { SnackbarHostState() }
 
         // Transient feedback (copied, saved, disconnect reason) as a
@@ -1058,6 +1058,15 @@ class TerminalActivity : FragmentActivity() {
     }
 
     /** In-session tabs moved to SessionTabs.kt (SessionTab) so they are unit-testable. */
+
+    companion object {
+        /** Intent extra: which [SessionTab] to open first (the stats widget opens Monitor). */
+        const val EXTRA_TAB = "tab"
+        const val TAB_MONITOR = "monitor"
+
+        internal fun initialTab(extra: String?): SessionTab =
+            if (extra == TAB_MONITOR) SessionTab.MONITOR else SessionTab.TERMINAL
+    }
 }
 
 /**

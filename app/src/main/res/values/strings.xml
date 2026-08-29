@@ -7,5 +7,8 @@
     <string name="widget_key_auth">Key authentication</string>
     <string name="widget_description">Connect to a saved SSH host in one tap.</string>
     <string name="widget_empty">No hosts yet</string>
+    <string name="widget_stats_description">Last-known CPU/memory for your hosts; tap to open Monitor.</string>
+    <string name="widget_stats_empty">Add hosts in Conch</string>
+    <string name="widget_stats_no_data">no data — open Monitor</string>
     <string name="share_to_host_label">Upload to SSH host</string>
 </resources>

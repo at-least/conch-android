@@ -79,7 +79,9 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
   here)
 - **Tunnel capsule** — a green `⇅ N` chip on the session toolbar shows
   active local port forwards; tap to stop all tunnels (session stays connected)
-- **Home-screen widget** — first four hosts, one tap deep-links into a terminal
+- **Home-screen widgets** — hosts (first four, one tap deep-links into a
+  terminal) and server stats (last-known CPU/memory per host with the
+  sample's age, written while a Monitor tab is open; tap opens Monitor)
 - **Host groups & search** — group hosts into sections, filter by name/host/user/group
 - **OpenSSH config import** — pull `Host` blocks from your `~/.ssh/config`
 - **Encrypted backup & restore** — single-file export of everything (hosts, passwords, keys, snippets, known hosts), passphrase-protected (AES-256-GCM + PBKDF2), restores on any device

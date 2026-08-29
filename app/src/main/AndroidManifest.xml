@@ -92,6 +92,18 @@
                 android:resource="@xml/hosts_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".StatsWidgetReceiver"
+            android:exported="false"
+            android:label="Server stats">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/stats_widget_info" />
+        </receiver>
+
         <!-- SAF: expose SAF-enabled hosts to system file pickers. Managed by
              the platform (MANAGE_DOCUMENTS signature-level permission), roots
              are per-host opt-in (Host.safExpose). -->

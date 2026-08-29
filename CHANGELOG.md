@@ -2,6 +2,12 @@
 
 ## 0.9.1 (unreleased)
 
+- **Server-stats widget** (iOS parity) — a second home-screen widget with
+  each host's last-known CPU and memory plus the sample's age ("2 min
+  ago"); written by the Monitor tab at most once a minute per host, never
+  from the widget itself (no SSH in a widget process), dimmed once older
+  than 10 minutes, cleared when the host is deleted. Tap opens that host
+  on the Monitor tab
 - **Multi-hop ProxyJump** (iOS parity) — a jump host's own jump host is
   followed, up to 3 hops (phone → bastion → dmz → target). Every hop
   authenticates with its own stored credentials and is TOFU-verified

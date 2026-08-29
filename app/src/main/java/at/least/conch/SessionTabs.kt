@@ -186,6 +186,8 @@ fun MonitorTab(session: SessionReconnector, hostId: String, modifier: Modifier =
     var autoRefresh by remember { mutableStateOf(true) }
     // per host for the life of the process: re-entering the tab continues the line
     val history = remember(hostId) { MetricHistoryStore.forHost(hostId) }
+    // successful samples reach the Server-stats widget (throttled; iOS parity)
+    val sharedStats = SharedStats(LocalContext.current.applicationContext)
 
     Column(
         modifier
@@ -244,7 +246,13 @@ fun MonitorTab(session: SessionReconnector, hostId: String, modifier: Modifier =
             snapshot = next.snapshot
             error = next.error
             rawOut = next.raw
-            next.snapshot?.let { history.push(System.currentTimeMillis(), it) }
+            next.snapshot?.let {
+                val now = System.currentTimeMillis()
+                history.push(now, it)
+                if (hostId.isNotEmpty()) {
+                    withContext(Dispatchers.IO) { sharedStats.set(hostId, StatsSnapshot.from(it, now), now) }
+                }
+            }
             delay(5_000)
         }
     }

@@ -98,6 +98,7 @@ class MainActivity : FragmentActivity() {
         hosts.clear()
         hosts.addAll(store.load())
         HostsWidget.update(this)
+        StatsWidget.update(this)
         // account-free sync: data only changes while the app runs, so a
         // foreground moment is the honest (and only needed) export trigger
         Thread {
@@ -358,6 +359,7 @@ class MainActivity : FragmentActivity() {
                         hosts.forEach { if (it.jumpHostId == host.id) it.jumpHostId = null }
                         store.save(hosts)
                         store.deleteSecrets(host.id)
+                        SharedStats(this@MainActivity).remove(host.id) // stats widget too
                         HostsWidget.update(this@MainActivity) // or the widget keeps a dead host
                         confirmDelete = null
                         message = "Deleted ${host.displayName()}"
