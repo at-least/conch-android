@@ -73,6 +73,10 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
   with 5-minute CPU/RAM history sparklines (no extra server load)
 - **Docker** — list containers, start/stop/restart, view logs
 - **Snippets** — save frequent commands, run them from the terminal menu
+- **Transfers sheet** — every SFTP download and upload runs in a queue with
+  per-item progress, Cancel and Retry; an interrupted download resumes from
+  its `.part` and an interrupted upload appends from the remote's current
+  length, and a local copy with the remote's size is never re-downloaded
 - **ZMODEM transfers** — `sz <file>` saves straight to your Downloads; `rz`
   on the server pops a file picker and uploads. Both directions verified
   byte-identical against real lrzsz (Termius's most-requested feature, free

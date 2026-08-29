@@ -13,15 +13,25 @@ import java.io.File
  * Blocking — call off the main thread.
  */
 internal fun uploadUri(context: Context, sftp: SFTPClient, uri: Uri, remotePath: String) {
-    var tmp: File? = null
+    val tmp = stageUri(context, uri)
     try {
-        tmp = File.createTempFile("up", null, context.cacheDir).also { t ->
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                t.outputStream().use { input.copyTo(it) }
-            } ?: error("Cannot read file")
-        }
         sftp.fileTransfer.upload(tmp.absolutePath, remotePath)
     } finally {
-        tmp?.delete()
+        tmp.delete()
     }
 }
+
+/**
+ * Copies a `content://` stream to a temp file in cacheDir — sshj uploads
+ * from a path, and a content Uri has none. The Files tab hands the staged
+ * file to [TransferQueue], which deletes it when the upload is done.
+ */
+internal fun stageUri(context: Context, uri: Uri): File =
+    File.createTempFile("up", null, context.cacheDir).also { t ->
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            t.outputStream().use { input.copyTo(it) }
+        } ?: run {
+            t.delete()
+            error("Cannot read file")
+        }
+    }

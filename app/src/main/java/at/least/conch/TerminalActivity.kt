@@ -110,6 +110,18 @@ class TerminalActivity : FragmentActivity() {
     private val tunnelConfirmVisible = mutableStateOf(false)
     private val liveTunnelCount = mutableIntStateOf(0)
     private val connectionGen = mutableIntStateOf(0)
+
+    /**
+     * SFTP transfers for this session (Files tab + Transfers sheet). Each
+     * runs on its own channel from the live connection, so it survives
+     * leaving the Files tab; the queue dies with the Activity.
+     */
+    private val transfers: TransferQueue by lazy {
+        TransferQueue(
+            downloadsDir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: filesDir,
+            sftpProvider = { reconnector?.sftpClient() },
+        )
+    }
     private val scrollOffset = mutableIntStateOf(0)
 
     /** One-shot user-facing message, rendered as a Snackbar (was Toast). */
@@ -278,6 +290,7 @@ class TerminalActivity : FragmentActivity() {
 
     override fun onDestroy() {
         LiveSessions.unregister(sessionId)
+        transfers.close()
         reconnector?.stop()
         reconnector = null
         SessionService.stop(this, sessionId)
@@ -482,6 +495,7 @@ class TerminalActivity : FragmentActivity() {
                                 onClick = {
                                     menuOpen = false
                                     terminalView?.cancelZmodem()
+                                    transfers.cancelAll()
                                 }
                             )
                             DropdownMenuItem(
@@ -629,7 +643,8 @@ class TerminalActivity : FragmentActivity() {
                         SessionTab.MONITOR ->
                             if (rc != null) MonitorTab(rc, host?.id.orEmpty()) else LoadingTab("Monitor")
                         SessionTab.DOCKER -> if (rc != null) DockerTab(rc) else LoadingTab("Docker")
-                        SessionTab.FILES -> if (rc != null) SftpTab(rc, connectionGen.intValue) else LoadingTab("Files")
+                        SessionTab.FILES ->
+                            if (rc != null) SftpTab(rc, connectionGen.intValue, transfers) else LoadingTab("Files")
                     }
                 }
                 SessionTabBar(tab = tab, onTab = { tab = it })

@@ -1,7 +1,6 @@
 package at.least.conch
 
 import android.net.Uri
-import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -41,8 +40,11 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,6 +68,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -91,7 +94,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.sftp.RemoteResourceInfo
 import net.schmizz.sshj.sftp.SFTPClient
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -598,11 +600,14 @@ data class SftpEntry(
 fun SftpTab(
     session: SessionReconnector,
     connectionGen: Int,
+    transfers: TransferQueue,
     modifier: Modifier = Modifier,
     startPath: String = "/",
 ) {
     val context = LocalContext.current
     var sftp by remember { mutableStateOf<SFTPClient?>(null) }
+    val transferItems by transfers.items.collectAsState()
+    var showTransfers by remember { mutableStateOf(false) }
     var sftpFailed by remember { mutableStateOf(false) }
     // bumped by "Retry": the open effect is keyed on it, otherwise the button
     // only cleared the flag and the tab sat on "Opening SFTP…" forever
@@ -717,54 +722,54 @@ fun SftpTab(
         path = cur.substringBeforeLast('/').ifEmpty { "/" }
     }
 
+    // Transfers run in the queue (their own SFTP channel each, so they
+    // outlive this tab); the sheet shows progress, Cancel and Retry.
     fun download(entry: SftpEntry) {
-        val sftp = sftp ?: return
-        busy = true
-        status = "Downloading ${entry.name}…"
-        scope.launch {
-            val msg = withContext(Dispatchers.IO) {
-                var partial: File? = null
-                try {
-                    // the name is whatever the server put in SSH_FXP_NAME
-                    require(!entry.name.contains('/') && entry.name != "..") { "unsafe remote name" }
-                    val local = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), entry.name)
-                    // land in a .part file: a drop mid-transfer must not leave
-                    // a truncated file under the final name
-                    val part = File(local.parentFile, entry.name + ".part").also { partial = it }
-                    sftp.get(entry.path, part.absolutePath)
-                    if (!part.renameTo(local)) error("cannot rename ${part.name}")
-                    partial = null
-                    "Downloaded to: ${local.absolutePath}"
-                } catch (e: Exception) {
-                    CrashReporting.report(e)
-                    "Download failed: ${e.message}"
-                } finally {
-                    partial?.delete()
-                }
-            }
-            busy = false
-            status = msg
+        status = try {
+            val item = transfers.enqueueDownload(entry.name, entry.path, entry.size)
+            if (item == null) "Already downloading ${entry.name}" else "Queued download: ${entry.name}"
+        } catch (e: IllegalArgumentException) {
+            "Download failed: ${e.message}"
         }
     }
 
     fun upload(uri: Uri) {
-        val sftp = sftp ?: return
-        busy = true
-        status = "Uploading…"
+        if (sftp == null) return
+        val target = path
         scope.launch {
             val msg = withContext(Dispatchers.IO) {
                 try {
                     val name = displayNameOf(context, uri) ?: ShareUpload.FALLBACK_NAME
-                    uploadUri(context, sftp, uri, ShareUpload.remotePath(path, name))
-                    "Uploaded: $name"
+                    val staged = stageUri(context, uri)
+                    val item = transfers.enqueueUpload(
+                        staged,
+                        ShareUpload.remotePath(target, name),
+                        deleteSourceWhenDone = true,
+                    )
+                    if (item == null) "Already uploading $name" else "Queued upload: $name"
                 } catch (e: Exception) {
                     CrashReporting.report(e)
                     "Upload failed: ${e.message}"
                 }
             }
-            busy = false
             status = msg
-            refresh()
+        }
+    }
+
+    // A finished upload changes the listing; a finished download changes
+    // nothing here but the status line tells the user where it landed.
+    val doneIds = transferItems.filter { it.state is TransferQueue.State.Done }.map { it.id }.toSet()
+    var seenDone by remember { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(doneIds) {
+        val fresh = transferItems.filter { it.id in doneIds && it.id !in seenDone }
+        seenDone = doneIds
+        if (fresh.any { it.direction == TransferQueue.Direction.UPLOAD }) refresh()
+        fresh.lastOrNull()?.let {
+            status = if (it.direction == TransferQueue.Direction.DOWNLOAD) {
+                "Downloaded to: ${it.localFile.absolutePath}"
+            } else {
+                "Uploaded: ${it.name}"
+            }
         }
     }
 
@@ -941,9 +946,21 @@ fun SftpTab(
                     }
                 }
             }
+            val active = transferItems.count { it.state.isActive }
+            IconButton(onClick = { showTransfers = true }) {
+                BadgedBox(badge = { if (active > 0) Badge { Text("$active") } }) {
+                    Icon(
+                        Icons.Filled.SwapVert,
+                        contentDescription = if (active == 0) "Transfers" else "Transfers, $active active",
+                    )
+                }
+            }
             IconButton(onClick = { refresh() }) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
+        }
+        if (showTransfers) {
+            TransfersSheet(transfers, onDismiss = { showTransfers = false })
         }
         status?.let {
             Text(

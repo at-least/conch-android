@@ -2,6 +2,15 @@
 
 ## 0.9.1 (unreleased)
 
+- **Transfers sheet with resume** (iOS parity) — Files-tab downloads and
+  uploads go through a queue (one at a time, each on its own SFTP channel
+  so it outlives the tab); a toolbar badge counts active transfers and
+  the sheet shows per-item progress with Cancel / Retry / Clear finished.
+  A download that drops or is cancelled keeps its `.part` and Retry
+  resumes from its length; an upload whose remote file is shorter than the
+  source appends from that offset; a local copy with the remote's exact
+  size is reported as already downloaded without a transfer. "Cancel file
+  transfer" in the terminal menu now also cancels queued SFTP transfers
 - **Server-stats widget** (iOS parity) — a second home-screen widget with
   each host's last-known CPU and memory plus the sample's age ("2 min
   ago"); written by the Monitor tab at most once a minute per host, never
