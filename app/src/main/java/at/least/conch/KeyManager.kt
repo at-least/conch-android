@@ -78,6 +78,23 @@ object LenientEpochMillisSerializer : KSerializer<Long> {
 }
 
 /**
+ * Policy shared with iOS (2026-08-29): RSA is not supported for login on
+ * either platform. Generated keys are Ed25519; ECDSA imports stay
+ * supported. RSA keys restored from a backup are kept (the shared format
+ * carries them) but never offered for auth.
+ */
+object KeyPolicy {
+    const val RSA_NOT_FOR_LOGIN =
+        "RSA keys are not supported for login — generate an Ed25519 key instead (ssh-keygen -t ed25519)"
+
+    fun isLoginSupported(algorithm: String): Boolean = algorithm != "ssh-rsa"
+
+    fun requireLoginSupported(algorithm: String) {
+        require(isLoginSupported(algorithm)) { RSA_NOT_FOR_LOGIN }
+    }
+}
+
+/**
  * The key being imported is passphrase-protected (either no passphrase was
  * supplied, or the supplied one was rejected). UI uses this to prompt and
  * re-prompt instead of dumping the user back to a file picker.
@@ -156,6 +173,7 @@ class KeyManager(private val context: Context) {
             val publicKey = provider.public
                 ?: throw IllegalArgumentException("Cannot parse public key")
             val type = KeyType.fromKey(publicKey)
+            KeyPolicy.requireLoginSupported(type.toString())
             val edSeed: ByteArray? = when (type) {
                 KeyType.ED25519 -> Ed25519Codec.seedFromPkcs8(privPkcs8)
                 else -> null
@@ -290,7 +308,12 @@ class KeyManager(private val context: Context) {
      * backup on a new device is NOT a missing-secret scenario.
      */
     fun loadKeyProvider(client: SSHClient, id: String): KeyProvider {
-        val keyName = byId(id)?.name ?: id.take(8)
+        val info = byId(id)
+        val keyName = info?.name ?: id.take(8)
+        if (info != null && !KeyPolicy.isLoginSupported(info.algorithm)) {
+            // a key that only arrived through a backup; terminal like a missing key
+            error("$MISSING_KEY_PREFIX '$keyName' is an RSA key — ${KeyPolicy.RSA_NOT_FOR_LOGIN}")
+        }
         val pem = SecretsStore.get("key-priv:$id")
             ?: error(
                 "$MISSING_KEY_PREFIX '$keyName' has no private key on this device " +

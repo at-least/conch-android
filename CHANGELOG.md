@@ -2,6 +2,13 @@
 
 ## 0.9.1 (unreleased)
 
+- **RSA keys are no longer accepted for login** (shared policy with Conch
+  iOS): import refuses them with a hint to generate an Ed25519 key; RSA
+  keys restored from a backup are kept and exportable but labelled
+  "Not supported for login", hidden from the host editor, and a host still
+  pointing at one fails without retrying. Modern OpenSSH rejects SHA-1
+  `ssh-rsa` anyway; ECDSA and Ed25519 are unchanged
+
 - **Transfers sheet with resume** (iOS parity) — Files-tab downloads and
   uploads go through a queue (one at a time, each on its own SFTP channel
   so it outlives the tab); a toolbar badge counts active transfers and

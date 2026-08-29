@@ -401,12 +401,21 @@ class KeysActivity : ComponentActivity() {
                         leadingContent = { Icon(Icons.Filled.Key, contentDescription = null) },
                         headlineContent = { Text(k.name) },
                         supportingContent = {
-                            Text(
-                                "${k.algorithm} · ${k.fingerprint}",
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Column {
+                                Text(
+                                    "${k.algorithm} · ${k.fingerprint}",
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (!KeyPolicy.isLoginSupported(k.algorithm)) {
+                                    Text(
+                                        "Not supported for login — replace with an Ed25519 key",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
                         },
                         modifier = Modifier.clickable { onOpen(k) },
                     )

@@ -42,9 +42,11 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 
 ### Authentication & security
 - Password or **public-key auth**: generate **Ed25519** on-device, or import
-  **Ed25519 / RSA / ECDSA** keys (OpenSSH, PKCS#8/PKCS#5 PEM, PuTTY —
+  **Ed25519 / ECDSA** keys (OpenSSH, PKCS#8/PKCS#5 PEM, PuTTY —
   passphrase-protected included; wrong passphrase just re-prompts) and
-  export any key back out (`ssh -i` compatible). No lock-in.
+  export any key back out (`ssh -i` compatible). No lock-in. RSA keys are
+  not accepted for login (modern OpenSSH rejects SHA-1 `ssh-rsa`; same
+  policy as Conch iOS) — one restored from a backup is kept and exportable.
 - **TOFU host-key verification** with fingerprints (`known_hosts`)
 - All secrets encrypted with the **Android Keystore** (AES-256-GCM) — and
   decrypted private keys are parsed in memory, never spilled to a file, so

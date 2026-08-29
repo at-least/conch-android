@@ -3,6 +3,7 @@ package at.least.conch
 import net.schmizz.sshj.SSHClient
 import org.apache.sshd.server.SshServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -85,11 +86,34 @@ class KeyAlgorithmMatrixTest {
         }
     }
 
+    /**
+     * Policy shared with iOS: RSA parses (sshj can), but import refuses it
+     * and a stored RSA key (backup restore) is never usable for login.
+     */
     @Test
-    fun `rsa-2048 imports and authenticates`() = roundTripAndAuth("ssh-rsa", rsa(2048))
+    fun `rsa parses but the import policy rejects it`() {
+        val tmp = File.createTempFile("matrix", ".key")
+        try {
+            tmp.writeText(pkcs8Pem(rsa(2048)))
+            val provider = SSHClient().loadKeys(tmp.absolutePath)
+            val algorithm = net.schmizz.sshj.common.KeyType.fromKey(provider.public).toString()
+            assertEquals("ssh-rsa", algorithm)
+            assertFalse(KeyPolicy.isLoginSupported(algorithm))
+            val e = runCatching { KeyPolicy.requireLoginSupported(algorithm) }.exceptionOrNull()
+            assertTrue(e is IllegalArgumentException)
+            assertEquals(KeyPolicy.RSA_NOT_FOR_LOGIN, e!!.message)
+        } finally {
+            tmp.delete()
+        }
+    }
 
     @Test
-    fun `rsa-4096 imports and authenticates`() = roundTripAndAuth("ssh-rsa", rsa(4096))
+    fun `an rsa key chosen for a host is a terminal connect failure like a missing key`() {
+        val reason = "${KeyManager.MISSING_KEY_PREFIX} 'old' is an RSA key — ${KeyPolicy.RSA_NOT_FOR_LOGIN}"
+        assertTrue(SshSession.isTerminalFailure(reason))
+        assertTrue(KeyPolicy.isLoginSupported("ssh-ed25519"))
+        assertTrue(KeyPolicy.isLoginSupported("ecdsa-sha2-nistp256"))
+    }
 
     @Test
     fun `ecdsa p-256 imports and authenticates`() =

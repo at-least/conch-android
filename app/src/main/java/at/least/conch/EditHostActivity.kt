@@ -184,8 +184,13 @@ private fun EditHostScreen(
         mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "")
     }
     val ctx = LocalContext.current
-    val keys = remember { KeyManager(ctx).list() }
+    val allKeys = remember { KeyManager(ctx).list() }
+    // RSA keys (backup restores only) are never offered for auth — shared policy with iOS
+    val keys = remember(allKeys) { allKeys.filter { KeyPolicy.isLoginSupported(it.algorithm) } }
     var selectedKeyId by rememberSaveable { mutableStateOf(initial?.keyId) }
+    val selectedUnsupported = remember(allKeys, selectedKeyId) {
+        allKeys.firstOrNull { it.id == selectedKeyId }?.let { !KeyPolicy.isLoginSupported(it.algorithm) } ?: false
+    }
     var keysMenuOpen by rememberSaveable { mutableStateOf(false) }
     var jumpHostId by rememberSaveable { mutableStateOf(initial?.jumpHostId) }
     var jumpMenuOpen by rememberSaveable { mutableStateOf(false) }
@@ -444,18 +449,18 @@ private fun EditHostScreen(
                     onExpandedChange = { keysMenuOpen = it },
                 ) {
                     OutlinedTextField(
-                        value = keys.firstOrNull {
+                        value = allKeys.firstOrNull {
                             it.id == selectedKeyId
                         }?.let { "${it.name} (${it.fingerprint.takeLast(12)})" } ?: "",
                         onValueChange = { },
                         readOnly = true,
                         label = { Text("Auth key") },
                         placeholder = { Text("Select key") },
-                        isError = keyError,
-                        supportingText = if (keyError) {
-                            { Text("Pick the key this host authenticates with") }
-                        } else {
-                            null
+                        isError = keyError || selectedUnsupported,
+                        supportingText = when {
+                            selectedUnsupported -> ({ Text(KeyPolicy.RSA_NOT_FOR_LOGIN) })
+                            keyError -> ({ Text("Pick the key this host authenticates with") })
+                            else -> null
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = keysMenuOpen) },
                         modifier = field.menuAnchor(MenuAnchorType.PrimaryNotEditable)
