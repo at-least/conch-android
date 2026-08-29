@@ -179,12 +179,13 @@ object MonitorPoll {
 }
 
 @Composable
-fun MonitorTab(session: SessionReconnector, modifier: Modifier = Modifier) {
+fun MonitorTab(session: SessionReconnector, hostId: String, modifier: Modifier = Modifier) {
     var snapshot by remember { mutableStateOf<MonitorParser.Snapshot?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var rawOut by remember { mutableStateOf<String?>(null) }
     var autoRefresh by remember { mutableStateOf(true) }
-    val history = remember { MetricHistory() }
+    // per host for the life of the process: re-entering the tab continues the line
+    val history = remember(hostId) { MetricHistoryStore.forHost(hostId) }
 
     Column(
         modifier

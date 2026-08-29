@@ -624,7 +624,8 @@ class TerminalActivity : FragmentActivity() {
                     val rc = reconnector
                     when (tab) {
                         SessionTab.TERMINAL -> {}
-                        SessionTab.MONITOR -> if (rc != null) MonitorTab(rc) else LoadingTab("Monitor")
+                        SessionTab.MONITOR ->
+                            if (rc != null) MonitorTab(rc, host?.id.orEmpty()) else LoadingTab("Monitor")
                         SessionTab.DOCKER -> if (rc != null) DockerTab(rc) else LoadingTab("Docker")
                         SessionTab.FILES -> if (rc != null) SftpTab(rc, connectionGen.intValue) else LoadingTab("Files")
                     }

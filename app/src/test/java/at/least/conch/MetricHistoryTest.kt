@@ -92,4 +92,19 @@ class MetricHistoryTest {
         // a single point has no line to draw; callers skip < 2 points anyway
         assertEquals(1, SparklineGeometry.points(doubleArrayOf(1.0), 10f, 10f, 1.0).size)
     }
+
+    @Test
+    fun `store hands out one history per host and keeps it across lookups`() {
+        MetricHistoryStore.remove("a")
+        MetricHistoryStore.remove("b")
+        val a = MetricHistoryStore.forHost("a")
+        a.push(0, snap(cpu = 42.0))
+        // a second lookup (re-entering the tab) sees the same samples
+        assertEquals(1, MetricHistoryStore.forHost("a").size)
+        assertTrue(a === MetricHistoryStore.forHost("a"))
+        // other hosts are isolated
+        assertEquals(0, MetricHistoryStore.forHost("b").size)
+        MetricHistoryStore.remove("a")
+        assertEquals(0, MetricHistoryStore.forHost("a").size)
+    }
 }

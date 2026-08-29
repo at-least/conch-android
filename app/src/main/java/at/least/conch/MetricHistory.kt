@@ -63,3 +63,21 @@ object SparklineGeometry {
         }
     }
 }
+
+/**
+ * Process-wide history per host (iOS parity: `MetricHistoryStore`), so
+ * leaving and re-entering the Monitor tab — or a second Activity on the
+ * same host — keeps the last five minutes instead of starting a fresh,
+ * empty sparkline. Memory is bounded by hosts × 60 samples.
+ */
+object MetricHistoryStore {
+    private val histories = HashMap<String, MetricHistory>()
+
+    fun forHost(hostId: String): MetricHistory = synchronized(histories) {
+        histories.getOrPut(hostId) { MetricHistory() }
+    }
+
+    fun remove(hostId: String) {
+        synchronized(histories) { histories.remove(hostId) }
+    }
+}
