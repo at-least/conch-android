@@ -19,6 +19,7 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Bracketed paste mode** (DECSET 2004) — multi-line pastes into vim/nano land verbatim, no auto-execution, no justify-mangling
 - **Searchable command history** — per-host, encrypted at rest, one tap to re-run or save as snippet
 - **Color themes** — Default, Dracula, Solarized Dark, Nord, Gruvbox Dark
+- **Bundled JetBrains Mono Nerd Font** (box-drawing/powerline glyphs for tmux, htop, starship…) — pick it or the system monospace in Settings, same choice as Conch iOS
 - **Scrollback history** (4000 lines) with gesture scrolling and a position indicator
 - Hardware keyboard: F1–F12, PgUp/PgDn, Home/End, Del, Ctrl+arrows
 - **User-configurable extra-keys row** (18-key pool, layout persists across sessions)

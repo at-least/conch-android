@@ -105,18 +105,38 @@ class TerminalView @JvmOverloads constructor(
         set(value) {
             field = value.coerceIn(6f * resources.displayMetrics.scaledDensity, 40f * resources.displayMetrics.scaledDensity)
             textPaint.textSize = field
-            measureCell()
-            requestLayout()
-            // The view's own size usually does not change with the font, so
-            // onSizeChanged will not fire — recompute the grid explicitly or
-            // cols/rows stay stale and columns get clipped/under-filled.
-            post { recomputeGrid() }
-            invalidate()
+            metricsChanged()
         }
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
         textSize = fontSizePx
+    }
+
+    /**
+     * Face every cell is drawn with. The cell grid is re-measured from the
+     * new face's advance and ascent/descent so box-drawing and Nerd glyphs
+     * tile without seams; the grid is recomputed like a font-size change.
+     */
+    var typeface: Typeface = Typeface.MONOSPACE
+        set(value) {
+            if (field == value) return
+            field = value
+            textPaint.typeface = value
+            metricsChanged()
+        }
+
+    /**
+     * After a font size or face change. The view's own size usually does
+     * not change with the font, so onSizeChanged will not fire — recompute
+     * the grid explicitly or cols/rows stay stale and columns get
+     * clipped/under-filled.
+     */
+    private fun metricsChanged() {
+        measureCell()
+        requestLayout()
+        post { recomputeGrid() }
+        invalidate()
     }
     private val bgPaint = Paint()
     private val cursorPaint = Paint()

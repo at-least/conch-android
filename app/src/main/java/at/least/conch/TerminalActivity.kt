@@ -605,6 +605,8 @@ class TerminalActivity : FragmentActivity() {
                                         fontSizePx = host!!.fontSizeSp * resources.displayMetrics.scaledDensity
                                     }
                                     theme = TerminalTheme.byName(SettingsStore.terminalTheme(this@TerminalActivity))
+                                    val fontId = SettingsStore.terminalFontFamily(this@TerminalActivity)
+                                    typeface = TerminalFont.byId(fontId).typeface(ctx)
                                     zmodemSink = zmodemDownloadSink()
                                     setOnClickListener { showSoftKeyboard() }
                                     post { requestFocus() }

@@ -20,6 +20,7 @@
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.ExecCommand${}</ID>
     <ID>EmptyFunctionBlock:TestSshd.kt$TestSshd.RecordedShell${}</ID>
     <ID>LargeClass:TerminalActivity.kt$TerminalActivity : FragmentActivity</ID>
+<ID>LargeClass:TerminalView.kt$TerminalView : View</ID>
     <ID>LongMethod:CommandHistory.kt$InputLineAssembler$private fun feedByte(b: Int)</ID>
     <ID>LongMethod:CommandPaletteSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CommandPaletteSheet( hostId: String, historyStore: CommandHistoryStore, snippetStore: SnippetStore, runCommand: (String) -&gt; Unit, onDismiss: () -&gt; Unit, onOpenSnippets: () -&gt; Unit, onOpenHistory: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:EditHostActivity.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun EditHostScreen( isEdit: Boolean, initial: Host?, otherHosts: List&lt;Host&gt;, onBack: () -&gt; Unit, onSave: (Host, String) -&gt; Unit, )</ID>

@@ -2,6 +2,11 @@
 
 ## 0.9.1 (unreleased)
 
+- **Bundled JetBrains Mono Nerd Font** (iOS parity) — Settings › Terminal
+  › Terminal font picks between the system monospace and the bundled Nerd
+  Font, so tmux/htop/starship box-drawing and powerline glyphs render
+  instead of tofu. Persisted as `terminalFontFamily` with the same values
+  iOS uses. OFL-1.1, credited under Open source licenses
 - **New backup format, shared with Conch iOS** — the pre-release `TILDBAK1`
   container (which mirrored Android's internal `hosts.json` shape and
   needed per-platform tolerance rules) is replaced by `CONCHBAK`

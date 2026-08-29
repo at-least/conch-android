@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -251,6 +252,19 @@ class SettingsActivity : ComponentActivity() {
                         Column {
                             Text("Color scheme for the terminal (applied to new sessions).")
                             TerminalThemePicker(Modifier.padding(top = 8.dp))
+                        }
+                    },
+                )
+                ListItem(
+                    leadingContent = { Icon(Icons.Filled.TextFields, contentDescription = null) },
+                    headlineContent = { Text("Terminal font") },
+                    supportingContent = {
+                        Column {
+                            Text(
+                                "JetBrains Mono Nerd Font ships with the app: box-drawing and powerline " +
+                                    "glyphs for tmux, htop, starship and friends (applied to new sessions)."
+                            )
+                            TerminalFontPicker(Modifier.padding(top = 8.dp))
                         }
                     },
                 )
@@ -549,6 +563,29 @@ class SettingsActivity : ComponentActivity() {
                         SettingsStore.setTerminalTheme(this@SettingsActivity, theme.name)
                     },
                     label = { Text(theme.name) }
+                )
+            }
+        }
+    }
+
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    @Composable
+    private fun TerminalFontPicker(modifier: Modifier = Modifier) {
+        var selected by remember {
+            mutableStateOf(TerminalFont.byId(SettingsStore.terminalFontFamily(this@SettingsActivity)))
+        }
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            for (font in TerminalFont.ALL) {
+                FilterChip(
+                    selected = font == selected,
+                    onClick = {
+                        selected = font
+                        SettingsStore.setTerminalFontFamily(this@SettingsActivity, font.id)
+                    },
+                    label = { Text(font.displayName) }
                 )
             }
         }

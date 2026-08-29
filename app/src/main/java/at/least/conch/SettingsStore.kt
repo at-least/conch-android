@@ -32,6 +32,7 @@ object SettingsStore {
     private val KEY_APP_LOCK = booleanPreferencesKey("appLockEnabled")
     private val KEY_CRASH_REPORTS = booleanPreferencesKey("crashReportsEnabled")
     private val KEY_TERMINAL_THEME = stringPreferencesKey("terminalTheme")
+    private val KEY_TERMINAL_FONT = stringPreferencesKey("terminalFontFamily")
 
     @Volatile
     private var store: DataStore<Preferences>? = null
@@ -103,4 +104,8 @@ object SettingsStore {
 
     fun terminalTheme(context: Context): String? = readString(context, KEY_TERMINAL_THEME)
     fun setTerminalTheme(context: Context, name: String) = writeString(context, KEY_TERMINAL_THEME, name)
+
+    /** [TerminalFont.id]; absent = [TerminalFont.DEFAULT]. Same key and values as iOS. */
+    fun terminalFontFamily(context: Context): String? = readString(context, KEY_TERMINAL_FONT)
+    fun setTerminalFontFamily(context: Context, id: String) = writeString(context, KEY_TERMINAL_FONT, id)
 }
