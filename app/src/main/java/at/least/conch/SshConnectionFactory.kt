@@ -55,14 +55,17 @@ object SshConnectionFactory {
         prompt: KeyPrompt? = null,
         agentKeys: AgentKeySource? = null,
     ): SSHClient {
-        val jumpHost = host.jumpHostId?.let { id ->
-            HostStore(context).load().firstOrNull { it.id == id }
-                ?: error("${HOST_CONFIG_PREFIX}jump host not found — reselect a jump host")
+        // Resolved here, once, for every caller (terminal, Files tab, SAF
+        // provider, share target): a broken chain (deleted jump host,
+        // cycle, too deep) is a host-config error — only editing fixes it.
+        val jumps = when (val r = ProxyJumpResolver.resolve(host, HostStore(context).load())) {
+            is ProxyJumpResolver.Resolution.Chain -> r.jumps
+            is ProxyJumpResolver.Resolution.Broken -> error("$HOST_CONFIG_PREFIX${ProxyJumpResolver.BROKEN_MESSAGE}")
         }
         val keys = agentKeys ?: if (host.forwardAgent) KeyManagerAgentSource(context) else null
         return connect(
             host = host,
-            jumpHost = jumpHost,
+            jumps = jumps,
             prompt = prompt,
             store = KnownHostsStore(context.filesDir),
             keyProvider = { ssh, keyId -> KeyManager(context).loadKeyProvider(ssh, keyId) },
@@ -76,8 +79,16 @@ object SshConnectionFactory {
      * JVM-testable core: same wiring, with storage/auth sources injected.
      * A null [mainHandler] runs the TOFU prompt synchronously.
      *
-     * @param jumpHost optional saved host to ProxyJump through (single hop);
-     *                 its own jumpHostId is ignored. Both host keys get TOFU.
+     * @param jumpHost optional single hop to ProxyJump through — shorthand
+     *                 for `jumps = listOf(jumpHost)`; ignored when [jumps]
+     *                 is given.
+     * @param jumps ProxyJump chain, OUTERmost first (the host dialed
+     *                 directly, …, the last hop before [host]); each hop's
+     *                 own `jumpHostId` is NOT followed — resolve the chain
+     *                 first ([ProxyJumpResolver], as the Android overload
+     *                 does). Every hop authenticates with its own
+     *                 credentials and is TOFU-verified against its own
+     *                 endpoint.
      * @param agentKeys key source for ssh-agent forwarding; the Android
      *                 overload defaults it when the host opts in.
      */
@@ -90,11 +101,47 @@ object SshConnectionFactory {
         mainHandler: Handler? = null,
         jumpHost: Host? = null,
         agentKeys: AgentKeySource? = null,
+        jumps: List<Host>? = null,
     ): SSHClient {
-        val jump = jumpHost?.let {
-            buildClient(it, prompt, store, keyProvider, password, mainHandler, agentKeys = null)
+        val chain = jumps ?: listOfNotNull(jumpHost)
+        // Each hop is dialed through the previous one's direct-tcpip channel
+        // and owns it (JumpedClient), so a failure at hop N — or the final
+        // disconnect — tears down hops N-1 … 1 as well.
+        var previous: SSHClient? = null
+        for (hop in chain) {
+            previous = attributing(hop) {
+                buildClient(hop, prompt, store, keyProvider, password, mainHandler, previous, agentKeys = null)
+            }
         }
-        return buildClient(host, prompt, store, keyProvider, password, mainHandler, jump, agentKeys)
+        return buildClient(host, prompt, store, keyProvider, password, mainHandler, previous, agentKeys)
+    }
+
+    /**
+     * Re-labels a hop's failure so the user learns WHICH host in the chain
+     * failed, keeping the exception type (describeError and the
+     * reconnector's terminal-failure rule key on it): auth failures and
+     * host-config errors name the hop; anything else (network, host key)
+     * passes through unchanged.
+     */
+    private inline fun attributing(hop: Host, dial: () -> SSHClient): SSHClient {
+        try {
+            return dial()
+        } catch (e: Exception) {
+            throw attributed(hop, e)
+        }
+    }
+
+    /** The same failure, naming [hop] where the type allows it (see [attributing]). */
+    private fun attributed(hop: Host, e: Exception): Exception {
+        val label = "jump host '${hop.alias.ifBlank { "${hop.username}@${hop.hostname}" }}'"
+        val msg = e.message.orEmpty()
+        return when {
+            e is net.schmizz.sshj.userauth.UserAuthException ->
+                net.schmizz.sshj.userauth.UserAuthException("$label: $msg", e)
+            e is IllegalStateException && msg.startsWith(HOST_CONFIG_PREFIX) ->
+                IllegalStateException("$HOST_CONFIG_PREFIX$label: ${msg.removePrefix(HOST_CONFIG_PREFIX)}", e)
+            else -> e
+        }
     }
 
     /**

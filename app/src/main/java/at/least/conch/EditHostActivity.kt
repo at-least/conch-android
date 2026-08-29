@@ -483,18 +483,25 @@ private fun EditHostScreen(
                 }
             }
 
+            // iOS parity: the picker offers only hosts whose own chain resolves
+            // and does not pass through THIS host (that would close a cycle);
+            // a multi-hop choice shows the full route it implies.
+            val self = remember(initial) { initial ?: Host(id = "") }
+            val allHosts = remember(otherHosts, self) { otherHosts + self }
+            val jumpCandidates = remember(allHosts) { ProxyJumpResolver.candidates(self, allHosts) }
+            val chosenJump = otherHosts.firstOrNull { it.id == jumpHostId }
+            val route = chosenJump?.let { ProxyJumpResolver.describeChain(it, allHosts) }
             if (otherHosts.isNotEmpty()) {
                 ExposedDropdownMenuBox(
                     expanded = jumpMenuOpen,
                     onExpandedChange = { jumpMenuOpen = it }
                 ) {
                     OutlinedTextField(
-                        value = otherHosts.firstOrNull {
-                            it.id == jumpHostId
-                        }?.let { it.alias.ifBlank { it.hostname } } ?: "Direct (no jump host)",
+                        value = chosenJump?.let { it.alias.ifBlank { it.hostname } } ?: "Direct (no jump host)",
                         onValueChange = { },
                         readOnly = true,
                         label = { Text("Connect via") },
+                        supportingText = route?.let { { Text("via $it") } },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = jumpMenuOpen) },
                         modifier = field.menuAnchor(MenuAnchorType.PrimaryNotEditable)
                     )
@@ -506,9 +513,21 @@ private fun EditHostScreen(
                                 jumpMenuOpen = false
                             }
                         )
-                        otherHosts.forEach { h ->
+                        jumpCandidates.forEach { h ->
+                            val viaRoute = ProxyJumpResolver.describeChain(h, allHosts)
                             DropdownMenuItem(
-                                text = { Text(h.alias.ifBlank { h.hostname }) },
+                                text = {
+                                    Column {
+                                        Text(h.alias.ifBlank { h.hostname })
+                                        if (viaRoute != null) {
+                                            Text(
+                                                "via $viaRoute",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                },
                                 onClick = {
                                     jumpHostId = h.id
                                     jumpMenuOpen = false

@@ -35,6 +35,7 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **tmux auto-attach on by default** for new hosts (`tmux new -A -s conch`) — a dropped connection never loses your work; existing hosts keep their saved setting
 - **Why no mosh?** tmux auto-attach + auto-reconnect already deliver mosh's core promise — work survives drops and network switches, and the client comes back on its own — over plain SSH with no extra server daemon. A native mosh client is not on the roadmap (no JVM implementation exists to build on)
 - **Port forwarding**: local (-L) and remote (-R, with server bind address) tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
+- **ProxyJump, multi-hop** — "Connect via" a saved host whose own jump host is followed too (up to 3 hops); every hop uses its own credentials and host-key pin, failures name the hop, and the editor refuses choices that would form a cycle
 - **UDP port knocking** — an ordered knock sequence sent before every dial, for firewalls that hide the SSH port
 - **ssh-agent forwarding** (`-A`) per host — offer your stored keys to the server's own `ssh`/`git` hops; off by default with an explicit trust warning
 - Keep-alive, per-host terminal font size, OSC window-title tracking

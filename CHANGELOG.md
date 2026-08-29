@@ -2,6 +2,14 @@
 
 ## 0.9.1 (unreleased)
 
+- **Multi-hop ProxyJump** (iOS parity) — a jump host's own jump host is
+  followed, up to 3 hops (phone → bastion → dmz → target). Every hop
+  authenticates with its own stored credentials and is TOFU-verified
+  against its own endpoint; a failure names the hop ("jump host
+  'bastion': …"). The editor's "Connect via" picker offers only hosts that
+  would not close a cycle and shows the route a choice implies; a broken
+  chain (deleted jump host, cycle, too deep) is reported as a host-config
+  error instead of retried
 - **Share to host** (iOS drag-and-drop parity) — Conch is a share-sheet
   target ("Upload to SSH host"): files shared from any app upload into a
   live session's current directory (the shell's OSC 7 cwd, now tracked by
