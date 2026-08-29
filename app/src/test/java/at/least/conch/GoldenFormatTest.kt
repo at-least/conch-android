@@ -13,7 +13,7 @@ import java.nio.file.Files
 /**
  * Golden wire-format pins. These freeze the EXACT serialized shape of every
  * persistence surface (hosts.json, snippets.json, command_history.bin
- * plaintext, backup TILDBAK1 plaintext, extra-keys prefs) so a serialization
+ * plaintext, backup CONCHBAK plaintext, extra-keys prefs) so a serialization
  * library swap (org.json -> kotlinx.serialization) cannot drift the format.
  *
  * Canonicalization: JSON object key order and number spelling (18 vs 18.0)
@@ -258,33 +258,40 @@ class GoldenFormatTest {
     // ---------------------------------------------------------------- backup
 
     @Test
-    fun `golden backup payload json`() {
+    fun `golden backup payload json is canonical`() {
+        // Model → BackupSchema → canonical JSON. Pins the MAPPING (tunnels
+        // → forwards incl. the dynamic one, socksPort, secrets embedded,
+        // fontSize omitted at 0, optionals absent) and the canonical form
+        // (sorted keys, no whitespace, raw unicode). Cross-platform pins
+        // live in CrossPlatformBackupFixtureTest.
         val host = Host(
             id = "h1", alias = "prod", hostname = "prod.example.com", port = 2222,
             username = "alice", authType = Host.AUTH_KEY, keyId = "k1",
-            fontSizeSp = 14.5f, keepAlive = false, tmuxAutoAttach = false, socksPort = 0,
+            fontSizeSp = 14.5f, keepAlive = false, tmuxAutoAttach = false, socksPort = 1080,
         )
         host.tunnels.add(Tunnel(8080, "db.internal", 5432))
-        val payload = BackupCodec.BackupPayload(
-            hosts = listOf(HostWire.from(host)),
-            hostSecrets = mapOf("h1" to "s3cret-パスワード🔑", "h2" to ""),
+        host.tunnels.add(Tunnel(9000, "127.0.0.1", 9001, remote = true, bindHost = "0.0.0.0"))
+        val pwHost = Host(id = "h2", hostname = "b.example.com", username = "bob")
+        val payload = BackupPayload(
+            exportedAt = "2026-08-29T05:30:00Z",
+            origin = BackupOrigin("android", "0.9.1"),
+            hosts = listOf(BackupHost.from(host, null), BackupHost.from(pwHost, "s3cret-パスワード🔑")),
             keys = listOf(
-                KeyWire(
-                    id = "k1",
-                    name = "my-phone",
-                    algorithm = "ssh-ed25519",
-                    createdAt = 1735689600123L,
-                    publicLine = "ssh-ed25519 AAAA… my-phone",
-                    fingerprint = "SHA256:xxx",
-                )
+                BackupKey.from(
+                    SshKeyInfo("k1", "my-phone", "ssh-ed25519", 1735689600123L, "ssh-ed25519 AAAA… my-phone", "SHA256:xxx"),
+                    "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n",
+                ),
             ),
-            keySecrets = mapOf("k1" to "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n"),
-            snippets = listOf(SnippetWire("s1", "disk", "df -h")),
-            knownHosts = "[prod.example.com]:2222 ssh-ed25519 AAAA\n",
+            snippets = listOf(BackupSnippet("s1", "disk", "df -h")),
+            knownHosts = listOfNotNull(BackupKnownHost.parseLine("[prod.example.com]:2222 ssh-ed25519 $ED25519_BLOB")),
         )
         assertEquals(
-            """{"hostSecrets":{"h1":"s3cret-パスワード🔑","h2":""},"hosts":[{"alias":"prod","authType":"KEY","fontSizeSp":14.5,"hostname":"prod.example.com","id":"h1","keepAlive":false,"keyId":"k1","port":2222,"socksPort":0,"tmuxAutoAttach":false,"tunnels":[{"host":"db.internal","localPort":8080,"port":5432}],"username":"alice"}],"keySecrets":{"k1":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n"},"keys":[{"algorithm":"ssh-ed25519","createdAt":1735689600123,"fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","publicLine":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":"[prod.example.com]:2222 ssh-ed25519 AAAA\n","snippets":[{"command":"df -h","id":"s1","label":"disk"}],"version":1}""",
-            canon(BackupCodec.payloadToJson(payload)),
+            """{"exportedAt":"2026-08-29T05:30:00Z","hosts":[{"auth":{"keyId":"k1","method":"key"},"exposeFiles":false,"fontSize":14.5,"forwardAgent":false,"forwards":[{"listenPort":8080,"targetHost":"db.internal","targetPort":5432,"type":"local"},{"listenHost":"0.0.0.0","listenPort":9000,"targetHost":"127.0.0.1","targetPort":9001,"type":"remote"},{"listenPort":1080,"type":"dynamic"}],"group":"","hostname":"prod.example.com","id":"h1","keepAlive":false,"knockPorts":[],"name":"prod","port":2222,"tmuxAutoAttach":false,"username":"alice"},{"auth":{"method":"password","password":"s3cret-パスワード🔑"},"exposeFiles":false,"forwardAgent":false,"forwards":[],"group":"","hostname":"b.example.com","id":"h2","keepAlive":true,"knockPorts":[],"name":"","port":22,"tmuxAutoAttach":true,"username":"bob"}],"keys":[{"algorithm":"ssh-ed25519","createdAt":"2025-01-01T00:00:00.123Z","fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n","publicKey":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":[{"algorithm":"ssh-ed25519","host":"prod.example.com","port":2222,"publicKey":"$ED25519_BLOB"}],"origin":{"appVersion":"0.9.1","platform":"android"},"snippets":[{"command":"df -h","id":"s1","label":"disk"}]}""",
+            BackupCodec.payloadToJson(payload),
         )
+    }
+
+    private companion object {
+        const val ED25519_BLOB = "AAAAC3NzaC1lZDI1NTE5AAAAIB3z4kLp1o3Qy9Fh0mF4y2Nn1YQe4rZ1B3o5vE7d2mXU"
     }
 }

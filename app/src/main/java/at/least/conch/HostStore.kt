@@ -52,7 +52,8 @@ data class TunnelWire(
 }
 
 /**
- * Wire shape of a host entry in hosts.json and the TILDBAK1 backup payload.
+ * Wire shape of a host entry in hosts.json (private to this app; the backup
+ * format maps through BackupSchema).
  * Decode defaults mirror the original org.json opt* fallbacks — in
  * particular tmuxAutoAttach decodes to FALSE (pre-feature backups stay off)
  * while the in-memory [Host] defaults new hosts to true. keyId null is

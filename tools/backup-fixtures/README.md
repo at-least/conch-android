@@ -1,18 +1,19 @@
 # Backup format fixtures
 
-Sources for the `TILDBAK1` conformance fixtures shared by conch-android and
+Sources for the `CONCHBAK` conformance fixtures shared by conch-android and
 conch-ios (spec: [docs/backup-format.md](../../docs/backup-format.md)).
 
-- `android-v1.json` — payload as Android writes it (every shared field,
-  platform flags set)
-- `ios-v1.json` — payload as iOS wrote it before the shared spec (sorted
-  keys, tunnel `direction`, `group`/`knockPorts` present, fractional
-  `createdAt`)
+- `make_sources.py` — the payloads, written out as canonical JSON:
+  - `full-v1.json` — every field populated (both auth methods, all three
+    forward types, jump host, knock ports, platform-specific flags, a key
+    without its private half, a revoked known host, IPv6, unicode/quoting)
+  - `sparse-v1.json` — minimal writer: every optional field absent, unknown
+    keys at every level that readers must ignore
 - `GenFixtures.java` — encrypts each with passphrase `conch-parity-2026`
-  (fresh salt/IV per run; the JSON is what matters)
+  (fresh salt/nonce per run; the JSON is what matters)
 
-`./regen.sh` writes `*.til` next to the sources and copies both `.json`
-and `.til` into `app/src/test/resources/fixtures/backup/` and
+`./regen.sh` runs both and copies `.json` + `.conchbak` into
+`app/src/test/resources/fixtures/backup/` and
 `../conch-ios/ConchTests/Fixtures/Backup/`. Then run
 `CrossPlatformBackupFixtureTest` (Android) and
 `CrossPlatformBackupFixtureTests` (iOS).

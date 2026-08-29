@@ -84,7 +84,8 @@ class BackupFlowModel(app: Application) : AndroidViewModel(app) {
                     "Imported: ${result.hostsAdded} hosts, ${result.keysAdded} keys, " +
                     "${result.snippetsAdded} snippets" +
                     (if (result.knownHostsMerged) ", known hosts merged" else "") +
-                    (if (result.secretsRefilled > 0) ", ${result.secretsRefilled} secrets restored" else "")
+                    (if (result.secretsRefilled > 0) ", ${result.secretsRefilled} secrets restored" else "") +
+                    (if (result.keysSkipped > 0) ", ${result.keysSkipped} keys skipped (no private key)" else "")
             } catch (e: Exception) {
                 val wrongPass = e.isWrongPassphrase()
                 if (!wrongPass) CrashReporting.report(e) // wrong passphrases are user input, not bugs

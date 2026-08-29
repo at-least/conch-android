@@ -7,7 +7,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 
 /**
- * Account-free sync (improvement-plan 3.3): keeps a TILDBAK1 backup
+ * Account-free sync (improvement-plan 3.3): keeps a CONCHBAK backup
  * materialized in a user-chosen SAF folder so Syncthing/Dropbox/rsync can
  * move it between devices — no accounts, no cloud, no new permissions.
  * Restore side is the existing merge-only import.
@@ -98,7 +98,7 @@ class ScheduledBackup(private val context: Context) {
     }
 
     /**
-     * Writes conch-backup.til into the tree, creating the document on first
+     * Writes conch-backup.conchbak into the tree, creating the document on first
      * export and overwriting in place afterwards (fixed name = the file
      * sync engines converge on; rotating names would pile up). If the stored
      * document vanished (folder cleaned, other device deleted it), one
@@ -106,7 +106,7 @@ class ScheduledBackup(private val context: Context) {
      */
     private fun writeBackup(
         tree: Uri,
-        payload: BackupCodec.BackupPayload,
+        payload: BackupPayload,
         fingerprint: String,
         nowMs: Long,
     ): Outcome {
@@ -157,7 +157,7 @@ class ScheduledBackup(private val context: Context) {
     companion object {
         /**
          * Settings' "sync now" and Main.onResume's maybeExport can overlap;
-         * both would then createDocument() and leave "conch-backup (1).til"
+         * both would then createDocument() and leave "conch-backup (1).conchbak"
          * behind in the sync folder, with only one of them tracked.
          */
         private val exportLock = Any()
@@ -173,7 +173,7 @@ class ScheduledBackup(private val context: Context) {
         /** At most one export per hour; unchanged data never rewrites. */
         const val MIN_INTERVAL_MS = 60L * 60 * 1000
 
-        const val FILE_NAME = "conch-backup.til"
+        const val FILE_NAME = "conch-backup.conchbak"
         private const val KEY_TREE = "tree"
         private const val KEY_FILE = "file"
         private const val KEY_FP = "fp"

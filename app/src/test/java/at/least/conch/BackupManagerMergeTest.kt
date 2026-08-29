@@ -6,10 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * BackupManager merge semantics (iOS BackupCodecTests
- * testExportRestoreMergeSemantics parity): an import never destroys current
- * data — existing ids kept verbatim, only new ids append. Extracted into
- * pure companion functions so the decisions run on the JVM.
+ * BackupManager merge semantics (iOS BackupManagerTests parity): an import
+ * never destroys current data — existing ids kept verbatim, only new ids
+ * append. Extracted into pure companion functions so the decisions run on
+ * the JVM.
  *
  * Not covered here (Android-bound, no Robolectric in this repo): the
  * SecretsStore side of restore (host-pw:/key-priv: writes) and collect()'s
@@ -33,6 +33,7 @@ class BackupManagerMergeTest {
         val incoming = listOf(
             host("h1", "EDITED-alias"), // same id — must NOT overwrite
             host("h2", "new-host"),
+            host("", "no id"), // spec: blank id is skipped
         )
         val (merged, added) = BackupManager.mergeHosts(existing, incoming)
 
@@ -53,14 +54,12 @@ class BackupManagerMergeTest {
     @Test
     fun `key import skips known ids and keys without their private half`() {
         val incoming = listOf(
-            KeyWire("k1", "n", "ssh-ed25519", 0L, "pub", "fp"), // already known
-            KeyWire("k2", "n", "ssh-ed25519", 0L, "pub", "fp"), // no pem — useless
-            KeyWire("", "n", "ssh-ed25519", 0L, "pub", "fp"), // no id
-            KeyWire("k3", "n", "ssh-ed25519", 0L, "pub", "fp"), // good
+            BackupKey(id = "k1", privateKey = "PEM"), // already known
+            BackupKey(id = "k2"), // no pem — useless
+            BackupKey(id = "", privateKey = "PEM"), // no id
+            BackupKey(id = "k3", privateKey = "PEM"), // good
         )
-        val secrets = mapOf("k1" to "PEM", "k3" to "PEM")
-        val imported = BackupManager.keyIdsToImport(setOf("k1"), incoming, secrets)
-        assertEquals(listOf("k3"), imported)
+        assertEquals(listOf("k3"), BackupManager.keyIdsToImport(setOf("k1"), incoming))
     }
 
     @Test

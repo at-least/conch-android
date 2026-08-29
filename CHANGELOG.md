@@ -2,17 +2,21 @@
 
 ## 0.9.1 (unreleased)
 
-- **Shared backup format with Conch iOS** — `TILDBAK1` is now specified in
-  one document ([docs/backup-format.md](docs/backup-format.md)) that both
-  apps implement, with the same two fixture backups decoded by both test
-  suites. Fixed: a backup written by iOS that contained any SSH key failed
-  to restore on Android ("corrupt or wrong passphrase") because iOS wrote
-  the key's `createdAt` as a fractional number; it is read leniently now
-  and both apps write an integer. Fixed: an iOS host's group, port-knock
-  sequence and remote-tunnel bind address were silently dropped by an
-  Android restore (and by the next Android export); they are kept and
-  round-trip. iOS in turn now keeps Android's agent-forwarding and
-  file-picker flags
+- **New backup format, shared with Conch iOS** — the pre-release `TILDBAK1`
+  container (which mirrored Android's internal `hosts.json` shape and
+  needed per-platform tolerance rules) is replaced by `CONCHBAK`
+  (`conch-backup.conchbak`), designed clean since neither app had shipped:
+  a self-describing header (format version + KDF parameters, authenticated
+  as GCM associated data, so an unknown version is rejected before key
+  derivation and a tampered iteration count fails the tag), a canonical
+  JSON payload (sorted keys — identical data is byte-identical on both
+  platforms), SSH-shaped fields (`auth {method,password|keyId}`, `forwards`
+  as `-L`/`-R`/`-D` rules, structured `knownHosts`, RFC 3339 timestamps)
+  and secrets embedded in their entities instead of parallel id-keyed
+  maps. Specified in one document ([docs/backup-format.md](docs/backup-format.md))
+  that both apps implement via a boundary mapping (`BackupSchema`); the
+  same two fixture backups (full + sparse/forward-compat) are decoded by
+  both test suites. No migration from `TILDBAK1` — it never shipped
 - New: **host groups** (section headers in the host list, picker of
   existing groups in the editor) and **host search** (name / host / user /
   group) — iOS parity, shared `group` field

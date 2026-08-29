@@ -1,56 +1,50 @@
 package at.least.conch
 
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.nio.ByteBuffer
 import javax.crypto.AEADBadTagException
 
+/** CONCHBAK container pins (docs/backup-format.md §1); iOS BackupCodecTests mirrors these. */
 class BackupCodecTest {
 
-    private fun samplePayload() = BackupCodec.BackupPayload(
+    private fun samplePayload() = BackupPayload(
+        exportedAt = "2026-08-29T05:30:00Z",
+        origin = BackupOrigin("android", "test"),
         hosts = listOf(
-            HostWire(
+            BackupHost(
                 id = "h1",
-                alias = "prod",
+                name = "prod",
                 hostname = "prod.example.com",
-                port = 22,
                 username = "alice",
-                authType = Host.AUTH_PASSWORD,
-            )
+                auth = BackupAuth(BackupAuth.METHOD_PASSWORD, password = "s3cret-password"),
+            ),
         ),
-        hostSecrets = mapOf("h1" to "s3cret-password"),
         keys = listOf(
-            KeyWire(
+            BackupKey(
                 id = "k1",
                 name = "my-phone",
                 algorithm = "ssh-ed25519",
-                createdAt = 0L,
-                publicLine = "ssh-ed25519 AAAA... my-phone",
+                createdAt = "2025-01-01T00:00:00Z",
+                publicKey = "ssh-ed25519 AAAA... my-phone",
                 fingerprint = "SHA256:xxx",
-            )
+                privateKey = "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n",
+            ),
         ),
-        keySecrets = mapOf("k1" to "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n"),
-        snippets = listOf(SnippetWire("s1", "disk", "df -h")),
-        knownHosts = "[prod.example.com]:2222 ssh-ed25519 AAAA\n",
+        snippets = listOf(BackupSnippet("s1", "disk", "df -h")),
+        knownHosts = listOf(BackupKnownHost("prod.example.com", 2222, "ssh-ed25519", "AAAA")),
     )
+
+    private fun empty() = BackupPayload()
 
     @Test
     fun `encrypt decrypt roundtrip preserves everything`() {
         val blob = BackupCodec.encrypt(samplePayload(), "correct horse".toCharArray())
         val out = BackupCodec.decrypt(blob, "correct horse".toCharArray())
-
-        assertEquals(1, out.hosts.size)
-        assertEquals("prod", out.hosts[0].alias)
-        assertEquals("s3cret-password", out.hostSecrets["h1"])
-        assertEquals(1, out.keys.size)
-        assertEquals("ssh-ed25519", out.keys[0].algorithm)
-        assertTrue(out.keySecrets["k1"]!!.contains("BEGIN OPENSSH PRIVATE KEY"))
-        assertEquals(1, out.snippets.size)
-        assertEquals("df -h", out.snippets[0].command)
-        assertTrue(out.knownHosts.contains("prod.example.com"))
+        assertEquals(samplePayload(), out)
     }
 
     @Test
@@ -59,13 +53,12 @@ class BackupCodecTest {
         try {
             BackupCodec.decrypt(blob, "wrong horse".toCharArray())
             fail("expected AEADBadTagException")
-        } catch (e: AEADBadTagException) {
-            // expected
+        } catch (_: AEADBadTagException) {
         }
     }
 
     @Test
-    fun `ciphertext differs per encryption (random salt+iv)`() {
+    fun `ciphertext differs per encryption (random salt+nonce)`() {
         val a = BackupCodec.encrypt(samplePayload(), "pass123".toCharArray())
         val b = BackupCodec.encrypt(samplePayload(), "pass123".toCharArray())
         assertNotEquals(a.toList(), b.toList())
@@ -73,117 +66,121 @@ class BackupCodecTest {
     }
 
     @Test
-    fun `format has magic header`() {
-        val blob = BackupCodec.encrypt(samplePayload(), "pass123".toCharArray())
-        assertEquals("TILDBAK1", String(blob, 0, 8, Charsets.US_ASCII))
+    fun `header layout is pinned at documented offsets`() {
+        // "CONCHBAK" | version u16=1 | kdf u8=1 | cipher u8=1 | iterations u32 |
+        // salt[16] | nonce[12] | ciphertext || tag[16]
+        val plain = BackupCodec.payloadToJson(empty()).toByteArray(Charsets.UTF_8)
+        val blob = BackupCodec.encrypt(empty(), "pw".toCharArray())
+        assertEquals(44 + plain.size + 16, blob.size)
+        assertEquals("CONCHBAK", String(blob, 0, 8, Charsets.US_ASCII))
+        val buf = ByteBuffer.wrap(blob, 8, 8)
+        assertEquals(1, buf.short.toInt())
+        assertEquals(1, buf.get().toInt())
+        assertEquals(1, buf.get().toInt())
+        assertEquals(600_000, buf.int)
+
+        val other = BackupCodec.encrypt(empty(), "pw".toCharArray())
+        assertEquals(blob.copyOfRange(0, 16).toList(), other.copyOfRange(0, 16).toList())
+        assertNotEquals(blob.copyOfRange(16, 32).toList(), other.copyOfRange(16, 32).toList())
+        assertNotEquals(blob.copyOfRange(32, 44).toList(), other.copyOfRange(32, 44).toList())
     }
 
     @Test
-    fun `garbage input rejected without leaking key derivation`() {
+    fun `garbage input rejected before key derivation`() {
         try {
             BackupCodec.decrypt(ByteArray(50), "x".toCharArray())
-            fail("expected IllegalArgumentException")
-        } catch (_: IllegalArgumentException) {
+            fail("expected FormatException")
+        } catch (_: BackupCodec.FormatException) {
         }
     }
 
     @Test
     fun `unicode passphrases and secrets survive roundtrip`() {
         val payload = samplePayload().copy(
-            hostSecrets = mapOf("h1" to "パスワード🔑"),
+            hosts = listOf(BackupHost(id = "h1", auth = BackupAuth(password = "パスワード🔑"))),
         )
         val blob = BackupCodec.encrypt(payload, "パスフレーズ123".toCharArray())
         val out = BackupCodec.decrypt(blob, "パスフレーズ123".toCharArray())
-        assertEquals("パスワード🔑", out.hostSecrets["h1"])
+        assertEquals("パスワード🔑", out.hosts[0].auth.password)
     }
 
     @Test
-    fun `header layout is magic salt iv ciphertext tag at pinned offsets`() {
-        // magic[8] || salt[16] || iv[12] || ciphertext||tag — the same
-        // layout iOS BackupCodecTests testHeaderLayout pins. GCM's doFinal
-        // appends the 16-byte tag to the ciphertext, so a blob carrying a
-        // 1-byte payload plaintext is exactly 8+16+12+1+16 = 53 bytes.
-        val tiny = samplePayload().copy(
-            hosts = emptyList(),
-            hostSecrets = emptyMap(),
-            keys = emptyList(),
-            keySecrets = emptyMap(),
-            snippets = emptyList(),
-            knownHosts = "",
-        )
-        val plain = BackupCodec.payloadToJson(tiny).toByteArray(Charsets.UTF_8)
-        val blob = BackupCodec.encrypt(tiny, "pw".toCharArray())
-        assertEquals(8 + 16 + 12 + plain.size + 16, blob.size)
-
-        // salt and iv live at the documented offsets: two encryptions of
-        // the same payload must differ in [8,24) and [24,36) but be
-        // byte-equal in the magic segment [0,8).
-        val other = BackupCodec.encrypt(tiny, "pw".toCharArray())
-        assertEquals(
-            String(blob, 0, 8, Charsets.US_ASCII),
-            String(other, 0, 8, Charsets.US_ASCII),
-        )
-        assertNotEquals(blob.copyOfRange(8, 24).toList(), other.copyOfRange(8, 24).toList())
-        assertNotEquals(blob.copyOfRange(24, 36).toList(), other.copyOfRange(24, 36).toList())
-    }
-
-    @Test
-    fun `blob with corrupted magic is rejected as bad magic`() {
+    fun `corrupted magic is rejected as bad magic`() {
         val blob = BackupCodec.encrypt(samplePayload(), "pw".toCharArray())
         blob[0] = 'X'.code.toByte()
-        try {
-            BackupCodec.decrypt(blob, "pw".toCharArray())
-            fail("expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertTrue("message: ${e.message}", e.message!!.contains("bad magic"))
-        }
+        assertRejected(blob, "bad magic")
     }
 
     @Test
     fun `magic-only blob is rejected as too short`() {
+        assertRejected("CONCHBAK".toByteArray(Charsets.US_ASCII), "too short")
+    }
+
+    @Test
+    fun `unknown format version is rejected before key derivation`() {
+        val blob = BackupCodec.encrypt(samplePayload(), "pw".toCharArray())
+        blob[9] = 2 // version u16 low byte
+        assertRejected(blob, "Unsupported backup version")
+    }
+
+    @Test
+    fun `unknown kdf or cipher id is rejected`() {
+        val blob = BackupCodec.encrypt(samplePayload(), "pw".toCharArray())
+        blob[10] = 7
+        assertRejected(blob, "Unsupported backup parameters")
+        blob[10] = 1
+        blob[11] = 7
+        assertRejected(blob, "Unsupported backup parameters")
+    }
+
+    @Test
+    fun `iteration count is authenticated — tampering fails the tag`() {
+        // The header is GCM associated data: lowering the iteration count
+        // (to make brute force cheaper) must not yield a decryptable file.
+        val blob = BackupCodec.encrypt(samplePayload(), "pw".toCharArray())
+        ByteBuffer.wrap(blob, 12, 4).putInt(1000)
         try {
-            BackupCodec.decrypt("TILDBAK1".toByteArray(Charsets.US_ASCII), "pw".toCharArray())
-            fail("expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertTrue("message: ${e.message}", e.message!!.contains("too short"))
+            BackupCodec.decrypt(blob, "pw".toCharArray())
+            fail("expected AEADBadTagException")
+        } catch (_: AEADBadTagException) {
         }
     }
 
     @Test
-    fun `payload with unknown version is rejected as unsupported version`() {
-        // Build the blob by hand (same suite the codec uses) so the ONLY
-        // thing decrypt can reject is version=99 — this also pins the KDF
-        // parameters: PBKDF2-HMAC-SHA256, 600k iterations, 256-bit key.
-        val tiny = samplePayload().copy(
-            hosts = emptyList(),
-            hostSecrets = emptyMap(),
-            keys = emptyList(),
-            keySecrets = emptyMap(),
-            snippets = emptyList(),
-            knownHosts = "",
-        )
-        val json = JSONObject(BackupCodec.payloadToJson(tiny)).put("version", 99)
-        val passphrase = "pw".toCharArray()
-        val salt = ByteArray(16)
-        val iv = ByteArray(12)
-        java.security.SecureRandom().nextBytes(salt)
-        java.security.SecureRandom().nextBytes(iv)
-        val key = javax.crypto.spec.SecretKeySpec(
-            javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-                .generateSecret(javax.crypto.spec.PBEKeySpec(passphrase, salt, 600_000, 256))
-                .encoded,
-            "AES",
-        )
-        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key, javax.crypto.spec.GCMParameterSpec(128, iv))
-        val blob = "TILDBAK1".toByteArray(Charsets.US_ASCII) + salt + iv + cipher.doFinal(
-            json.toString().toByteArray(Charsets.UTF_8)
-        )
+    fun `iteration count is read from the header`() {
+        // A writer with a different (valid) count still decrypts — the
+        // parameter lives in the file, not in the reader.
+        val blob = BackupCodec.encrypt(samplePayload(), "pw".toCharArray(), iterations = 1234)
+        assertEquals(1234, ByteBuffer.wrap(blob, 12, 4).int)
+        assertEquals(samplePayload(), BackupCodec.decrypt(blob, "pw".toCharArray()))
+    }
+
+    @Test
+    fun `payload json is canonical — sorted keys no whitespace raw unicode`() {
+        val json = BackupCodec.payloadToJson(samplePayload().copy(hosts = listOf(BackupHost(id = "h", name = "生產/機"))))
+        assertTrue(json, json.startsWith("{\"exportedAt\":"))
+        assertTrue(json, json.contains("\"hosts\":[{\"auth\":{\"method\":\"password\"},\"exposeFiles\":false"))
+        assertTrue(json, json.contains("\"name\":\"生產/機\""))
+        assertTrue(json, !json.contains(": ") && !json.contains(", ") && !json.contains("\\u") && !json.contains("\\/"))
+        // optionals are absent, never null
+        assertTrue(json, !json.contains("null"))
+    }
+
+    @Test
+    fun `fingerprint ignores exportedAt and tracks data`() {
+        val a = samplePayload()
+        val later = a.copy(exportedAt = "2030-01-01T00:00:00Z")
+        val edited = a.copy(snippets = emptyList())
+        assertEquals(BackupCodec.fingerprint(a), BackupCodec.fingerprint(later))
+        assertNotEquals(BackupCodec.fingerprint(a), BackupCodec.fingerprint(edited))
+    }
+
+    private fun assertRejected(blob: ByteArray, message: String) {
         try {
-            BackupCodec.decrypt(blob, passphrase)
-            fail("expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertTrue("message: ${e.message}", e.message!!.contains("Unsupported backup version"))
+            BackupCodec.decrypt(blob, "pw".toCharArray())
+            fail("expected FormatException")
+        } catch (e: BackupCodec.FormatException) {
+            assertTrue("message: ${e.message}", e.message!!.contains(message))
         }
     }
 }

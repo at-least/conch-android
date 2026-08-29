@@ -6,7 +6,7 @@ A free, open-source SSH client for Android — no subscription, no tracking, no 
 
 This is the original Conch codebase. An iOS sibling lives at
 [at-least/conch-ios](https://github.com/at-least/conch-ios) — same feature
-set and byte-compatible backups (`TILDBAK1`), built with Citadel/SwiftTerm.
+set and byte-compatible backups (`conch-backup.conchbak`), built with Citadel/SwiftTerm.
 Feature parity is tracked in [docs/parity.md](docs/parity.md); the shared
 backup format is specified in [docs/backup-format.md](docs/backup-format.md).
 
@@ -81,13 +81,13 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 ## Backup format
 
 Backups are portable and self-contained — you are never locked into Conch.
-The format (`TILDBAK1`: PBKDF2-HMAC-SHA256 600k + AES-256-GCM over a JSON
-payload) is **shared with Conch iOS** and fully specified in
-[docs/backup-format.md](docs/backup-format.md); two cross-platform fixtures
-are decoded by both apps' test suites so a backup written on either phone
-restores on the other with nothing lost.
+The format (`CONCHBAK`: PBKDF2-HMAC-SHA256 600k + AES-256-GCM, header
+authenticated as AAD, over a canonical JSON payload) is **shared with Conch
+iOS** and fully specified in [docs/backup-format.md](docs/backup-format.md);
+the cross-platform fixtures are decoded by both apps' test suites so a
+backup written on either phone restores on the other with nothing lost.
 
-**Account-free sync**: Settings can keep `conch-backup.til` continuously
+**Account-free sync**: Settings can keep `conch-backup.conchbak` continuously
 materialized in a folder of your choice (Syncthing, Dropbox, a cable —
 whatever moves files, no account needed). It refreshes while the app is
 open, at most hourly and only when data actually changed; the other device

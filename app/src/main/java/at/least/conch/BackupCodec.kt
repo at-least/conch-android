@@ -1,6 +1,11 @@
 package at.least.conch
 
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import java.nio.ByteBuffer
+import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -9,90 +14,123 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Portable, self-contained backup format:
+ * CONCHBAK container (docs/backup-format.md §1), byte-compatible with iOS:
  *
- *   magic "TILDBAK1" || salt[16] || iv[12] || ciphertext(AES-256-GCM over JSON)
+ *   "CONCHBAK" | version u16 | kdf u8 | cipher u8 | iterations u32 |
+ *   salt[16] | nonce[12] | AES-256-GCM(canonical JSON), header as AAD
  *
- * The payload key is derived from a user passphrase with PBKDF2-HMAC-SHA256
- * (600k iterations), NOT from the Android Keystore — backups must restore on
- * a different device. Pure Kotlin: unit tested without Android.
+ * The key comes from the passphrase via PBKDF2-HMAC-SHA256, never from the
+ * Android Keystore — backups must restore on a different device. Pure
+ * Kotlin: unit tested without Android.
  */
 object BackupCodec {
 
-    private const val MAGIC = "TILDBAK1"
-    private const val SALT_LEN = 16
-    private const val IV_LEN = 12
-    private const val PBKDF2_ITERATIONS = 600_000
+    const val MAGIC = "CONCHBAK"
+    const val FORMAT_VERSION = 1
+    const val KDF_PBKDF2_HMAC_SHA256 = 1
+    const val CIPHER_AES_256_GCM = 1
+    const val ITERATIONS = 600_000
+    const val MAX_ITERATIONS = 10_000_000
+    const val SALT_LEN = 16
+    const val NONCE_LEN = 12
+    const val TAG_LEN = 16
+    const val HEADER_LEN = 8 + 2 + 1 + 1 + 4 + SALT_LEN + NONCE_LEN // 44
     private const val KEY_BITS = 256
 
-    @Serializable
-    data class BackupPayload(
-        val version: Int = 1,
-        val hosts: List<HostWire> = emptyList(),
-        val hostSecrets: Map<String, String> = emptyMap(),
-        val keys: List<KeyWire> = emptyList(),
-        val keySecrets: Map<String, String> = emptyMap(),
-        val snippets: List<SnippetWire> = emptyList(),
-        val knownHosts: String = "",
-    )
+    /** Payload JSON contract: unknown keys skipped, absent ≡ default, optionals omitted (never `null`). */
+    val json: Json = Json {
+        encodeDefaults = true
+        explicitNulls = false
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
+
+    class FormatException(message: String) : IllegalArgumentException(message)
 
     // ------------------------------------------------------------- encrypt
 
-    fun encrypt(payload: BackupPayload, passphrase: CharArray, random: SecureRandom = SecureRandom()): ByteArray {
+    fun encrypt(
+        payload: BackupPayload,
+        passphrase: CharArray,
+        random: SecureRandom = SecureRandom(),
+        iterations: Int = ITERATIONS,
+    ): ByteArray {
         val plain = payloadToJson(payload).toByteArray(Charsets.UTF_8)
-
         val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
-        val iv = ByteArray(IV_LEN).also { random.nextBytes(it) }
+        val nonce = ByteArray(NONCE_LEN).also { random.nextBytes(it) }
+        val header = header(iterations, salt, nonce)
 
-        val key = deriveKey(passphrase, salt)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
-        val ct = cipher.doFinal(plain)
-
-        return MAGIC.toByteArray(Charsets.US_ASCII) + salt + iv + ct
+        cipher.init(Cipher.ENCRYPT_MODE, deriveKey(passphrase, salt, iterations), GCMParameterSpec(TAG_LEN * 8, nonce))
+        cipher.updateAAD(header)
+        return header + cipher.doFinal(plain)
     }
 
     fun decrypt(blob: ByteArray, passphrase: CharArray): BackupPayload {
-        val magicLen = MAGIC.length
-        require(blob.size > magicLen + SALT_LEN + IV_LEN + 16) { "Not a Conch backup (too short)" }
-        val magic = String(blob, 0, magicLen, Charsets.US_ASCII)
-        require(magic == MAGIC) { "Not a Conch backup (bad magic)" }
+        if (blob.size <= HEADER_LEN + TAG_LEN) throw FormatException("Not a Conch backup (too short)")
+        if (String(blob, 0, MAGIC.length, Charsets.US_ASCII) != MAGIC) throw FormatException("Not a Conch backup (bad magic)")
+        val buf = ByteBuffer.wrap(blob, MAGIC.length, HEADER_LEN - MAGIC.length)
+        val version = buf.short.toInt() and 0xFFFF
+        val kdf = buf.get().toInt() and 0xFF
+        val cipherId = buf.get().toInt() and 0xFF
+        val iterations = buf.int
+        if (version != FORMAT_VERSION) throw FormatException("Unsupported backup version $version")
+        if (kdf != KDF_PBKDF2_HMAC_SHA256 || cipherId != CIPHER_AES_256_GCM || iterations !in 1..MAX_ITERATIONS) {
+            throw FormatException("Unsupported backup parameters")
+        }
+        val header = blob.copyOfRange(0, HEADER_LEN)
+        val salt = blob.copyOfRange(16, 16 + SALT_LEN)
+        val nonce = blob.copyOfRange(32, 32 + NONCE_LEN)
+        val ct = blob.copyOfRange(HEADER_LEN, blob.size)
 
-        val salt = blob.copyOfRange(magicLen, magicLen + SALT_LEN)
-        val iv = blob.copyOfRange(magicLen + SALT_LEN, magicLen + SALT_LEN + IV_LEN)
-        val ct = blob.copyOfRange(magicLen + SALT_LEN + IV_LEN, blob.size)
-
-        val key = deriveKey(passphrase, salt)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-        val plain = cipher.doFinal(ct) // AEADBadTagException on wrong passphrase
+        cipher.init(Cipher.DECRYPT_MODE, deriveKey(passphrase, salt, iterations), GCMParameterSpec(TAG_LEN * 8, nonce))
+        cipher.updateAAD(header)
+        val plain = cipher.doFinal(ct) // AEADBadTagException: wrong passphrase or tampered
         return payloadFromJson(String(plain, Charsets.UTF_8))
     }
 
-    private fun deriveKey(passphrase: CharArray, salt: ByteArray): SecretKeySpec {
-        val spec = PBEKeySpec(passphrase, salt, PBKDF2_ITERATIONS, KEY_BITS)
+    private fun header(iterations: Int, salt: ByteArray, nonce: ByteArray): ByteArray =
+        ByteBuffer.allocate(HEADER_LEN)
+            .put(MAGIC.toByteArray(Charsets.US_ASCII))
+            .putShort(FORMAT_VERSION.toShort())
+            .put(KDF_PBKDF2_HMAC_SHA256.toByte())
+            .put(CIPHER_AES_256_GCM.toByte())
+            .putInt(iterations)
+            .put(salt)
+            .put(nonce)
+            .array()
+
+    private fun deriveKey(passphrase: CharArray, salt: ByteArray, iterations: Int): SecretKeySpec {
+        val spec = PBEKeySpec(passphrase, salt, iterations, KEY_BITS)
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
     }
 
     // --------------------------------------------------------------- json
 
-    fun payloadToJson(p: BackupPayload): String = ConchJson.encodeToString(BackupPayload.serializer(), p)
+    /** Canonical JSON (§2): sorted keys, no whitespace, raw non-ASCII. */
+    fun payloadToJson(p: BackupPayload): String =
+        json.encodeToString(JsonElement.serializer(), canonical(json.encodeToJsonElement(BackupPayload.serializer(), p)))
+
+    fun payloadFromJson(text: String): BackupPayload =
+        json.decodeFromString(BackupPayload.serializer(), text)
 
     /**
-     * SHA-256 of the plaintext JSON — the "did anything change" signal for
-     * scheduled exports. Over the PLAINTEXT, not the ciphertext: encrypt()
-     * salts and IVs freshly every call, so ciphertext comparison would see
-     * phantom changes on identical data.
+     * SHA-256 of the canonical plaintext with `exportedAt` removed — the
+     * "did anything change" signal for scheduled exports. Over the
+     * PLAINTEXT because salt and nonce are fresh every encrypt.
      */
-    fun fingerprint(p: BackupPayload): String =
-        java.security.MessageDigest.getInstance("SHA-256")
-            .digest(payloadToJson(p).toByteArray(Charsets.UTF_8))
+    fun fingerprint(p: BackupPayload): String {
+        val stable = p.copy(exportedAt = BackupTime.EPOCH)
+        return MessageDigest.getInstance("SHA-256")
+            .digest(payloadToJson(stable).toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
+    }
 
-    private fun payloadFromJson(json: String): BackupPayload {
-        val payload = ConchJson.decodeFromString(BackupPayload.serializer(), json)
-        require(payload.version == 1) { "Unsupported backup version" }
-        return payload
+    private fun canonical(e: JsonElement): JsonElement = when (e) {
+        is JsonObject -> JsonObject(e.entries.sortedBy { it.key }.associate { it.key to canonical(it.value) })
+        is JsonArray -> JsonArray(e.map(::canonical))
+        else -> e
     }
 }

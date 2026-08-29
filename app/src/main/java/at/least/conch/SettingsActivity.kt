@@ -332,7 +332,7 @@ class SettingsActivity : ComponentActivity() {
                                     Modifier.padding(top = 12.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    OutlinedButton(onClick = { exportPicker.launch("conchapp-backup.bin") }) {
+                                    OutlinedButton(onClick = { exportPicker.launch(ScheduledBackup.FILE_NAME) }) {
                                         Icon(
                                             Icons.Filled.FileDownload,
                                             contentDescription = null,
@@ -359,7 +359,7 @@ class SettingsActivity : ComponentActivity() {
                     supportingContent = {
                         Column {
                             Text(
-                                "Keeps an encrypted backup (conch-backup.til) in a folder you pick — " +
+                                "Keeps an encrypted backup (conch-backup.conchbak) in a folder you pick — " +
                                     "sync it with Syncthing, Dropbox or a cable. Refreshes while the app " +
                                     "is open, at most hourly and only when data changed; restore on any " +
                                     "device with Import (merge-only, never overwrites)."

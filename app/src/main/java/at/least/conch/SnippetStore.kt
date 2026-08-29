@@ -12,7 +12,7 @@ data class Snippet(
     var command: String = "",
 )
 
-/** Wire shape shared by snippets.json and the TILDBAK1 backup payload. */
+/** Wire shape of snippets.json (private to this app; the backup maps through BackupSchema). */
 @Serializable
 data class SnippetWire(
     val id: String? = null,

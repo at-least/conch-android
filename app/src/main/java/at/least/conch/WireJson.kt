@@ -4,8 +4,8 @@ import kotlinx.serialization.json.Json
 
 /**
  * Shared JSON configuration for every on-disk / wire format (hosts.json,
- * snippets.json, command_history.bin plaintext, TILDBAK1 backup payload,
- * docker NDJSON). These settings ARE the format contract:
+ * snippets.json, command_history.bin plaintext, docker NDJSON). The CONCHBAK
+ * backup payload has its own Json in BackupCodec. These settings ARE the format contract:
  *
  *  - encodeDefaults: every field is written unconditionally (org.json
  *    JSONObject.put semantics; iOS parity readers rely on the full shape)

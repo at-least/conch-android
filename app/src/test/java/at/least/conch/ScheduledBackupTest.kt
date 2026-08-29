@@ -51,9 +51,9 @@ class ScheduledBackupTest {
 
     @Test
     fun `fingerprint is stable for identical payloads and moves when data changes`() {
-        val a = BackupCodec.BackupPayload(knownHosts = "hostA")
-        val sameData = BackupCodec.BackupPayload(knownHosts = "hostA")
-        val edited = a.copy(hosts = listOf(HostWire(id = "h1", hostname = "x", username = "u")))
+        val a = BackupPayload(snippets = listOf(BackupSnippet("s", "a", "b")))
+        val sameData = BackupPayload(exportedAt = "2030-01-01T00:00:00Z", snippets = listOf(BackupSnippet("s", "a", "b")))
+        val edited = a.copy(hosts = listOf(BackupHost(id = "h1", hostname = "x", username = "u")))
         assertEquals(BackupCodec.fingerprint(a), BackupCodec.fingerprint(sameData))
         assertNotEquals(BackupCodec.fingerprint(a), BackupCodec.fingerprint(edited))
     }
@@ -64,6 +64,6 @@ class ScheduledBackupTest {
         // rewrites of one file; the fixed name is what makes two devices
         // converge on a single document instead of piling files
         assertEquals(60L * 60 * 1000, ScheduledBackup.MIN_INTERVAL_MS)
-        assertEquals("conch-backup.til", ScheduledBackup.FILE_NAME)
+        assertEquals("conch-backup.conchbak", ScheduledBackup.FILE_NAME)
     }
 }

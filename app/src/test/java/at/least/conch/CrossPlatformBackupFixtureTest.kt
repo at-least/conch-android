@@ -7,16 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Shared-format pins: the SAME two `.til` fixtures are checked into
- * conch-ios (`ConchTests/Fixtures/Backup/`) and decoded by its
+ * Shared-format pins: the SAME fixtures are checked into conch-ios
+ * (`ConchTests/Fixtures/Backup/`) and decoded by its
  * `CrossPlatformBackupFixtureTests` with the SAME assertions. Any change
  * to docs/backup-format.md must keep both suites green.
  *
- *  - android-v1.til: written the way this codebase writes (union of every
- *    shared field, platform flags included)
- *  - ios-v1.til: written the way iOS writes (sorted keys, redundant tunnel
- *    `direction`, `group`/`knockPorts` always present, and — the case that
- *    used to abort the whole restore — a fractional `createdAt`)
+ *  - full-v1.conchbak: every field populated
+ *  - sparse-v1.conchbak: minimal writer + unknown keys at every level
  *
  * Passphrase: conch-parity-2026. Regenerate with tools/backup-fixtures.
  */
@@ -28,48 +25,29 @@ class CrossPlatformBackupFixtureTest {
     private fun decode(name: String) = BackupCodec.decrypt(fixture(name), PASSPHRASE.toCharArray())
 
     @Test
-    fun `android fixture decodes to the shared shape`() = assertSharedShape(decode("android-v1.til"))
-
-    @Test
-    fun `ios fixture decodes to the shared shape`() = assertSharedShape(decode("ios-v1.til"))
-
-    @Test
-    fun `both fixtures decode to the same hosts keys snippets and secrets`() {
-        // One canonical meaning whichever app wrote it. The iOS fixture
-        // predates the pass-through of Android's platform flags, so those
-        // two are normalized out here (assertSharedShape pins them on the
-        // Android fixture; the iOS suite pins the pass-through).
-        val a = decode("android-v1.til")
-        val b = decode("ios-v1.til")
-        fun hosts(p: BackupCodec.BackupPayload) =
-            p.hosts.map { it.toHost().copy(forwardAgent = false, safExpose = false) }
-        assertEquals(hosts(a), hosts(b))
-        assertEquals(a.keys, b.keys)
-        assertEquals(a.snippets, b.snippets)
-        assertEquals(a.keySecrets, b.keySecrets)
-        assertEquals(a.knownHosts, b.knownHosts)
-        // "" and absent both mean "no password"
-        assertEquals(a.hostSecrets.filterValues { it.isNotEmpty() }, b.hostSecrets.filterValues { it.isNotEmpty() })
-    }
-
-    @Test
     fun `plaintext sidecars match the encrypted fixtures`() {
-        // The .json next to each .til is the documentation copy; keep them in sync.
-        for (name in listOf("android-v1", "ios-v1")) {
+        for (name in listOf("full-v1", "sparse-v1")) {
             val sidecar = String(fixture("$name.json"), Charsets.UTF_8).trim()
-            val expected = BackupCodec.decrypt(fixture("$name.til"), PASSPHRASE.toCharArray())
-            assertEquals(
-                BackupCodec.fingerprint(expected),
-                BackupCodec.fingerprint(ConchJson.decodeFromString(BackupCodec.BackupPayload.serializer(), sidecar)),
-            )
+            assertEquals(name, BackupCodec.payloadFromJson(sidecar), decode("$name.conchbak"))
         }
     }
 
-    private fun assertSharedShape(p: BackupCodec.BackupPayload) {
-        assertEquals(1, p.version)
+    @Test
+    fun `full fixture re-encodes to its own canonical bytes`() {
+        // What this app writes for that data IS the fixture: sorted keys,
+        // no whitespace, raw unicode, optionals absent.
+        val sidecar = String(fixture("full-v1.json"), Charsets.UTF_8).trim()
+        assertEquals(sidecar, BackupCodec.payloadToJson(decode("full-v1.conchbak")))
+    }
+
+    @Test
+    fun `full fixture decodes to the shared shape`() {
+        val p = decode("full-v1.conchbak")
+        assertEquals("2026-08-29T05:30:00Z", p.exportedAt)
+        assertEquals(BackupOrigin("android", "0.9.1"), p.origin)
 
         // ---- hosts
-        assertEquals(listOf("h-prod", "h-bastion"), p.hosts.map { it.id })
+        assertEquals(listOf("h-prod", "h-bastion", "h-v6"), p.hosts.map { it.id })
         val prod = p.hosts[0].toHost()
         assertEquals("生產機 prod", prod.alias)
         assertEquals("prod.example.com", prod.hostname)
@@ -77,6 +55,7 @@ class CrossPlatformBackupFixtureTest {
         assertEquals("alice", prod.username)
         assertEquals(Host.AUTH_KEY, prod.authType)
         assertEquals("k-phone", prod.keyId)
+        assertNull(p.hosts[0].password)
         assertEquals(14.5f, prod.fontSizeSp)
         assertFalse(prod.keepAlive)
         assertTrue(prod.tmuxAutoAttach)
@@ -84,6 +63,8 @@ class CrossPlatformBackupFixtureTest {
         assertEquals("h-bastion", prod.jumpHostId)
         assertEquals("Production", prod.group)
         assertEquals(listOf(7000, 8000, 9000), prod.knockPorts)
+        assertTrue(prod.forwardAgent)
+        assertTrue(prod.safExpose)
         assertEquals(
             listOf(
                 Tunnel(8080, "db.internal", 5432),
@@ -96,6 +77,7 @@ class CrossPlatformBackupFixtureTest {
         assertEquals("", bastion.alias)
         assertEquals(Host.AUTH_PASSWORD, bastion.authType)
         assertNull(bastion.keyId)
+        assertEquals("s3cret-パスワード🔑", p.hosts[1].password)
         assertEquals(0f, bastion.fontSizeSp)
         assertTrue(bastion.keepAlive)
         assertFalse(bastion.tmuxAutoAttach)
@@ -103,17 +85,17 @@ class CrossPlatformBackupFixtureTest {
         assertEquals("", bastion.group)
         assertTrue(bastion.knockPorts.isEmpty())
         assertTrue(bastion.tunnels.isEmpty())
+        assertEquals(0, bastion.socksPort)
         assertFalse(bastion.forwardAgent)
         assertFalse(bastion.safExpose)
 
-        // ---- secrets: "" and absent both mean "no password"
-        assertEquals("s3cret-パスワード🔑", p.hostSecrets["h-bastion"])
-        assertTrue(p.hostSecrets["h-prod"].isNullOrEmpty())
+        val v6 = p.hosts[2].toHost()
+        assertEquals("2001:db8::10", v6.hostname)
+        assertNull(p.hosts[2].password) // password auth, nothing stored → prompt
 
-        // ---- keys: createdAt is epoch millis, integer after decode
-        assertEquals(1, p.keys.size)
-        val key = p.keys[0]
-        assertEquals("k-phone", key.id)
+        // ---- keys
+        assertEquals(listOf("k-phone", "k-orphan"), p.keys.map { it.id })
+        val key = p.keys[0].toInfo()
         assertEquals("my-phone", key.name)
         assertEquals("ssh-ed25519", key.algorithm)
         assertEquals(1735689600123L, key.createdAt)
@@ -121,31 +103,74 @@ class CrossPlatformBackupFixtureTest {
         assertEquals("SHA256:parityfixture", key.fingerprint)
         assertEquals(
             "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture-not-a-real-key\n-----END OPENSSH PRIVATE KEY-----\n",
-            p.keySecrets["k-phone"],
+            p.keys[0].privateKey,
         )
+        assertNull(p.keys[1].privateKey)
+        assertEquals(1748779200000L, p.keys[1].toInfo().createdAt)
+        assertEquals(listOf("k-phone"), BackupManager.keyIdsToImport(emptySet(), p.keys))
 
         // ---- snippets
         assertEquals(
-            listOf(Snippet("s-disk", "磁碟", "df -h"), Snippet("s-multi", "q\"uote", "echo 'multi\nline'")),
+            listOf(Snippet("s-disk", "磁碟", "df -h"), Snippet("s-multi", "q\"uote", "echo 'multi\nline' && ls /")),
             p.snippets.map { it.toSnippet() },
         )
 
-        // ---- known_hosts: OpenSSH lines, newline-terminated
-        val lines = p.knownHosts.lines().filter { it.isNotBlank() }
-        assertEquals(2, lines.size)
-        assertTrue(lines[0].startsWith("[prod.example.com]:2222 ssh-ed25519 "))
-        assertTrue(lines[1].startsWith("bastion.example.com ssh-ed25519 "))
+        // ---- known hosts → OpenSSH lines
+        assertEquals(4, p.knownHosts.size)
+        assertTrue(p.knownHosts.all { it.isValid })
+        val lines = p.knownHosts.map { it.toLine() }
+        assertTrue(lines[0].startsWith("[prod.example.com]:2222 ssh-ed25519 AAAAC3"))
+        assertTrue(lines[1].startsWith("bastion.example.com ssh-ed25519 AAAAC3"))
+        assertTrue(lines[2].startsWith("[2001:db8::10] ssh-ed25519 AAAAC3"))
+        assertTrue(lines[3].startsWith("@revoked old.example.com ssh-ed25519 AAAAC3"))
+        assertEquals("revoked", p.knownHosts[3].marker)
+        // and back again, losslessly
+        assertEquals(p.knownHosts, lines.map { BackupKnownHost.parseLine(it) })
     }
 
     @Test
-    fun `platform flags survive an ios round trip`() {
-        // The iOS fixture was written from an Android backup that carried
-        // forwardAgent/safExpose — after the shared-format change iOS keeps
-        // them; before it they were dropped. This pins that the ANDROID
-        // fixture carries them (the iOS suite pins the pass-through).
-        val prod = decode("android-v1.til").hosts[0].toHost()
-        assertTrue(prod.forwardAgent)
-        assertTrue(prod.safExpose)
+    fun `sparse fixture applies every default and ignores unknown keys`() {
+        val p = decode("sparse-v1.conchbak")
+        assertEquals(BackupTime.EPOCH, p.exportedAt)
+        assertEquals(BackupOrigin(), p.origin)
+
+        assertEquals(1, p.hosts.size)
+        val h = p.hosts[0].toHost()
+        assertEquals("h-min", h.id)
+        assertEquals("", h.alias)
+        assertEquals("min.example.com", h.hostname)
+        assertEquals(22, h.port)
+        assertEquals("bob", h.username)
+        assertEquals("", h.group)
+        assertEquals(Host.AUTH_PASSWORD, h.authType)
+        assertNull(h.keyId)
+        assertNull(p.hosts[0].password)
+        assertNull(h.jumpHostId)
+        assertTrue(h.knockPorts.isEmpty())
+        assertTrue(h.tunnels.isEmpty())
+        assertEquals(0, h.socksPort)
+        assertEquals(0f, h.fontSizeSp)
+        assertTrue(h.keepAlive)
+        assertTrue(h.tmuxAutoAttach)
+        assertFalse(h.forwardAgent)
+        assertFalse(h.safExpose)
+
+        assertEquals(1, p.keys.size)
+        val k = p.keys[0].toInfo()
+        assertEquals("k-min", k.id)
+        assertEquals("", k.name)
+        assertEquals("", k.algorithm)
+        assertEquals(0L, k.createdAt)
+        assertEquals("", k.publicLine)
+        assertEquals("", k.fingerprint)
+        assertTrue(p.keys[0].privateKey!!.startsWith("-----BEGIN OPENSSH"))
+
+        assertEquals(listOf(Snippet("s-min", "", "")), p.snippets.map { it.toSnippet() })
+
+        assertEquals(1, p.knownHosts.size)
+        assertEquals(22, p.knownHosts[0].port)
+        assertNull(p.knownHosts[0].marker)
+        assertTrue(p.knownHosts[0].toLine().startsWith("min.example.com ssh-ed25519 "))
     }
 
     companion object {
