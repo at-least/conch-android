@@ -15,8 +15,7 @@ import org.junit.Test
  */
 class HistoricalFormatTest {
 
-    private fun fixture(name: String): String =
-        javaClass.getResourceAsStream("/format/$name")!!.readBytes().decodeToString()
+    private fun fixture(name: String): String = testResource("/format/$name").decodeToString()
 
     @Test
     fun `v0 hosts file with plaintext passwords decodes and keeps legacy fields out of the model`() {

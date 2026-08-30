@@ -19,8 +19,7 @@ import org.junit.Test
  */
 class CrossPlatformBackupFixtureTest {
 
-    private fun fixture(name: String): ByteArray =
-        javaClass.getResourceAsStream("/fixtures/backup/$name")!!.readBytes()
+    private fun fixture(name: String): ByteArray = testResource("/fixtures/backup/$name")
 
     private fun decode(name: String) = BackupCodec.decrypt(fixture(name), PASSPHRASE.toCharArray())
 

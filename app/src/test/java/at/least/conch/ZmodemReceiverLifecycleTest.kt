@@ -106,7 +106,7 @@ class ZmodemReceiverLifecycleTest {
     fun `ZRINIT carries its capability flags in ZF0 and an unlimited buffer`() {
         // hex frame: "**" ZDLE 'B' then hex(type, hdr0..3, crc16) CR LF
         val frame = String(ZmodemReceiver.zrinitBytes(), Charsets.ISO_8859_1)
-        val hex = frame.removePrefix("**B").removeSuffix("\r\n")
+        val hex = frame.removePrefix("**\u0018B").removeSuffix("\r\n")
         val bytes = hex.chunked(2).map { it.toInt(16) }
         assertEquals(ZmodemReceiver.ZRINIT, bytes[0])
         assertEquals("ZP0/ZP1 = receive buffer size, 0 = stream everything", 0, bytes[1] or bytes[2])

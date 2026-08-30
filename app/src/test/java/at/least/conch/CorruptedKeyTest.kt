@@ -62,11 +62,6 @@ class CorruptedKeyTest {
         }
     }
 
-    private fun pemFor(blob: ByteArray): String {
-        val b64 = Base64.getMimeEncoder(70, "\n".toByteArray()).encodeToString(blob)
-        return "-----BEGIN OPENSSH PRIVATE KEY-----\n$b64\n-----END OPENSSH PRIVATE KEY-----\n"
-    }
-
     private fun loadExpectSuccess(pem: String, expectedPublic: ByteArray) {
         val tmp = File.createTempFile("conch-corrupt", ".key")
         try {
@@ -153,7 +148,7 @@ class CorruptedKeyTest {
         val parsed = OpenSshKeyBlob(raw)
         val mutated = raw.copyOf()
         mutated[parsed.check2Offset] = ((mutated[parsed.check2Offset].toInt() + 1) and 0xFF).toByte()
-        loadExpectFailure(pemFor(mutated), "check1 != check2")
+        loadExpectFailure(opensshArmor(mutated), "check1 != check2")
     }
 
     @Test
@@ -165,7 +160,7 @@ class CorruptedKeyTest {
         if (parsed.paddingLength > 0) {
             val mutated = raw.copyOf()
             mutated[parsed.paddingOffset] = 0x7F // spec says padding must be 1,2,3,...
-            loadExpectFailure(pemFor(mutated), "padding byte 0x7F violates the spec")
+            loadExpectFailure(opensshArmor(mutated), "padding byte 0x7F violates the spec")
         }
     }
 
@@ -182,7 +177,7 @@ class CorruptedKeyTest {
         mutated[seedOffset] = (mutated[seedOffset].toInt() xor 0x55).toByte()
         // sshj trusts the embedded public section, so it loads with the SAME
         // public — but such a pair can no longer authenticate (priv != pub)
-        loadExpectSuccess(pemFor(mutated), wireBlobFor(pub))
+        loadExpectSuccess(opensshArmor(mutated), wireBlobFor(pub))
     }
 
     @Test
@@ -225,7 +220,7 @@ class CorruptedKeyTest {
         val raw = decodePem(pem)
         val mutated = raw.copyOf()
         mutated[13] = 'X'.code.toByte() // break "openssh-key-v1\0"
-        loadExpectFailure(pemFor(mutated), "bad magic")
+        loadExpectFailure(opensshArmor(mutated), "bad magic")
     }
 
     // ----------------------------------- stored-key loss at connect (plan 1.4)

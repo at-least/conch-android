@@ -18,8 +18,7 @@ import java.io.File
  */
 class KeyPassphraseImportTest {
 
-    private fun fixture(): ByteArray =
-        javaClass.getResourceAsStream("/encrypted_ed25519_openssh.key")!!.readBytes()
+    private fun fixture(): ByteArray = testResource("/encrypted_ed25519_openssh.key")
 
     @Test
     fun `sniff flags encrypted openssh v1 key`() {
@@ -31,19 +30,6 @@ class KeyPassphraseImportTest {
         val (seed, pub) = Ed25519Codec.generateKeyPair()
         val plain = Ed25519Codec.openSshPrivateKeyPem(seed, pub, "plain").toByteArray()
         assertFalse(KeyManager.looksEncrypted(plain))
-    }
-
-    @Test
-    fun `sniff does not prompt for encrypted forms the format policy refuses`() {
-        // these never reach the passphrase dialog: KeyPolicy rejects them first
-        assertFalse(
-            KeyManager.looksEncrypted("-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc".toByteArray())
-        )
-        assertFalse(
-            KeyManager.looksEncrypted(
-                "-----BEGIN EC PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-256-CBC".toByteArray()
-            )
-        )
     }
 
     @Test
