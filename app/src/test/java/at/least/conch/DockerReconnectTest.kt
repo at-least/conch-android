@@ -52,8 +52,17 @@ class DockerReconnectTest {
         runCatching { reconnector?.stop("teardown") }
         executor?.shutdownNow()
         dir.deleteRecursively()
-        // never leave the shared matrix frozen for the next test class
-        DockerMatrix.docker("unpause", DockerMatrix.CONTAINER_NAME, allowFailure = true)
+        // Never leave the shared matrix frozen for the next test class — but
+        // only when this class actually opted in. @After runs even when the
+        // test SKIPPED on requireMatrix()'s assumption, so without this guard
+        // every plain (non-opt-in) unit run shells out to `docker` three
+        // times. That costs nothing when the daemon is healthy and blocks for
+        // minutes when it is not, which is how a wedged Docker turns the
+        // ordinary unit suite into a hang (observed 2026-08-31: `docker ps`
+        // alone took >120 s).
+        if (DockerMatrix.optedIn()) {
+            DockerMatrix.docker("unpause", DockerMatrix.CONTAINER_NAME, allowFailure = true)
+        }
     }
 
     private class RecordingListener : SessionReconnector.Listener {

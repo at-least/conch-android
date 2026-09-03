@@ -230,11 +230,25 @@ class CommandHistoryTest {
         }
         (writers + clearer).forEach { it.start() }
         (writers + clearer).forEach { it.join() }
-        // Every write was a complete encrypted file: final state decrypts.
-        val final = mk().load()
+        // The real invariant: every write left a COMPLETE ciphertext behind.
+        // `load()` swallows a decrypt failure and returns an empty list, so
+        // asking it is not enough — go at the bytes directly. An empty file is
+        // the legitimate "clear() wrote last" outcome.
+        val raw = file.readBytes()
+        if (raw.isNotEmpty()) {
+            assertNotNull(
+                "file is a torn ciphertext (${raw.size} bytes): a record/clear race corrupted it",
+                HistoryCrypto.decrypt(key, raw),
+            )
+        }
+        // ...and the store is still usable afterwards: a fresh record must
+        // round-trip through the same file.
+        val store = mk()
+        store.record("sentinel", "after-the-race")
+        val reloaded = store.load()
         assertTrue(
-            "file must decrypt to a valid (possibly empty) list, got ${final.size} entries",
-            final.all { it.hostId.startsWith("h") }
+            "a record after the race did not survive a reload, got $reloaded",
+            reloaded.any { it.hostId == "sentinel" && it.text == "after-the-race" },
         )
     }
 }

@@ -2,6 +2,7 @@ package at.least.conch
 
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Assume
@@ -20,6 +21,24 @@ class SshErrorMappingInteractionTest {
         val port = s.localPort
         s.close()
         return port
+    }
+
+    /**
+     * The one mapping that cannot come from a real attempt cheaply: sshj
+     * raises its OWN wording — "Timeout expired: N MILLISECONDS", not the
+     * JDK's "timed out" — when a transport event (key exchange) never
+     * completes, i.e. a peer that sent its banner and then stopped. The
+     * string below is copied verbatim from an observed run against the
+     * matrix's :2271 banner-stall fixture. Without this branch the user is
+     * shown the raw "Timeout expired: 30000 MILLISECONDS
+     * (TransportException) cause: ...". The real end-to-end path is
+     * DockerHandshakeTimeoutTest; this pins the mapping on every PR, where
+     * the docker matrix does not run.
+     */
+    @Test
+    fun `sshj's own timeout wording maps to the timed-out message`() {
+        val e = net.schmizz.sshj.transport.TransportException("Timeout expired: 30000 MILLISECONDS")
+        assertEquals("Connection timed out", SshConnectionFactory.describeError(e))
     }
 
     @Test(timeout = 30_000)

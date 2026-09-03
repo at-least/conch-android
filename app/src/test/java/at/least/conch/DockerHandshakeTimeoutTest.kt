@@ -1,18 +1,10 @@
 package at.least.conch
 
-import net.schmizz.sshj.DefaultConfig
-import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
-import java.net.InetSocketAddress
-import java.net.Socket
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
-import kotlin.concurrent.thread
+import org.junit.rules.TemporaryFolder
 
 /**
  * Two ways a TCP connection can "succeed" and still never yield an SSH
@@ -23,87 +15,82 @@ import kotlin.concurrent.thread
  *   :2271 sends an SSH identification banner and then stalls forever.
  *
  * Neither can be reproduced by the in-process MINA server (which always
- * completes its handshake). The invariant pinned here is deterministic and
- * implementation-independent: a bounded connect attempt to such a peer must
- * NEVER produce a usable session. An external watchdog closes the client if
- * the attempt is still blocking, so the test never itself hangs — regardless
- * of whether sshj's own socket timeout happens to fire during key exchange.
+ * completes its handshake).
  *
- * NOTE ON THE APP PATH: [SshConnectionFactory] sets `ssh.timeout = 0`
- * (unbounded socket reads) on purpose — the same socket timeout governs the
- * long-lived interactive reader loop, so a small value would kill idle
- * sessions. The app therefore has NO handshake-level deadline today; a
- * wedged peer leaves a session "connecting" until TCP itself gives up. These
- * tests stand as the executable spec a future app-side handshake watchdog
- * would satisfy. Same opt-in as [DockerSshdAuthTest] (see [DockerMatrix]).
+ * THESE DRIVE THE APP'S OWN PATH ([SshConnectionFactory.connect] via
+ * [DockerMatrix.connect]). An earlier version of this file did not: it built
+ * its own `SSHClient` with `connectTimeout`/`timeout` values the app never
+ * set, so it passed no matter what the app did — and it stayed green for the
+ * whole time the app genuinely hung against these very fixtures. The lower
+ * bound on `elapsed` below exists for the same reason: without it the test
+ * would also pass if the fixture merely refused the connection, which is not
+ * what it claims to prove.
+ *
+ * The two fixtures are bounded by DIFFERENT mechanisms, which is why both
+ * are worth keeping:
+ *  - :2270 stalls before the banner, inside the read that
+ *    [SshConnectionFactory.HANDSHAKE_TIMEOUT_MS] bounds (~45 s). This is the
+ *    case that hung indefinitely until that budget existed.
+ *  - :2271 sends its banner and stalls during key exchange, which sshj's own
+ *    transport event timeout already bounds (~30 s) — but whose error wording
+ *    ("Timeout expired: 30000 MILLISECONDS") needed a describeError mapping
+ *    before the user saw anything readable.
+ *
+ * Same opt-in as [DockerSshdAuthTest] (see [DockerMatrix]).
  */
 class DockerHandshakeTimeoutTest {
 
-    private fun boundedClient(): SSHClient = SSHClient(DefaultConfig()).apply {
-        addHostKeyVerifier(PromiscuousVerifier())
-        connectTimeout = 6_000
-        timeout = 6_000
-    }
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val budgetMs = SshConnectionFactory.HANDSHAKE_TIMEOUT_MS
 
     /**
-     * Attempts [ssh].connect on a worker thread and waits up to [budgetMs].
-     * If the attempt is still blocking, the client is disconnected to unblock
-     * it. Returns whether a usable (connected) session was ever produced.
+     * Connects through the app path and returns how long the failure took.
+     * Fails the test if a session is somehow established.
      */
-    private fun connectYieldsSession(ssh: SSHClient, port: Int, budgetMs: Long): Boolean {
-        val done = CountDownLatch(1)
-        val connected = AtomicBoolean(false)
-        val err = AtomicReference<Throwable>()
-        thread(isDaemon = true, name = "handshake-probe") {
-            try {
-                ssh.connect("127.0.0.1", port)
-                connected.set(ssh.isConnected)
-            } catch (t: Throwable) {
-                err.set(t)
-            } finally {
-                done.countDown()
-            }
-        }
-        val finished = done.await(budgetMs, TimeUnit.MILLISECONDS)
-        // whether the attempt failed on its own or is still blocking, force
-        // the transport down so nothing is left hanging for the next test
-        runCatching { ssh.disconnect() }
-        if (finished && err.get() != null) {
-            // when it DID fail on its own, the app can render the reason
-            val e = err.get() as? Exception ?: Exception(err.get())
-            assertTrue(
-                "describeError produced nothing useful for: ${err.get()}",
-                SshConnectionFactory.describeError(e).isNotBlank(),
-            )
-        }
-        return connected.get()
+    private fun timeToFailure(port: Int): Pair<Long, Exception> {
+        val host = DockerMatrix.pwHost(port)
+        val t0 = System.currentTimeMillis()
+        val e = runCatching {
+            DockerMatrix.connect(KnownHostsStore(tmp.newFolder()), host, prompt = null).use { }
+        }.exceptionOrNull()
+        val elapsed = System.currentTimeMillis() - t0
+        assertTrue("a peer that never completes a handshake must not yield a session", e != null)
+        return elapsed to (e as Exception)
     }
 
-    @Test(timeout = 30_000)
-    fun `a port that accepts and never speaks never yields a session`() {
-        DockerMatrix.requireMatrix()
-        // sanity: the fixture really accepts TCP but sends nothing promptly
-        Socket().use { s ->
-            s.connect(InetSocketAddress("127.0.0.1", DockerMatrix.SILENT_ACCEPT_PORT), 3_000)
-            s.soTimeout = 1_500
-            val first = runCatching { s.getInputStream().read() }
-            assertTrue(
-                "silent-accept fixture unexpectedly sent data",
-                first.isFailure || first.getOrNull() == -1,
-            )
-        }
-        assertFalse(
-            "a silent-accept peer must never produce a usable session",
-            connectYieldsSession(boundedClient(), DockerMatrix.SILENT_ACCEPT_PORT, budgetMs = 12_000),
+    private fun assertBoundedStall(port: Int, what: String) {
+        val (elapsed, e) = timeToFailure(port)
+        // Upper: the whole point — it must give up, not block until TCP does.
+        assertTrue(
+            "$what: handshake was not bounded (${elapsed}ms, budget ${budgetMs}ms): $e",
+            elapsed < budgetMs + 25_000,
         )
+        // Lower: proves the fixture really stalled. A refused port fails in
+        // milliseconds and would make every assertion above vacuously true —
+        // which is exactly how the iOS twin of this test passed in 5 ms while
+        // testing nothing. Kept well clear of both real bounds (30 s / 45 s)
+        // so it discriminates refusal-vs-stall without racing either.
+        assertTrue(
+            "$what: failed in ${elapsed}ms — the fixture refused instead of stalling, so this proves nothing",
+            elapsed > 20_000,
+        )
+        assertEquals("$what: unhelpful message", "Connection timed out", SshConnectionFactory.describeError(e))
     }
 
-    @Test(timeout = 30_000)
-    fun `a banner-then-stall server never yields a session`() {
+    @Test(timeout = 120_000)
+    fun `a port that accepts and never speaks gives up within the handshake budget`() {
         DockerMatrix.requireMatrix()
-        assertFalse(
-            "a banner-then-stall peer must never produce a usable session",
-            connectYieldsSession(boundedClient(), DockerMatrix.BANNER_STALL_PORT, budgetMs = 12_000),
-        )
+        assertBoundedStall(DockerMatrix.SILENT_ACCEPT_PORT, "silent accept")
+    }
+
+    @Test(timeout = 120_000)
+    fun `a banner-then-stall server gives up within the handshake budget`() {
+        DockerMatrix.requireMatrix()
+        // The banner arrives at once and the stall happens in the NEXT read,
+        // so this pins that the budget covers key exchange, not just the
+        // first byte.
+        assertBoundedStall(DockerMatrix.BANNER_STALL_PORT, "banner then stall")
     }
 }

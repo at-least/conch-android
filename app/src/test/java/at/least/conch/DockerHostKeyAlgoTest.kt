@@ -94,31 +94,21 @@ class DockerHostKeyAlgoTest {
     }
 
     @Test(timeout = 60_000)
-    fun `legacy SHA-1 appliance connection outcome is recorded`() {
+    fun `legacy SHA-1 CBC appliance still connects`() {
         // The legacy instance does not start on bases whose OpenSSH dropped
         // SHA-1/CBC entirely (trixie/OpenSSH 10) — skip rather than fail there.
         DockerMatrix.requireOptionalInstance(
             DockerMatrix.LEGACY_PORT,
             "OpenSSH 10 refuses to offer SHA-1 kex / CBC ciphers",
         )
-        val e = runCatching {
-            DockerMatrix.connectPw(newStore(), DockerMatrix.LEGACY_PORT).use { ssh ->
-                assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
-            }
-        }.exceptionOrNull()
-        // sshj's DefaultConfig DOES carry group14-sha1 + CBC + ssh-rsa, so the
-        // app is expected to reach this old box. If a future sshj upgrade drops
-        // them the login will fail with a negotiation error — an intentional
-        // signal, surfaced here rather than silently.
-        if (e == null) {
-            println("[legacy] conch connected to the SHA-1/CBC appliance (sshj still offers those algorithms)")
-        } else {
-            println("[legacy] conch refused the SHA-1/CBC appliance: ${e.message}")
-            assertTrue(
-                "a legacy-refusal must be an algorithm negotiation failure, not something else: $e",
-                (e.message ?: "").contains("negotiat", true) ||
-                    e is net.schmizz.sshj.transport.TransportException,
-            )
+        // sshj's DefaultConfig carries group14-sha1 + CBC + ssh-rsa, so the app
+        // reaches this old box. Committed to as an assertion: the previous form
+        // accepted BOTH connecting and refusing and reported the outcome only
+        // via println, which CI never reads — so it could not fail. The day a
+        // sshj upgrade drops those algorithms this must go red; that is the
+        // signal, and losing support for old appliances is a real regression.
+        DockerMatrix.connectPw(newStore(), DockerMatrix.LEGACY_PORT).use { ssh ->
+            assertEquals("MATRIX_OK", DockerMatrix.exec(ssh, "echo MATRIX_OK").trim())
         }
     }
 }

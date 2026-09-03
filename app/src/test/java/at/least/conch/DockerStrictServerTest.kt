@@ -80,7 +80,21 @@ class DockerStrictServerTest {
             // now go fully idle: the server's ChannelTimeout (12 s) reaps the
             // shell, the reader loop hits EOF, and the app reports a disconnect
             val reason = cb.awaitDisconnected(25_000)
-            assertTrue("a reaped shell must not read as a clean user exit: $reason", reason.isNotBlank())
+            // The old assertion here was `reason.isNotBlank()`, which no
+            // change could ever fail: cleanCloseReason() returns one of two
+            // non-empty constants. Pin the real classification instead.
+            // The shell lived ~12 s (past MIN_SESSION_MS) before the
+            // server's ChannelTimeout reaped it, so the reader-loop EOF is
+            // read as a clean end-of-session.
+            assertEquals(SshSession.REASON_SESSION_ENDED, reason)
+            // KNOWN GAP, pinned so it is visible rather than implied: that
+            // makes isTerminalFailure() true, so a server-side idle reap
+            // does NOT reconnect — the app cannot tell it from the user
+            // typing `exit`. Flip these two lines the day it can.
+            assertTrue(
+                "a server-side reap is currently indistinguishable from a user exit",
+                SshSession.isTerminalFailure(reason),
+            )
         } finally {
             session.disconnect("test done")
         }

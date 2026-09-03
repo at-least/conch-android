@@ -132,9 +132,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     implementation("com.hierynomus:sshj:0.38.0")
-    // sshj declares eddsa runtime-only, so it ships in the APK but is not on
-    // the compile classpath; SshAgentSigner references EdDSA types directly.
-    implementation("net.i2p.crypto:eddsa:0.3.0")
+    // sshj 0.38 declares eddsa runtime-only, so it still ships in the APK for
+    // sshj's own Ed25519 handling; no app source compiles against it (the old
+    // comment's "SshAgentSigner" class does not exist — grep-verified).
+    // Upgrading to 0.40.0 is blocked on upstream issue #1018 (ECDSA PKCS#8
+    // parsing + ed25519 pubkey auth regressions, reproduced in our suite).
     implementation("org.slf4j:slf4j-android:1.7.36")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
@@ -176,7 +178,9 @@ dependencies {
     // In-process SSH server for JVM tests against real SSH interaction.
     testImplementation("org.apache.sshd:sshd-core:2.13.2")
     testImplementation("org.apache.sshd:sshd-sftp:2.13.2")
-    // i2p eddsa key types are what sshj (and this MINA version) expect for Ed25519.
+    // i2p eddsa key types are what sshj 0.38 and MINA sshd 2.13 expect for
+    // Ed25519 (TestSshd.generateEd25519); 0.40 would drop this need but is
+    // blocked on upstream #1018.
     testImplementation("net.i2p.crypto:eddsa:0.3.0")
     // slf4j-android's Log calls would hit android.jar stubs in JVM tests; use NOP instead.
     // Variant classpaths are named e.g. fossDebugUnitTestRuntimeClasspath.
