@@ -9,7 +9,6 @@
 #   host 2234 → 2224  pubkey only         keyuser (keyB, keyRSA, keyECDSA), bothuser (keyA)
 #   host 2235 → 2225  password + pubkey   forwarding allowed (tunnels, agent, jump, SOCKS)
 #   host 2236 → 2226  keyboard-interactive only (PAM)   same users as :2233
-#   host 2237 → 2227  gated: listens for 8 s after the UDP knock 2260,2261,2262
 #   host 2238 → 2228  hardened: Banner, MaxSessions 2, PermitOpen 127.0.0.1:2223,
 #                     CA-trusted certuser (keyA-cert.pub), cmduser (forced
 #                     command), restrictuser (restrict,pty), noptyuser (no-pty),
@@ -21,7 +20,6 @@
 #   host 2270 → 2270  accepts TCP, never sends a byte
 #   host 2271 → 2271  sends an SSH banner, then stalls
 #   [::1]:2233 → 2223 the password instance over IPv6
-#   host 2260-2262/udp → knockd
 #   + host docker socket mounted (Docker tab tests), NET_ADMIN (tc netem /
 #     iptables blackhole tests), a 1 MB tmpfs at /mnt/tiny (disk-full SFTP)
 #
@@ -175,10 +173,10 @@ start_default() {
     # shellcheck disable=SC2086
     docker run -d --init --name "$NAME" \
         --cap-add NET_ADMIN \
-        -p 127.0.0.1:2233-2242:2223-2232 \
+        -p 127.0.0.1:2233-2236:2223-2226 \
+        -p 127.0.0.1:2238-2242:2228-2232 \
         -p 127.0.0.1:2270-2271:2270-2271 \
         -p '[::1]:2233:2223' \
-        -p 127.0.0.1:2260-2262:2260-2262/udp \
         --tmpfs /mnt/tiny:size=1m,mode=1777 \
         -v "$KEYS_DIR":/keys:ro \
         $sock_mount \
@@ -189,7 +187,6 @@ start_default() {
         log "  127.0.0.1:2234  key-only: keyuser with keyB/keyRSA/keyECDSA, bothuser with keyA"
         log "  127.0.0.1:2235  forwarding allowed (same users as :2233)"
         log "  127.0.0.1:2236  keyboard-interactive only (same users as :2233)"
-        log "  127.0.0.1:2237  gated — knock udp 2260,2261,2262 first"
         log "  127.0.0.1:2238  hardened — banner, MaxSessions 2, PermitOpen, certuser, cmduser, restrictuser, noptyuser, sftponly/conch-pw-3"
         log "  127.0.0.1:2239  strict — MaxAuthTries 1, idle shell reaped after 12 s"
         log "  127.0.0.1:2240  ecdsa-only host key · 2241 rsa-only · 2242 legacy SHA-1/CBC"

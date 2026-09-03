@@ -73,7 +73,6 @@ data class BackupHost(
     val group: String = "",
     val auth: BackupAuth = BackupAuth(),
     val jumpHostId: String? = null,
-    val knockPorts: List<Int> = emptyList(),
     val forwards: List<BackupForward> = emptyList(),
     /** Terminal font size in points; absent = app default. */
     val fontSize: Double? = null,
@@ -100,7 +99,6 @@ data class BackupHost(
             jumpHostId = jumpHostId?.takeIf { it.isNotEmpty() },
             safExpose = exposeFiles,
             group = group.trim(),
-            knockPorts = knockPorts.filter(PortKnocker::isValidPort),
         )
         for (f in forwards) {
             when (f.type) {
@@ -145,7 +143,6 @@ data class BackupHost(
                 group = h.group.trim(),
                 auth = auth,
                 jumpHostId = h.jumpHostId,
-                knockPorts = h.knockPorts,
                 forwards = forwards,
                 fontSize = h.fontSizeSp.toDouble().takeIf { it > 0.0 },
                 keepAlive = h.keepAlive,

@@ -109,30 +109,28 @@ class GoldenFormatTest {
 
     @Test
     fun `golden host json - in-memory defaults and explicit null keyId`() {
-        // Host() constructed in code: tmux default ON, keyId null -> null literal
+        // Host() constructed in code: tmux default OFF, keyId null -> null literal
         val host = Host(id = "golden-2", hostname = "h", username = "u")
         assertEquals(
-            """{"alias":"","authType":"PASSWORD","fontSizeSp":0,"hostname":"h","id":"golden-2","keepAlive":true,"keyId":null,"port":22,"socksPort":0,"tmuxAutoAttach":true,"tunnels":[],"username":"u"}""",
+            """{"alias":"","authType":"PASSWORD","fontSizeSp":0,"hostname":"h","id":"golden-2","keepAlive":true,"keyId":null,"port":22,"socksPort":0,"tmuxAutoAttach":false,"tunnels":[],"username":"u"}""",
             canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host))),
         )
     }
 
     @Test
     @Suppress("MaxLineLength")
-    fun `golden host json - group knockPorts bindHost omitted at default, written when set`() {
+    fun `golden host json - group bindHost omitted at default, written when set`() {
         // Shared-format fields (docs/backup-format.md): absent == default,
         // so the goldens above stay byte-identical for hosts without them.
         val host = Host(id = "g-1", hostname = "h", username = "u")
         val off = canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host)))
         assertFalse(off.contains("group"))
-        assertFalse(off.contains("knockPorts"))
         host.group = " Prod "
-        host.knockPorts = listOf(7000, 8000)
         host.tunnels.add(Tunnel(9000, "127.0.0.1", 9001, remote = true, bindHost = "0.0.0.0"))
         // a LOCAL tunnel never carries bindHost, whatever the object holds
         host.tunnels.add(Tunnel(8080, "db", 5432, remote = false, bindHost = "ignored"))
         assertEquals(
-            """{"alias":"","authType":"PASSWORD","fontSizeSp":0,"group":"Prod","hostname":"h","id":"g-1","keepAlive":true,"keyId":null,"knockPorts":[7000,8000],"port":22,"socksPort":0,"tmuxAutoAttach":true,"tunnels":[{"bindHost":"0.0.0.0","host":"127.0.0.1","localPort":9000,"port":9001,"remote":true},{"host":"db","localPort":8080,"port":5432}],"username":"u"}""",
+            """{"alias":"","authType":"PASSWORD","fontSizeSp":0,"group":"Prod","hostname":"h","id":"g-1","keepAlive":true,"keyId":null,"port":22,"socksPort":0,"tmuxAutoAttach":false,"tunnels":[{"bindHost":"0.0.0.0","host":"127.0.0.1","localPort":9000,"port":9001,"remote":true},{"host":"db","localPort":8080,"port":5432}],"username":"u"}""",
             canon(ConchJson.encodeToString(HostWire.serializer(), HostWire.from(host))),
         )
     }
@@ -142,10 +140,11 @@ class GoldenFormatTest {
     fun `golden host decode - ios-written tunnel with redundant direction decodes by remote flag`() {
         val back = ConchJson.decodeFromString(
             HostWire.serializer(),
+            // knockPorts is a REMOVED field (feature deleted 2026-09); it stays
+            // in this fixture to pin that old on-disk hosts.json still decodes.
             """{"id":"x","hostname":"h","username":"u","group":"G","knockPorts":[1,70000,2],"tunnels":[{"direction":"REMOTE","remote":true,"localPort":9000,"host":"127.0.0.1","port":9001,"bindHost":"0.0.0.0"},{"direction":"LOCAL","localPort":1,"host":"a","port":2}]}""",
         ).toHost()
         assertEquals("G", back.group)
-        assertEquals(listOf(1, 2), back.knockPorts) // out-of-range knocks dropped on decode
         assertEquals(
             listOf(Tunnel(9000, "127.0.0.1", 9001, remote = true, bindHost = "0.0.0.0"), Tunnel(1, "a", 2)),
             back.tunnels,
@@ -172,9 +171,11 @@ class GoldenFormatTest {
 
     @Test
     fun `golden host decode - decode fallback defaults differ from in-memory defaults`() {
-        // THE tmux trap: absent field decodes to FALSE (pre-feature backups),
-        // while Host() in memory defaults to TRUE. Pinned by HostStoreJsonTest
-        // and re-pinned here at the raw-string level for the library swap.
+        // THE tmux trap: absent field decodes to FALSE (pre-feature backups)
+        // and Host() in memory now also defaults to FALSE (2026-09 default
+        // change; saved hosts carry their own explicit value). Pinned by
+        // HostStoreJsonTest and re-pinned here at the raw-string level for
+        // the library swap.
         val back = ConchJson.decodeFromString(
             HostWire.serializer(),
             """{"id":"x","hostname":"h","username":"u","authType":"GARBAGE","keyId":null}"""
@@ -276,7 +277,7 @@ class GoldenFormatTest {
             knownHosts = listOfNotNull(BackupKnownHost.parseLine("[prod.example.com]:2222 ssh-ed25519 $ED25519_BLOB")),
         )
         assertEquals(
-            """{"exportedAt":"2026-08-29T05:30:00Z","hosts":[{"auth":{"keyId":"k1","method":"key"},"exposeFiles":false,"fontSize":14.5,"forwards":[{"listenPort":8080,"targetHost":"db.internal","targetPort":5432,"type":"local"},{"listenHost":"0.0.0.0","listenPort":9000,"targetHost":"127.0.0.1","targetPort":9001,"type":"remote"},{"listenPort":1080,"type":"dynamic"}],"group":"","hostname":"prod.example.com","id":"h1","keepAlive":false,"knockPorts":[],"name":"prod","port":2222,"tmuxAutoAttach":false,"username":"alice"},{"auth":{"method":"password","password":"s3cret-パスワード🔑"},"exposeFiles":false,"forwards":[],"group":"","hostname":"b.example.com","id":"h2","keepAlive":true,"knockPorts":[],"name":"","port":22,"tmuxAutoAttach":true,"username":"bob"}],"keys":[{"algorithm":"ssh-ed25519","createdAt":"2025-01-01T00:00:00.123Z","fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n","publicKey":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":[{"algorithm":"ssh-ed25519","host":"prod.example.com","port":2222,"publicKey":"$ED25519_BLOB"}],"origin":{"appVersion":"0.9.1","platform":"android"},"snippets":[{"command":"df -h","id":"s1","label":"disk"}]}""",
+            """{"exportedAt":"2026-08-29T05:30:00Z","hosts":[{"auth":{"keyId":"k1","method":"key"},"exposeFiles":false,"fontSize":14.5,"forwards":[{"listenPort":8080,"targetHost":"db.internal","targetPort":5432,"type":"local"},{"listenHost":"0.0.0.0","listenPort":9000,"targetHost":"127.0.0.1","targetPort":9001,"type":"remote"},{"listenPort":1080,"type":"dynamic"}],"group":"","hostname":"prod.example.com","id":"h1","keepAlive":false,"name":"prod","port":2222,"tmuxAutoAttach":false,"username":"alice"},{"auth":{"method":"password","password":"s3cret-パスワード🔑"},"exposeFiles":false,"forwards":[],"group":"","hostname":"b.example.com","id":"h2","keepAlive":true,"name":"","port":22,"tmuxAutoAttach":false,"username":"bob"}],"keys":[{"algorithm":"ssh-ed25519","createdAt":"2025-01-01T00:00:00.123Z","fingerprint":"SHA256:xxx","id":"k1","name":"my-phone","privateKey":"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n","publicKey":"ssh-ed25519 AAAA… my-phone"}],"knownHosts":[{"algorithm":"ssh-ed25519","host":"prod.example.com","port":2222,"publicKey":"$ED25519_BLOB"}],"origin":{"appVersion":"0.9.1","platform":"android"},"snippets":[{"command":"df -h","id":"s1","label":"disk"}]}""",
             BackupCodec.payloadToJson(payload),
         )
     }

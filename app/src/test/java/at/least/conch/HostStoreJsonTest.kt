@@ -40,9 +40,10 @@ class HostStoreJsonTest {
     }
 
     @Test
-    fun `new hosts default to tmux auto attach`() {
-        // mobile-first default: sessions must survive network drops
-        assertTrue(Host().tmuxAutoAttach)
+    fun `new hosts default to tmux auto attach off`() {
+        // 2026-09 default change: opt-in, not opt-out — an explicit per-host
+        // choice, and saved hosts keep whatever they were saved with
+        assertFalse(Host().tmuxAutoAttach)
     }
 
     @Test

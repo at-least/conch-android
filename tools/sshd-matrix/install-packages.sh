@@ -2,15 +2,15 @@
 # Installs the matrix toolset on whichever distro BASE resolved to.
 # Required everywhere: sshd + ssh client, pgrep (readiness probe), nc,
 # iproute2 (`tc netem` slow-network tests), tmux, shadow tools (useradd /
-# chpasswd -e). Optional, best-effort: lrzsz (ZMODEM), knockd (port
-# knocking) — only the default Debian image is expected to have them.
+# chpasswd -e). Optional, best-effort: lrzsz (ZMODEM) — only the default
+# Debian image is expected to have it.
 set -eu
 
 if command -v apt-get >/dev/null 2>&1; then
     apt-get update -qq
     apt-get install -y --no-install-recommends \
         openssh-server openssh-client procps netcat-openbsd iproute2 iptables tmux
-    for p in lrzsz knockd; do
+    for p in lrzsz; do
         apt-get install -y --no-install-recommends "$p" || echo "optional package $p unavailable"
     done
     rm -rf /var/lib/apt/lists/*

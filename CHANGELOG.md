@@ -9,6 +9,15 @@
   v1/v2 are refused before any passphrase prompt, each with the
   `ssh-keygen -p` / `puttygen` command that converts it
 
+- **UDP port knocking removed** (shared decision with Conch iOS): zero
+  signal anyone used it and port-knocking itself is a fading practice.
+  The `PortKnocker`, its host-editor field, the `knockPorts` backup field
+  and the matrix's knockd instance are gone; backups written by older
+  releases still import (readers ignore unknown keys)
+- **tmux auto-attach now defaults to OFF for new hosts** (both platforms):
+  an explicit per-host choice instead of a global default; saved hosts
+  keep whatever they were saved with
+
 - **ssh-agent forwarding removed** (shared decision with Conch iOS, which
   never had it): multi-hop ProxyJump covers the bastion → inner-host case
   and is what OpenSSH recommends over `-A`, while forwarding hands your

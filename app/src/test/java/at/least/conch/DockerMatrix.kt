@@ -28,9 +28,6 @@ object DockerMatrix {
     /** host port → container 2226: keyboard-interactive (PAM) only, no "password" method. */
     const val KBD_INTERACTIVE_PORT = 2236
 
-    /** host port → container 2227: only listens for 8 s after the UDP knock sequence. */
-    const val GATED_PORT = 2237
-
     /**
      * host port → container 2228: hardened server — SSH banner, MaxSessions 2,
      * PermitOpen 127.0.0.1:2223 only, a CA-trusted [certuser][CERT_PRINCIPAL],
@@ -57,9 +54,6 @@ object DockerMatrix {
 
     /** host port → container 2271: sends an SSH banner, then stalls forever (handshake timeout fixture). */
     const val BANNER_STALL_PORT = 2271
-
-    /** UDP knock sequence knockd watches for (same numbers on host and in the container). */
-    val KNOCK_PORTS = listOf(2260, 2261, 2262)
 
     /** sshd port INSIDE the container (targets of direct-tcpip / inner ssh). */
     const val CONTAINER_SSH_PORT = 2223
@@ -222,8 +216,8 @@ object DockerMatrix {
 
     /**
      * A matrix port that is optional on some bases (the legacy SHA-1 instance
-     * is refused to start by OpenSSH 10; the PAM/knockd instances are absent
-     * where the package is): opted-in but unreachable SKIPS rather than fails,
+     * is refused to start by OpenSSH 10; the PAM instance is absent where the
+     * package is): opted-in but unreachable SKIPS rather than fails,
      * because the fixture itself documents "not available on this base".
      */
     fun requireOptionalInstance(port: Int, why: String) {

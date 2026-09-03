@@ -35,6 +35,37 @@ object SshConnectionFactory {
     const val KEEP_ALIVE_MAX_UNANSWERED = 3
 
     /**
+     * Deadline for a single blocked read during the HANDSHAKE, in ms.
+     * 45 s matches iOS's `SSHManager.handshakeTimeout` (parity directive).
+     *
+     * sshj applies this as the socket's SO_TIMEOUT in `onConnect()`, and
+     * SO_TIMEOUT only counts time spent BLOCKED IN A READ — which is exactly
+     * the semantics wanted here: the seconds a user spends reading the TOFU
+     * fingerprint prompt are spent inside `TofuHostKeyVerifier.verify()`
+     * (which waits up to 60 s on the human), not inside a socket read, so
+     * they never count against this budget.
+     *
+     * What it bounds: a peer that accepts the TCP connection and then goes
+     * silent — captive portal, half-open firewall, wedged server. Before
+     * this, such a peer left
+     * the connect blocked until TCP itself gave up (minutes, or forever):
+     * `connectTimeout` only covers the dial, which such a peer completes.
+     *
+     * It is not the only bound in play: once the banner HAS arrived, sshj's
+     * own transport event timeout (TransportImpl, 30 s by default) already
+     * covers a peer that stalls during key exchange. This budget is what
+     * covers the phase before that — the banner read itself, which is where
+     * a silent peer parks forever.
+     *
+     * What it does NOT bound, stated plainly rather than implied:
+     *  - a peer that drips one byte every 44 s (each read succeeds, so the
+     *    window restarts) — only a total-deadline watchdog would catch that;
+     *  - a JUMPED handshake: `connectVia` reads from the jump channel's
+     *    streams and leaves `socket` null, so no SO_TIMEOUT is applied.
+     */
+    const val HANDSHAKE_TIMEOUT_MS = 45_000
+
+    /**
      * Prefix for errors that only editing the host record can fix (no
      * password saved, key auth with no key chosen, jump host deleted). The
      * reconnector treats these as terminal — retrying with backoff forever
@@ -163,9 +194,12 @@ object SshConnectionFactory {
         val ssh = if (jump != null) JumpedClient(config, jump) else SSHClient(config)
         ssh.addHostKeyVerifier(TofuHostKeyVerifier(store, prompt, mainHandler))
         ssh.connectTimeout = 10_000
-        ssh.timeout = 0
+        // Bounded only for the handshake; cleared the moment the session is
+        // up (below), because the SAME SO_TIMEOUT then governs the
+        // long-lived interactive reader loop, where any finite value would
+        // kill idle sessions. See [HANDSHAKE_TIMEOUT_MS].
+        ssh.timeout = HANDSHAKE_TIMEOUT_MS
         ssh.useCompression()
-
         try {
             if (jump != null) {
                 // Inside the try: a target that is unreachable through the
@@ -173,19 +207,37 @@ object SshConnectionFactory {
                 // already-authenticated jump transport (one per retry).
                 ssh.connectVia(jump.newDirectConnection(host.hostname, host.port))
             } else {
-                // Port knocking (iOS parity): the firewall opens the SSH
-                // port on seeing the UDP sequence from THIS device, so a
-                // jumped target (dialed by the jump host) is not knocked.
-                if (host.knockPorts.isNotEmpty()) PortKnocker.knock(host.hostname, host.knockPorts)
                 ssh.connect(host.hostname, host.port)
             }
             authenticate(ssh, host, keyProvider, password)
-            if (host.keepAlive) {
-                ssh.connection.keepAlive.apply {
-                    keepAliveInterval = KEEP_ALIVE_INTERVAL_SECONDS
-                    (this as? KeepAliveRunner)?.maxAliveCount = KEEP_ALIVE_MAX_UNANSWERED
-                }
-            }
+            // Handshake is over — hand the reader loop back an unbounded
+            // socket. sshj's setTimeout() only writes its own field (it is
+            // applied to the socket once, in onConnect()), so the live
+            // socket has to be cleared directly. A jumped client has no
+            // socket of its own, hence the null-safety.
+            ssh.timeout = 0
+            ssh.socket?.let { it.soTimeout = 0 }
+            // Keep-alive, started BY HAND and only now.
+            //
+            // Two sshj facts make this the only correct placement. (1)
+            // `setKeepAliveInterval()` merely writes a field — the thread is
+            // started in SSHClient.onConnect(), and only `if
+            // (keepAlive.isEnabled())`, i.e. the interval was already > 0.
+            // The KeepAlive constructor sets it to 0, so configuring the
+            // interval AFTER connect (as this did until 2026-08-31) left the
+            // thread never started and the app with NO keep-alive at all —
+            // the silent-transport detection described on the constants above
+            // was inert, and DockerReconnectTest's frozen-peer case had been
+            // failing on exactly that. (2) But setting it before connect() is
+            // not the fix: onConnect() starts the thread BEFORE doKex(), and
+            // KeepAlive.run() beats once immediately, so the first beat races
+            // key exchange — which made the unit suite fail intermittently
+            // with "Timeout expired: 30000 MILLISECONDS" inside doKex().
+            //
+            // Starting it here, after auth, gives a running keep-alive with
+            // no KEX race. sshj will not have auto-started it, because the
+            // interval was still 0 at onConnect().
+            if (host.keepAlive) startKeepAlive(ssh)
         } catch (e: Exception) {
             // Without this the socket and sshj reader threads (and the jump
             // client, via JumpedClient) leak on every failed attempt.
@@ -193,6 +245,37 @@ object SshConnectionFactory {
             throw e
         }
         return ssh
+    }
+
+    /**
+     * Starts sshj's transport keep-alive BY HAND, after authentication.
+     *
+     * HISTORY, so the next person does not re-derive it: turning the thread
+     * on made the unit suite look flaky (three runs, 1-3 failures each, never
+     * the same tests). That was NOT this change. The cause was
+     * DockerReconnectTest's `@After`, which called `docker("unpause", ...)`
+     * unconditionally — and JUnit runs `@After` even when the test SKIPPED on
+     * requireMatrix()'s assumption, so every plain (non-opt-in) unit run
+     * shelled out to `docker` three times. That is free when the daemon is
+     * healthy and blocks for minutes when it is not (2026-08-31: `docker ps`
+     * alone took >120 s here). With that teardown gated on optedIn(), the
+     * full unit suite runs green with this keep-alive live.
+     *
+     * An earlier guess — tests abandoning an SSHClient without disconnect(),
+     * each leaking a keep-alive thread — was checked against the most
+     * frequent offender (SshConnectAuthInteractionTest) and did NOT hold: its
+     * connects are paired with disconnect() in a finally, and the unpaired
+     * ones are expected-to-fail connects with no client to leak.
+     */
+    private fun startKeepAlive(ssh: SSHClient) {
+        ssh.connection.keepAlive.apply {
+            keepAliveInterval = KEEP_ALIVE_INTERVAL_SECONDS
+            (this as? KeepAliveRunner)?.maxAliveCount = KEEP_ALIVE_MAX_UNANSWERED
+            // Guard, not decoration: if a future sshj auto-starts the thread
+            // after all, a second start() would throw
+            // IllegalThreadStateException here and fail EVERY connect.
+            if (state == Thread.State.NEW) start()
+        }
     }
 
     private fun authenticate(
@@ -248,7 +331,14 @@ object SshConnectionFactory {
     fun describeError(e: Exception): String = when {
         e is java.net.UnknownHostException -> "Cannot resolve hostname"
         e.message?.contains("Connection refused", true) == true -> "Connection refused (port closed?)"
-        e is java.net.SocketTimeoutException || e.message?.contains("timed out", true) == true ->
+        // "timed out" is the JDK socket wording; "Timeout expired" is sshj's
+        // own, raised when a transport event (key exchange) never completes
+        // — a wedged peer that sent its banner and then stopped. Without the
+        // second spelling the user is shown the raw
+        // "Timeout expired: 30000 MILLISECONDS (TransportException) cause: …".
+        e is java.net.SocketTimeoutException ||
+            e.message?.contains("timed out", true) == true ||
+            e.message?.contains("timeout expired", true) == true ->
             "Connection timed out"
         e is net.schmizz.sshj.userauth.UserAuthException -> "Authentication failed: ${e.message}"
         e.message?.contains("Auth fail", true) == true -> "Authentication failed (wrong user/password/key?)"

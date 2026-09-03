@@ -2,8 +2,6 @@
 # Sets up auth-scenario users and runs the sshd instances of the matrix:
 #   :2223 pw+pubkey, :2224 pubkey-only, :2225 pw+pubkey with forwarding,
 #   :2226 keyboard-interactive via PAM (only where PAM is installed),
-#   :2227 "gated": firewalled until knockd sees the UDP sequence 2260,2261,2262
-#         (only where iptables + knockd are installed),
 #   :2228 "hardened": Banner, MaxSessions 2, PermitOpen to the inner sshd
 #         only, a CA-trusted certificate user, authorized_keys option users
 #         (forced command / restrict / no-pty) and a chrooted SFTP-only user,
@@ -147,9 +145,6 @@ write_cfg fwd 2225 yes 'AllowTcpForwarding yes'
 # plain "password" auth is refused; the client must answer the PAM prompt.
 write_cfg kbd 2226 no 'UsePAM yes' 'KbdInteractiveAuthentication yes'
 
-# Gated instance: nothing listens on 2227 until knockd sees the sequence.
-write_cfg gated 2227 yes
-
 # Hardened: the policy knobs real admins turn. PermitOpen lets tunnels reach
 # only the inner sshd; MaxSessions 2 = shell + one more channel; the CA
 # makes certificate auth possible for certuser; the Match block turns
@@ -197,7 +192,7 @@ write_cfg legacy 2232 yes \
     'MACs hmac-sha1' \
     'HostKeyAlgorithms ssh-rsa'
 
-for i in pwpub fwd gated hardened strict ecdsa rsa; do
+for i in pwpub fwd hardened strict ecdsa rsa; do
     /usr/sbin/sshd -f "/etc/ssh/sshd_config_$i" -E "/var/log/sshd_$i.log"
 done
 /usr/sbin/sshd -f /etc/ssh/sshd_config_legacy -E /var/log/sshd_legacy.log \
@@ -210,43 +205,43 @@ else
 fi
 
 # Handshake-timeout fixtures: a port that accepts and never speaks, and one
-# that sends a banner and then stalls. One client at a time each; the
-# loops restart nc after every client. stdin never reaches EOF so nc never
+# that sends a banner and then stalls. stdin never reaches EOF so nc never
 # half-closes the socket — the client must give up on its own.
-(while :; do sleep 2147483647 | nc -l 2270 >/dev/null 2>&1; done) &
-(while :; do (printf 'SSH-2.0-OpenSSH_9.2 conch-stall\r\n'; sleep 2147483647) | nc -l 2271 >/dev/null 2>&1; done) &
-
-# Realistic port knocking: the gated sshd (:2227) is already listening, but
-# the firewall DROPs new connections to it until knockd sees the UDP
-# sequence and inserts a time-limited ACCEPT — exactly how a real knockd
-# guards an always-running sshd, and (unlike spawning sshd on the knock)
-# with no start-up race against the client's immediate dial.
-if command -v iptables >/dev/null 2>&1 && iptables -N CONCH_GATE 2>/dev/null; then
-    iptables -A INPUT -p tcp --dport 2227 -j CONCH_GATE
-    iptables -A CONCH_GATE -j DROP
-    gate_ok=1
+#
+# DURABILITY: these must survive every client, because when they die the
+# port stays PUBLISHED and Docker's proxy answers it with an instant EOF —
+# which looks like a fast, clean failure and makes a "gives up quickly"
+# assertion pass while testing nothing. (Seen 2026-08-31: both loops were
+# gone after a few runs, and conch-ios's two stall tests had been "passing"
+# in 5 ms against exactly that.) :2270 therefore uses nc's own -k
+# (keep listening) rather than a restart loop; :2271 must re-send its
+# banner per client so it keeps the loop, with a guard sleep so a failed
+# bind cannot spin.
+# :2270 — nc -k accepts client after client from ONE process.
+sleep 2147483647 | nc -lk 2270 >/dev/null 2>&1 &
+# :2271 — must re-send its banner per client, which a single nc stdin cannot
+# do, and a `while :; do ... nc -l ...; done` loop does NOT recycle: with
+# stdin held open by a sleep, nc never exits after its client leaves, so the
+# loop is stuck on iteration 1 with the port bound but no longer accepting
+# (verified 2026-08-31 — neither -w nor a guard sleep changes it). perl is in
+# the debian/rocky bases that publish these ports; the nc loop stays as the
+# fallback so a base without perl is no worse off than before.
+if command -v perl >/dev/null 2>&1; then
+    perl -MIO::Socket::INET -e '
+        my $l = IO::Socket::INET->new(LocalPort => 2271, Listen => 16,
+                                      ReuseAddr => 1, Proto => "tcp") or exit 1;
+        my @held;
+        while (my $c = $l->accept) {
+            $c->autoflush(1);
+            print {$c} "SSH-2.0-OpenSSH_9.2 conch-stall\r\n";
+            # never close: the client must give up on its own. Bounded so a
+            # long run cannot exhaust file descriptors.
+            push @held, $c;
+            (shift @held)->close if @held > 32;
+        }
+    ' >/dev/null 2>&1 &
 else
-    echo "iptables unavailable: gated instance (:2227) left open"
-    gate_ok=0
-fi
-
-if [ "$gate_ok" = 1 ] && command -v knockd >/dev/null 2>&1; then
-    cat > /etc/knockd.conf <<'KNOCK'
-[options]
-    logfile = /var/log/knockd.log
-    interface = eth0
-
-[openGate]
-    sequence      = 2260:udp,2261:udp,2262:udp
-    seq_timeout   = 5
-    start_command = iptables -I CONCH_GATE 1 -s %IP% -p tcp --dport 2227 -j ACCEPT
-    cmd_timeout   = 8
-    stop_command  = iptables -D CONCH_GATE -s %IP% -p tcp --dport 2227 -j ACCEPT
-KNOCK
-    pkill knockd 2>/dev/null || true
-    knockd -d -c /etc/knockd.conf || echo "knockd failed to start (pcap on eth0?)"
-elif [ "$gate_ok" = 1 ]; then
-    echo "no knockd on this base: gated instance (:2227) stays firewalled"
+    (while :; do { printf 'SSH-2.0-OpenSSH_9.2 conch-stall\r\n'; sleep 2147483647; } | nc -l 2271 >/dev/null 2>&1; sleep 1; done) &
 fi
 
 exec /usr/sbin/sshd -D -f /etc/ssh/sshd_config_keyonly -E /var/log/sshd_keyonly.log

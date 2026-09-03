@@ -80,8 +80,6 @@ data class HostWire(
     @EncodeDefault(Mode.NEVER) val safExpose: Boolean = false,
     /** Host-list group ("" = ungrouped). Shared with iOS; omitted when empty. */
     @EncodeDefault(Mode.NEVER) val group: String = "",
-    /** UDP port-knock sequence sent before dialing (empty = off). Shared with iOS; omitted when empty. */
-    @EncodeDefault(Mode.NEVER) val knockPorts: List<Int> = emptyList(),
 ) {
     fun toHost(): Host {
         val host = Host(
@@ -99,7 +97,6 @@ data class HostWire(
             jumpHostId = jumpHostId,
             safExpose = safExpose,
             group = group.trim(),
-            knockPorts = knockPorts.filter(PortKnocker::isValidPort),
         )
         host.tunnels.addAll(tunnels.map { it.toTunnel() })
         return host
@@ -122,7 +119,6 @@ data class HostWire(
             jumpHostId = h.jumpHostId,
             safExpose = h.safExpose,
             group = h.group.trim(),
-            knockPorts = h.knockPorts,
         )
     }
 }
@@ -137,10 +133,10 @@ data class Host(
     var keyId: String? = null,
     var fontSizeSp: Float = 0f, // 0 = app default
     var keepAlive: Boolean = true,
-    // Default ON for newly created hosts (mobile networks drop; tmux keeps
-    // the session alive server-side). HostWire decodes its own fallback of
-    // false so pre-feature backups and saved hosts stay exactly as they were.
-    var tmuxAutoAttach: Boolean = true,
+    // Default OFF for newly created hosts. HostWire decodes its own fallback
+    // of false so pre-feature backups and saved hosts stay exactly as they
+    // were.
+    var tmuxAutoAttach: Boolean = false,
     var socksPort: Int = 0, // local SOCKS5 proxy (0 = off)
     /** ProxyJump: id of another saved host to tunnel this connection through (null = direct). */
     var jumpHostId: String? = null,
@@ -148,8 +144,6 @@ data class Host(
     var safExpose: Boolean = false,
     /** Optional host-list group; blank = the ungrouped section (see [HostGrouping]). */
     var group: String = "",
-    /** UDP port-knock sequence fired before dialing, in order (see [PortKnocker]); empty = off. */
-    var knockPorts: List<Int> = emptyList(),
     var tunnels: MutableList<Tunnel> = mutableListOf(),
 ) {
     companion object {

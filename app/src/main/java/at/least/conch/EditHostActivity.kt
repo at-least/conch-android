@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.BottomAppBarDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -105,17 +106,6 @@ class EditHostActivity : ComponentActivity() {
     }
 }
 
-/** A settings-style group heading — the Material pattern for sectioned forms. */
-@Composable
-private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(top = 8.dp),
-    )
-}
-
 /**
  * A boolean host option. `ListItem` + `Switch` is the native Material row:
  * the whole row toggles, the label and explanation get the right type
@@ -173,12 +163,11 @@ private fun EditHostScreen(
         mutableStateOf(if ((initial?.fontSizeSp ?: 0f) > 0f) initial!!.fontSizeSp.toInt().toString() else "")
     }
     var keepAlive by rememberSaveable { mutableStateOf(initial?.keepAlive ?: true) }
-    var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: true) }
+    var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: false) }
     var safExpose by rememberSaveable { mutableStateOf(initial?.safExpose ?: false) }
     var group by rememberSaveable { mutableStateOf(initial?.group.orEmpty()) }
     var groupMenuOpen by rememberSaveable { mutableStateOf(false) }
     val existingGroups = remember(otherHosts) { HostGrouping.groupNames(otherHosts) }
-    var knockText by rememberSaveable { mutableStateOf(PortKnocker.format(initial?.knockPorts.orEmpty())) }
     var socksPortText by rememberSaveable {
         mutableStateOf(if ((initial?.socksPort ?: 0) > 0) initial!!.socksPort.toString() else "")
     }
@@ -230,15 +219,22 @@ private fun EditHostScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = flatTopAppBarColors(),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             // The primary action stays reachable instead of living at the
-            // bottom of a long scroll.
-            BottomAppBar {
+            // bottom of a long scroll. Flat, matching the background — a
+            // tinted bar here would read as a second, disconnected surface.
+            BottomAppBar(
+                containerColor = MaterialTheme.colorScheme.background,
+                tonalElevation = 0.dp,
+                contentPadding = BottomAppBarDefaults.ContentPadding,
+            ) {
                 Button(
+                    shape = MaterialTheme.shapes.extraLarge,
                     onClick = {
                         showErrors = true
                         val valid = hostname.isNotBlank() && username.isNotBlank() &&
@@ -269,7 +265,6 @@ private fun EditHostScreen(
                                 jumpHostId = jumpHostId,
                                 safExpose = safExpose,
                                 group = group.trim(),
-                                knockPorts = PortKnocker.parse(knockText),
                                 tunnels = tunnels.toMutableList(),
                             ),
                             password
@@ -295,7 +290,7 @@ private fun EditHostScreen(
             val field = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-            SectionHeader("Connection", Modifier.padding(horizontal = 16.dp))
+            GroupHeader("Connection")
             OutlinedTextField(
                 value = alias,
                 onValueChange = { alias = it },
@@ -390,7 +385,7 @@ private fun EditHostScreen(
             }
 
             HorizontalDivider()
-            SectionHeader("Authentication", Modifier.padding(horizontal = 16.dp))
+            GroupHeader("Authentication")
             // Exclusive choice → segmented buttons, the Material control for
             // exactly this (two filter chips only look mutually exclusive).
             SingleChoiceSegmentedButtonRow(field) {
@@ -542,7 +537,7 @@ private fun EditHostScreen(
             }
 
             HorizontalDivider()
-            SectionHeader("Session", Modifier.padding(horizontal = 16.dp))
+            GroupHeader("Session")
             SwitchRow(
                 title = "Keep-alive",
                 supporting = "Send a heartbeat every 15 seconds so idle firewalls don't drop the connection.",
@@ -575,25 +570,7 @@ private fun EditHostScreen(
             )
 
             HorizontalDivider()
-            SectionHeader("Port knocking (UDP)", Modifier.padding(horizontal = 16.dp))
-            OutlinedTextField(
-                value = knockText,
-                onValueChange = { knockText = it },
-                label = { Text("Knock sequence") },
-                placeholder = { Text("7000, 8000, 9000") },
-                supportingText = {
-                    Text(
-                        "Sent before connecting, in order. Your firewall/knock daemon opens the SSH port " +
-                            "after seeing the sequence. Blank = off."
-                    )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = field
-            )
-
-            HorizontalDivider()
-            SectionHeader("Port forwarding", Modifier.padding(horizontal = 16.dp))
+            GroupHeader("Port forwarding")
             OutlinedTextField(
                 value = socksPortText,
                 onValueChange = { socksPortText = it },

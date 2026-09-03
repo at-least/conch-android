@@ -22,7 +22,6 @@ FULL = {
             "group": "Production",
             "auth": {"method": "key", "keyId": "k-phone"},
             "jumpHostId": "h-bastion",
-            "knockPorts": [7000, 8000, 9000],
             "forwards": [
                 {"type": "local", "listenPort": 8080, "targetHost": "db.internal", "targetPort": 5432},
                 {"type": "remote", "listenHost": "0.0.0.0", "listenPort": 9000, "targetHost": "127.0.0.1", "targetPort": 9001},
@@ -41,7 +40,6 @@ FULL = {
             "username": "alice",
             "group": "",
             "auth": {"method": "password", "password": "s3cret-パスワード🔑"},
-            "knockPorts": [],
             "forwards": [],
             "keepAlive": True,
             "tmuxAutoAttach": False,
@@ -55,7 +53,6 @@ FULL = {
             "username": "root",
             "group": "",
             "auth": {"method": "password"},
-            "knockPorts": [],
             "forwards": [],
             "keepAlive": True,
             "tmuxAutoAttach": True,
@@ -93,10 +90,18 @@ FULL = {
     ],
 }
 
-# Minimal writer + forward-compat: every optional field absent, unknown keys everywhere.
+# Minimal writer + forward-compat: every optional field absent, unknown keys
+# everywhere. knockPorts is a REMOVED field (port knocking deleted 2026-09);
+# keeping it here pins that backups written by older releases still import.
 SPARSE = {
     "hosts": [
-        {"id": "h-min", "hostname": "min.example.com", "username": "bob", "futureField": {"nested": True}},
+        {
+            "id": "h-min",
+            "hostname": "min.example.com",
+            "username": "bob",
+            "knockPorts": [7000, 8000, 9000],
+            "futureField": {"nested": True},
+        },
     ],
     "keys": [
         {"id": "k-min", "privateKey": PEM, "futureField": 1},

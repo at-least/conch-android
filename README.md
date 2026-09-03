@@ -32,11 +32,10 @@ Built for people who manage servers from their phone: ops, devs, and anyone left
 - **Connection health banner** — four states (connecting / connected / reconnecting(n) / stopped) with a status dot that pulses on the 15-second keep-alive heartbeat; tap the amber banner to give up retrying
 - **Multiple concurrent sessions** — "Connect (new session)" opens another terminal; each gets its own persistent notification
 - **Foreground service** keeps sessions alive when backgrounded (survives Android's task killers)
-- **tmux auto-attach on by default** for new hosts (`tmux new -A -s conch`) — a dropped connection never loses your work; existing hosts keep their saved setting
+- **tmux auto-attach (opt-in)** per host (`tmux new -A -s conch`) — with it on, a dropped connection never loses your work; existing hosts keep their saved setting
 - **Why no mosh?** tmux auto-attach + auto-reconnect already deliver mosh's core promise — work survives drops and network switches, and the client comes back on its own — over plain SSH with no extra server daemon. A native mosh client is not on the roadmap (no JVM implementation exists to build on)
 - **Port forwarding**: local (-L) and remote (-R, with server bind address) tunnels per host + **SOCKS5 dynamic forwarding** (point any socks5-aware app at `127.0.0.1:<port>`)
 - **ProxyJump, multi-hop** — "Connect via" a saved host whose own jump host is followed too (up to 3 hops); every hop uses its own credentials and host-key pin, failures name the hop, and the editor refuses choices that would form a cycle
-- **UDP port knocking** — an ordered knock sequence sent before every dial, for firewalls that hide the SSH port
 - Keep-alive, per-host terminal font size, OSC window-title tracking
 
 ### Authentication & security
@@ -166,7 +165,6 @@ app/src/main/java/at/least/conch/
   LiveSessions.kt          # process-level live-session registry
   HostCardStatus.kt        # pure host-card live badge derivation
   HostGrouping.kt          # pure host-list grouping/search (iOS parity)
-  PortKnocker.kt           # UDP port-knock sequence before dial
   MonitorActivity.kt       # metrics dashboard (standalone entry point; pure parser unit-tested)
   DockerActivity.kt        # container management (standalone entry point; docker CLI over SSH)
   SessionService.kt        # foreground service keeping sessions alive
@@ -190,7 +188,6 @@ runs many sshd configs on 127.0.0.1 with fixed users and throwaway test keys:
 | 2234 | pubkey only | key auth (ed25519 / RSA-3072 / ECDSA-P256), refused password, unknown key, FIDO2 `sk-ssh-ed25519` authorized_keys entry |
 | 2235 | forwarding allowed | -L/-R tunnels, ProxyJump into the container's inner sshd, SOCKS5 |
 | 2236 | keyboard-interactive only (PAM) | the 2FA-prompt server shape through the plain password path |
-| 2237 | gated by knockd | port knocking: opens for 8 s after UDP 2260,2261,2262 |
 | 2238 | hardened | login `Banner`, CA-trusted certificate user, forced-command / `restrict` / `no-pty` authorized_keys keys, `MaxSessions 2`, `PermitOpen`, chrooted `internal-sftp` account |
 | 2239 | strict | `MaxAuthTries 1`, `ChannelTimeout` idle-shell reaping |
 | 2240 / 2241 | ecdsa-only / rsa-only host key | host-key type pinned by TOFU and matched on promptless reconnect |

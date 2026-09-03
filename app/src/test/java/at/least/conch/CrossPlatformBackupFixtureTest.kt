@@ -61,7 +61,6 @@ class CrossPlatformBackupFixtureTest {
         assertEquals(1080, prod.socksPort)
         assertEquals("h-bastion", prod.jumpHostId)
         assertEquals("Production", prod.group)
-        assertEquals(listOf(7000, 8000, 9000), prod.knockPorts)
         assertTrue(prod.safExpose)
         assertEquals(
             listOf(
@@ -81,7 +80,6 @@ class CrossPlatformBackupFixtureTest {
         assertFalse(bastion.tmuxAutoAttach)
         assertNull(bastion.jumpHostId)
         assertEquals("", bastion.group)
-        assertTrue(bastion.knockPorts.isEmpty())
         assertTrue(bastion.tunnels.isEmpty())
         assertEquals(0, bastion.socksPort)
         assertFalse(bastion.safExpose)
@@ -143,7 +141,8 @@ class CrossPlatformBackupFixtureTest {
         assertNull(h.keyId)
         assertNull(p.hosts[0].password)
         assertNull(h.jumpHostId)
-        assertTrue(h.knockPorts.isEmpty())
+        // knockPorts is a REMOVED field; the sparse fixture still carries it
+        // and decoding it at all proves old backups import cleanly.
         assertTrue(h.tunnels.isEmpty())
         assertEquals(0, h.socksPort)
         assertEquals(0f, h.fontSizeSp)
