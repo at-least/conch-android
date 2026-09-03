@@ -2,7 +2,6 @@ package at.least.conch
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,10 +32,14 @@ class SessionTabsTest {
     }
 
     @Test
-    fun `every tab has an icon`() {
-        SessionTab.entries.forEach { t ->
-            assertNotNull("icon for ${t.name}", t.icon)
-        }
+    fun `every tab has its own icon`() {
+        // `icon` is non-nullable, so presence is a compiler guarantee; what a
+        // test can still catch is two tabs sharing one glyph (copy-paste in
+        // the enum), which would make the bar ambiguous.
+        assertEquals(
+            SessionTab.entries.size,
+            SessionTab.entries.map { it.icon }.toSet().size,
+        )
     }
 }
 

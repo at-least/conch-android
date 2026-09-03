@@ -18,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,9 +57,11 @@ class LicensesActivity : ComponentActivity() {
                         IconButton(onClick = { finish() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    }
+                    },
+                    colors = flatTopAppBarColors(),
                 )
-            }
+            },
+            containerColor = MaterialTheme.colorScheme.background,
         ) { padding ->
             var showFontLicense by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize().padding(padding)) {

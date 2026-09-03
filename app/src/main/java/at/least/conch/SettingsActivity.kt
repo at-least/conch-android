@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,10 +37,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -57,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -222,7 +224,8 @@ class SettingsActivity : ComponentActivity() {
                         IconButton(onClick = { finish() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    }
+                    },
+                    colors = flatTopAppBarColors(),
                 )
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -232,188 +235,13 @@ class SettingsActivity : ComponentActivity() {
                     .fillMaxSize()
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
-                    .padding(bottom = 24.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                SettingsSection("Terminal")
-                SettingsSwitch(
-                    icon = Icons.Filled.Lightbulb,
-                    title = "Keep screen on",
-                    supporting = "Keep the screen awake while the terminal is open.",
-                    checked = keepScreenOn.value,
-                    onCheckedChange = { on ->
-                        keepScreenOn.value = on
-                        SettingsStore.setKeepScreenOn(this@SettingsActivity, on)
-                    },
-                )
-                ListItem(
-                    leadingContent = { Icon(Icons.Filled.Palette, contentDescription = null) },
-                    headlineContent = { Text("Terminal theme") },
-                    supportingContent = {
-                        Column {
-                            Text("Color scheme for the terminal (applied to new sessions).")
-                            TerminalThemePicker(Modifier.padding(top = 8.dp))
-                        }
-                    },
-                )
-                ListItem(
-                    leadingContent = { Icon(Icons.Filled.TextFields, contentDescription = null) },
-                    headlineContent = { Text("Terminal font") },
-                    supportingContent = {
-                        Column {
-                            Text(
-                                "JetBrains Mono Nerd Font ships with the app: box-drawing and powerline " +
-                                    "glyphs for tmux, htop, starship and friends (applied to new sessions)."
-                            )
-                            TerminalFontPicker(Modifier.padding(top = 8.dp))
-                        }
-                    },
-                )
-
-                HorizontalDivider()
-                SettingsSection("Privacy & security")
-                SettingsSwitch(
-                    icon = Icons.Filled.Fingerprint,
-                    title = "Lock app",
-                    supporting = if (AppLock.canAuthenticate(this@SettingsActivity)) {
-                        "Require fingerprint, face or screen lock to open Conch."
-                    } else {
-                        "No screen lock or biometrics set up on this device."
-                    },
-                    enabled = AppLock.canAuthenticate(this@SettingsActivity),
-                    checked = appLock.value,
-                    onCheckedChange = { on ->
-                        appLock.value = on
-                        AppLock.setEnabled(this@SettingsActivity, on)
-                    },
-                )
-                SettingsSwitch(
-                    icon = Icons.Filled.History,
-                    title = "Command history",
-                    supporting = "Remember the commands you run, per host, encrypted on this device. " +
-                        "Search and re-run them from the terminal menu, or save them as snippets.",
-                    checked = commandHistory.value,
-                    onCheckedChange = { on ->
-                        commandHistory.value = on
-                        SettingsStore.setCommandHistory(this@SettingsActivity, on)
-                    },
-                )
-                ListItem(
-                    headlineContent = {
-                        TextButton(onClick = {
-                            CommandHistoryStore(this@SettingsActivity).clear()
-                            message.value = "Command history cleared"
-                        }) { Text("Clear history") }
-                    },
-                )
-                SettingsSwitch(
-                    icon = Icons.Filled.BugReport,
-                    title = "Crash reports",
-                    supporting = if (CrashReporting.isAvailable()) {
-                        "Send anonymous crash reports to the developer's self-hosted server. Host addresses, " +
-                            "usernames and credentials are never included. Off by default."
-                    } else {
-                        "Not available in this build (no reporting endpoint compiled in)."
-                    },
-                    enabled = CrashReporting.isAvailable(),
-                    checked = crashEnabled.value,
-                    onCheckedChange = { on ->
-                        crashEnabled.value = on
-                        CrashReporting.setEnabled(on)
-                    },
-                )
-
-                HorizontalDivider()
-                SettingsSection("Backup")
-                ListItem(
-                    leadingContent = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
-                    headlineContent = { Text("Backup & restore") },
-                    supportingContent = {
-                        Column {
-                            Text(
-                                "Export hosts (with passwords), keys, snippets and known hosts into a single " +
-                                    "encrypted file, protected by your passphrase — import it on another device."
-                            )
-                            if (busy.value) {
-                                Row(
-                                    Modifier.padding(top = 12.dp),
-                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                                ) {
-                                    CircularProgressIndicator(Modifier.padding(end = 12.dp))
-                                    Text("Working…")
-                                }
-                            } else {
-                                Row(
-                                    Modifier.padding(top = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    OutlinedButton(onClick = { exportPicker.launch(ScheduledBackup.FILE_NAME) }) {
-                                        Icon(
-                                            Icons.Filled.FileDownload,
-                                            contentDescription = null,
-                                            modifier = Modifier.padding(end = 6.dp)
-                                        )
-                                        Text("Export")
-                                    }
-                                    OutlinedButton(onClick = { importPicker.launch(arrayOf("*/*")) }) {
-                                        Icon(
-                                            Icons.Filled.FileUpload,
-                                            contentDescription = null,
-                                            modifier = Modifier.padding(end = 6.dp)
-                                        )
-                                        Text("Import")
-                                    }
-                                }
-                            }
-                        }
-                    },
-                )
-                ListItem(
-                    leadingContent = { Icon(Icons.Filled.CloudSync, contentDescription = null) },
-                    headlineContent = { Text("Account-free sync") },
-                    supportingContent = {
-                        Column {
-                            Text(
-                                "Keeps an encrypted backup (conch-backup.conchbak) in a folder you pick — " +
-                                    "sync it with Syncthing, Dropbox or a cable. Refreshes while the app " +
-                                    "is open, at most hourly and only when data changed; restore on any " +
-                                    "device with Import (merge-only, never overwrites)."
-                            )
-                            if (syncConfigured.value) {
-                                Text(
-                                    if (syncLastMs.longValue > 0) {
-                                        "Last export " + android.text.format.DateUtils
-                                            .getRelativeTimeSpanString(syncLastMs.longValue)
-                                    } else {
-                                        "Will export on next app open"
-                                    },
-                                    modifier = Modifier.padding(top = 8.dp),
-                                )
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(top = 8.dp)
-                                ) {
-                                    OutlinedButton(
-                                        onClick = { doSyncNow() },
-                                        enabled = !syncBusy.value
-                                    ) { Text("Export now") }
-                                    OutlinedButton(onClick = { doSyncStop() }) { Text("Stop") }
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { syncFolderPicker.launch(null) },
-                                    modifier = Modifier.padding(top = 12.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Filled.FolderOpen,
-                                        contentDescription = null,
-                                        modifier = Modifier.padding(end = 6.dp)
-                                    )
-                                    Text("Choose folder")
-                                }
-                            }
-                        }
-                    },
-                )
+                TerminalSection()
+                PrivacySecuritySection()
+                BackupSection(exportPicker, importPicker, syncFolderPicker)
             }
         }
 
@@ -455,14 +283,239 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    /** Group heading between setting rows. */
     @Composable
-    private fun SettingsSection(title: String) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    private fun TerminalSection() {
+        Column {
+            GroupHeader("Terminal")
+            GroupedCard(count = 3) { index ->
+                when (index) {
+                    0 -> SettingsSwitch(
+                        icon = Icons.Filled.Lightbulb,
+                        title = "Keep screen on",
+                        supporting = "Keep the screen awake while the terminal is open.",
+                        checked = keepScreenOn.value,
+                        onCheckedChange = { on ->
+                            keepScreenOn.value = on
+                            SettingsStore.setKeepScreenOn(this@SettingsActivity, on)
+                        },
+                    )
+                    1 -> SettingsRow(
+                        icon = Icons.Filled.Palette,
+                        title = "Terminal theme",
+                    ) {
+                        Text("Color scheme for the terminal (applied to new sessions).")
+                        TerminalThemePicker(Modifier.padding(top = 8.dp))
+                    }
+                    else -> SettingsRow(
+                        icon = Icons.Filled.TextFields,
+                        title = "Terminal font",
+                    ) {
+                        Text(
+                            "JetBrains Mono Nerd Font ships with the app: box-drawing and powerline " +
+                                "glyphs for tmux, htop, starship and friends (applied to new sessions)."
+                        )
+                        TerminalFontPicker(Modifier.padding(top = 8.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun PrivacySecuritySection() {
+        Column {
+            GroupHeader("Privacy & security")
+            GroupedCard(count = 4) { index ->
+                when (index) {
+                    0 -> SettingsSwitch(
+                        icon = Icons.Filled.Fingerprint,
+                        title = "Lock app",
+                        supporting = if (AppLock.canAuthenticate(this@SettingsActivity)) {
+                            "Require fingerprint, face or screen lock to open Conch."
+                        } else {
+                            "No screen lock or biometrics set up on this device."
+                        },
+                        enabled = AppLock.canAuthenticate(this@SettingsActivity),
+                        checked = appLock.value,
+                        onCheckedChange = { on ->
+                            appLock.value = on
+                            AppLock.setEnabled(this@SettingsActivity, on)
+                        },
+                    )
+                    1 -> SettingsSwitch(
+                        icon = Icons.Filled.History,
+                        title = "Command history",
+                        supporting = "Remember the commands you run, per host, encrypted on this device. " +
+                            "Search and re-run them from the terminal menu, or save them as snippets.",
+                        checked = commandHistory.value,
+                        onCheckedChange = { on ->
+                            commandHistory.value = on
+                            SettingsStore.setCommandHistory(this@SettingsActivity, on)
+                        },
+                    )
+                    // Destructive, so it's tinted red — Apple's convention for
+                    // an irreversible local action, kept apart from a plain row.
+                    2 -> ListItem(
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = {
+                            Icon(
+                                Icons.Filled.History,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        headlineContent = {
+                            Text("Clear history", color = MaterialTheme.colorScheme.error)
+                        },
+                        modifier = Modifier.clickable {
+                            CommandHistoryStore(this@SettingsActivity).clear()
+                            message.value = "Command history cleared"
+                        },
+                    )
+                    else -> SettingsSwitch(
+                        icon = Icons.Filled.BugReport,
+                        title = "Crash reports",
+                        supporting = if (CrashReporting.isAvailable()) {
+                            "Send anonymous crash reports to the developer's self-hosted server. Host " +
+                                "addresses, usernames and credentials are never included. Off by default."
+                        } else {
+                            "Not available in this build (no reporting endpoint compiled in)."
+                        },
+                        enabled = CrashReporting.isAvailable(),
+                        checked = crashEnabled.value,
+                        onCheckedChange = { on ->
+                            crashEnabled.value = on
+                            CrashReporting.setEnabled(on)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun BackupSection(
+        exportPicker: androidx.activity.compose.ManagedActivityResultLauncher<String, android.net.Uri?>,
+        importPicker: androidx.activity.compose.ManagedActivityResultLauncher<Array<String>, android.net.Uri?>,
+        syncFolderPicker: androidx.activity.compose.ManagedActivityResultLauncher<android.net.Uri?, android.net.Uri?>,
+    ) {
+        Column {
+            GroupHeader("Backup")
+            GroupedCard(count = 2) { index ->
+                if (index == 0) {
+                    BackupRestoreRow(exportPicker, importPicker)
+                } else {
+                    AccountFreeSyncRow(syncFolderPicker)
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun BackupRestoreRow(
+        exportPicker: androidx.activity.compose.ManagedActivityResultLauncher<String, android.net.Uri?>,
+        importPicker: androidx.activity.compose.ManagedActivityResultLauncher<Array<String>, android.net.Uri?>,
+    ) {
+        SettingsRow(icon = Icons.Filled.FileDownload, title = "Backup & restore") {
+            Text(
+                "Export hosts (with passwords), keys, snippets and known hosts into a " +
+                    "single encrypted file, protected by your passphrase — import it on " +
+                    "another device."
+            )
+            if (busy.value) {
+                Row(
+                    Modifier.padding(top = 12.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(Modifier.padding(end = 12.dp))
+                    Text("Working…")
+                }
+            } else {
+                Row(
+                    Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = { exportPicker.launch(ScheduledBackup.FILE_NAME) }) {
+                        Icon(
+                            Icons.Filled.FileDownload,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 6.dp)
+                        )
+                        Text("Export")
+                    }
+                    OutlinedButton(onClick = { importPicker.launch(arrayOf("*/*")) }) {
+                        Icon(
+                            Icons.Filled.FileUpload,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 6.dp)
+                        )
+                        Text("Import")
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun AccountFreeSyncRow(
+        syncFolderPicker: androidx.activity.compose.ManagedActivityResultLauncher<android.net.Uri?, android.net.Uri?>,
+    ) {
+        SettingsRow(icon = Icons.Filled.CloudSync, title = "Account-free sync") {
+            Text(
+                "Keeps an encrypted backup (conch-backup.conchbak) in a folder you pick — " +
+                    "sync it with Syncthing, Dropbox or a cable. Refreshes while the app " +
+                    "is open, at most hourly and only when data changed; restore on any " +
+                    "device with Import (merge-only, never overwrites)."
+            )
+            if (syncConfigured.value) {
+                Text(
+                    if (syncLastMs.longValue > 0) {
+                        "Last export " + android.text.format.DateUtils
+                            .getRelativeTimeSpanString(syncLastMs.longValue)
+                    } else {
+                        "Will export on next app open"
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    OutlinedButton(onClick = { doSyncNow() }, enabled = !syncBusy.value) { Text("Export now") }
+                    OutlinedButton(onClick = { doSyncStop() }) { Text("Stop") }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { syncFolderPicker.launch(null) },
+                    modifier = Modifier.padding(top = 12.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.FolderOpen,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
+                    Text("Choose folder")
+                }
+            }
+        }
+    }
+
+    /**
+     * A settings row with a leading icon and free-form supporting content
+     * below the title (a picker, a status line, action buttons) — the
+     * richer sibling of [SettingsSwitch] for rows that aren't a toggle.
+     */
+    @Composable
+    private fun SettingsRow(
+        icon: ImageVector,
+        title: String,
+        supporting: @Composable ColumnScope.() -> Unit,
+    ) {
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            leadingContent = { Icon(icon, contentDescription = null) },
+            headlineContent = { Text(title) },
+            supportingContent = { Column(content = supporting) },
         )
     }
 
@@ -482,6 +535,7 @@ class SettingsActivity : ComponentActivity() {
         enabled: Boolean = true,
     ) {
         ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = { Icon(icon, contentDescription = null) },
             headlineContent = { Text(title) },
             supportingContent = { Text(supporting) },

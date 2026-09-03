@@ -6,12 +6,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material3.AlertDialog
@@ -20,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -35,7 +40,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
@@ -105,9 +113,13 @@ class ShareToHostActivity : ComponentActivity() {
 
         Scaffold(
             topBar = {
-                TopAppBar(title = { Text(if (count == 1) "Upload 1 file to…" else "Upload $count files to…") })
+                TopAppBar(
+                    title = { Text(if (count == 1) "Upload 1 file to…" else "Upload $count files to…") },
+                    colors = flatTopAppBarColors(),
+                )
             },
             snackbarHost = { SnackbarHost(snackbar) },
+            containerColor = MaterialTheme.colorScheme.background,
         ) { padding ->
             when {
                 busy -> Column(Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
@@ -116,9 +128,14 @@ class ShareToHostActivity : ComponentActivity() {
                 }
                 targets.isEmpty() ->
                     Text("No saved hosts — add one in Conch first.", Modifier.padding(padding).padding(24.dp))
-                else -> LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-                    items(targets, key = { (it.live?.id ?: "") + it.host.id }) { t ->
-                        TargetRow(t, enabled = picked == null) { picked = t }
+                else -> LazyColumn(
+                    Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    item(key = "targets-card") {
+                        GroupedCard(count = targets.size, dividerInset = 60.dp) { index ->
+                            TargetRow(targets[index], enabled = picked == null) { picked = targets[index] }
+                        }
                     }
                 }
             }
@@ -129,16 +146,24 @@ class ShareToHostActivity : ComponentActivity() {
     @Composable
     private fun TargetRow(t: Target, enabled: Boolean, onPick: () -> Unit) {
         ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = {
-                Icon(
-                    Icons.Filled.Dns,
-                    contentDescription = null,
-                    tint = if (t.live != null) {
-                        MaterialTheme.conch.success
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                val tileColor =
+                    if (t.live != null) MaterialTheme.conch.success else MaterialTheme.colorScheme.secondary
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(tileColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Dns,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(17.dp),
+                    )
+                }
             },
             headlineContent = { Text(if (t.host.alias.isNotBlank()) t.host.alias else t.host.hostname) },
             supportingContent = {

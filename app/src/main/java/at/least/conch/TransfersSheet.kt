@@ -5,11 +5,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
@@ -56,7 +57,15 @@ fun TransfersSheet(queue: TransferQueue, onDismiss: () -> Unit) {
                 )
             } else {
                 LazyColumn {
-                    items(items, key = { it.id }) { item -> TransferRow(item, queue) }
+                    itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+                        TransferRow(item, queue)
+                        if (index != items.lastIndex) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                                modifier = Modifier.padding(start = 56.dp),
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -46,7 +46,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,6 +61,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -209,7 +209,11 @@ fun MonitorTab(session: SessionReconnector, hostId: String, modifier: Modifier =
         )
 
         error?.let {
-            Card(Modifier.fillMaxWidth()) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Column(Modifier.padding(14.dp)) {
                     Text(it, color = MaterialTheme.colorScheme.error)
                     rawOut?.let { raw ->
@@ -316,7 +320,11 @@ private fun MetricCard(
     history: DoubleArray? = null,
     historyMax: Double = 1.0,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Column(Modifier.padding(16.dp)) {
             Text(
                 title,
