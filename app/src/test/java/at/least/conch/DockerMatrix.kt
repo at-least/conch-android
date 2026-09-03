@@ -230,8 +230,13 @@ object DockerMatrix {
      * that started the matrix) — used to restart/pause the container, add
      * tc netem qdiscs and spawn throwaway containers. Fails loudly on a
      * non-zero exit so a broken fixture never masquerades as an app bug.
+     *
+     * A no-op outside an opted-in run: the helper is meaningless without the
+     * matrix, and `@After` teardown runs even for a test that skipped, so a
+     * wedged or absent daemon would otherwise hang the plain unit suite.
      */
     fun docker(vararg args: String, timeoutMs: Long = 60_000, allowFailure: Boolean = false): String {
+        if (!optedIn()) return ""
         val proc = ProcessBuilder(listOf("docker") + args).redirectErrorStream(true).start()
         val out = proc.inputStream.bufferedReader().readText()
         if (!proc.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {

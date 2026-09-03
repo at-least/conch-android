@@ -24,7 +24,7 @@ import androidx.core.view.WindowCompat
  * The app's single Material 3 theme.
  *
  * Deliberately a fixed palette, not Android's per-device Material You colors
- * ([dynamicLightColorScheme] / [dynamicDarkColorScheme]): the brief is an
+ * (`dynamicLightColorScheme` / `dynamicDarkColorScheme`): the brief is an
  * Apple-HIG-flavoured look — one considered palette that reads the same on
  * every device, the way iOS's own apps do, rather than one that recolors
  * itself to the user's wallpaper. Shape and type scale follow the same
@@ -68,9 +68,8 @@ fun ConchTheme(
  * "success", a retrying one is "warning" — neither is `primary` and
  * neither may be a raw hex sprinkled through the screens (the old code
  * hardcoded `Color(0xFF23D18B)` in five files). Fixed across both themes,
- * exactly like `error`: a green that shifts with the wallpaper stops
- * meaning "connected" — matched to iOS's own systemGreen/systemOrange so it
- * reads as a native status color rather than a Material tertiary color.
+ * exactly like `error`, and matched to iOS's own systemGreen/systemOrange
+ * so it reads as a native status color rather than a Material tertiary one.
  */
 data class ConchColors(
     val success: Color,
@@ -92,23 +91,50 @@ val LocalConchColors = staticCompositionLocalOf { LightExtras }
 val MaterialTheme.conch: ConchColors
     @Composable get() = LocalConchColors.current
 
+/**
+ * The iOS system colors both schemes are built from. Named once so a value
+ * that appears under two Material slots — systemGreen is both `tertiary`
+ * and [ConchColors.success] — is the same color by construction rather
+ * than by two literals happening to agree.
+ */
+private object IosPalette {
+    val systemBlue = Color(0xFF007AFF)
+    val systemBlueDark = Color(0xFF0A84FF)
+    val systemGreen = Color(0xFF34C759)
+    val systemGreenDark = Color(0xFF30D158)
+    val greenContainer = Color(0xFFDCF6E3)
+    val onGreenContainer = Color(0xFF0B3D17)
+    val greenContainerDark = Color(0xFF0F4B22)
+    val onGreenContainerDark = Color(0xFFA9F3BB)
+    val systemOrange = Color(0xFFFF9500)
+    val systemOrangeDark = Color(0xFFFF9F0A)
+    val systemRed = Color(0xFFFF3B30)
+    val systemRedDark = Color(0xFFFF453A)
+
+    /** Grouped-list surface stack: gray canvas, white cards, hairlines. */
+    val groupedBackground = Color(0xFFF2F2F7)
+    val separator = Color(0xFFE5E5EA)
+    val elevatedDark = Color(0xFF1C1C1E)
+    val separatorDark = Color(0xFF2C2C2E)
+}
+
 private val LightExtras = ConchColors(
-    success = Color(0xFF34C759), // iOS systemGreen
+    success = IosPalette.systemGreen,
     onSuccess = Color(0xFFFFFFFF),
-    successContainer = Color(0xFFDCF6E3),
-    onSuccessContainer = Color(0xFF0B3D17),
-    warning = Color(0xFFFF9500), // iOS systemOrange
+    successContainer = IosPalette.greenContainer,
+    onSuccessContainer = IosPalette.onGreenContainer,
+    warning = IosPalette.systemOrange,
     onWarning = Color(0xFFFFFFFF),
     warningContainer = Color(0xFFFFE8CC),
     onWarningContainer = Color(0xFF4A2900),
 )
 
 private val DarkExtras = ConchColors(
-    success = Color(0xFF30D158), // iOS systemGreen (dark)
+    success = IosPalette.systemGreenDark,
     onSuccess = Color(0xFF00390D),
-    successContainer = Color(0xFF0F4B22),
-    onSuccessContainer = Color(0xFFA9F3BB),
-    warning = Color(0xFFFF9F0A), // iOS systemOrange (dark)
+    successContainer = IosPalette.greenContainerDark,
+    onSuccessContainer = IosPalette.onGreenContainerDark,
+    warning = IosPalette.systemOrangeDark,
     onWarning = Color(0xFF462600),
     warningContainer = Color(0xFF603C00),
     onWarningContainer = Color(0xFFFFDDAA),
@@ -122,74 +148,74 @@ private val DarkExtras = ConchColors(
  * blend, so grouping reads as "gray canvas, white card", not as a tint.
  */
 private val LightScheme: ColorScheme = lightColorScheme(
-    primary = Color(0xFF007AFF), // iOS systemBlue
+    primary = IosPalette.systemBlue,
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFDCEBFF),
     onPrimaryContainer = Color(0xFF00376B),
     secondary = Color(0xFF6C6C70), // iOS secondaryLabel
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFE9E9EB),
-    onSecondaryContainer = Color(0xFF1C1C1E),
-    tertiary = Color(0xFF34C759),
+    onSecondaryContainer = IosPalette.elevatedDark,
+    tertiary = IosPalette.systemGreen,
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFDCF6E3),
-    onTertiaryContainer = Color(0xFF0B3D17),
-    error = Color(0xFFFF3B30), // iOS systemRed
+    tertiaryContainer = IosPalette.greenContainer,
+    onTertiaryContainer = IosPalette.onGreenContainer,
+    error = IosPalette.systemRed,
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFFDAD4),
     onErrorContainer = Color(0xFF410001),
-    background = Color(0xFFF2F2F7), // iOS systemGroupedBackground
+    background = IosPalette.groupedBackground,
     onBackground = Color(0xFF000000),
     surface = Color(0xFFFFFFFF), // iOS secondarySystemGroupedBackground
     onSurface = Color(0xFF000000),
-    surfaceVariant = Color(0xFFF2F2F7),
+    surfaceVariant = IosPalette.groupedBackground,
     onSurfaceVariant = Color(0xFF6C6C70),
     surfaceContainerLowest = Color(0xFFFFFFFF),
     surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainer = Color(0xFFF2F2F7),
+    surfaceContainer = IosPalette.groupedBackground,
     surfaceContainerHigh = Color(0xFFEBEBF0),
-    surfaceContainerHighest = Color(0xFFE5E5EA),
+    surfaceContainerHighest = IosPalette.separator,
     outline = Color(0xFFC6C6C8), // iOS separator
-    outlineVariant = Color(0xFFE5E5EA),
-    inverseSurface = Color(0xFF1C1C1E),
-    inverseOnSurface = Color(0xFFF2F2F7),
-    inversePrimary = Color(0xFF0A84FF),
+    outlineVariant = IosPalette.separator,
+    inverseSurface = IosPalette.elevatedDark,
+    inverseOnSurface = IosPalette.groupedBackground,
+    inversePrimary = IosPalette.systemBlueDark,
     scrim = Color(0xFF000000),
 )
 
 private val DarkScheme: ColorScheme = darkColorScheme(
-    primary = Color(0xFF0A84FF), // iOS systemBlue (dark)
+    primary = IosPalette.systemBlueDark,
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFF00376B),
     onPrimaryContainer = Color(0xFFCFE4FF),
     secondary = Color(0xFF98989D), // iOS secondaryLabel (dark)
     onSecondary = Color(0xFF000000),
-    secondaryContainer = Color(0xFF2C2C2E),
-    onSecondaryContainer = Color(0xFFE5E5EA),
-    tertiary = Color(0xFF30D158),
+    secondaryContainer = IosPalette.separatorDark,
+    onSecondaryContainer = IosPalette.separator,
+    tertiary = IosPalette.systemGreenDark,
     onTertiary = Color(0xFF00390D),
-    tertiaryContainer = Color(0xFF0F4B22),
-    onTertiaryContainer = Color(0xFFA9F3BB),
-    error = Color(0xFFFF453A), // iOS systemRed (dark)
+    tertiaryContainer = IosPalette.greenContainerDark,
+    onTertiaryContainer = IosPalette.onGreenContainerDark,
+    error = IosPalette.systemRedDark,
     onError = Color(0xFF000000),
     errorContainer = Color(0xFF690003),
     onErrorContainer = Color(0xFFFFDAD4),
     background = Color(0xFF000000), // iOS systemGroupedBackground (dark)
     onBackground = Color(0xFFFFFFFF),
-    surface = Color(0xFF1C1C1E), // iOS secondarySystemGroupedBackground (dark)
+    surface = IosPalette.elevatedDark, // iOS secondarySystemGroupedBackground (dark)
     onSurface = Color(0xFFFFFFFF),
     surfaceVariant = Color(0xFF000000),
     onSurfaceVariant = Color(0xFF98989D),
     surfaceContainerLowest = Color(0xFF000000),
     surfaceContainerLow = Color(0xFF161618),
-    surfaceContainer = Color(0xFF1C1C1E),
+    surfaceContainer = IosPalette.elevatedDark,
     surfaceContainerHigh = Color(0xFF242426),
-    surfaceContainerHighest = Color(0xFF2C2C2E),
+    surfaceContainerHighest = IosPalette.separatorDark,
     outline = Color(0xFF38383A), // iOS separator (dark)
-    outlineVariant = Color(0xFF2C2C2E),
-    inverseSurface = Color(0xFFF2F2F7),
-    inverseOnSurface = Color(0xFF1C1C1E),
-    inversePrimary = Color(0xFF007AFF),
+    outlineVariant = IosPalette.separatorDark,
+    inverseSurface = IosPalette.groupedBackground,
+    inverseOnSurface = IosPalette.elevatedDark,
+    inversePrimary = IosPalette.systemBlue,
     scrim = Color(0xFF000000),
 )
 
@@ -212,24 +238,24 @@ private val ConchShapes = Shapes(
  * tracking throughout than Material's default — Apple's system font sits
  * tighter than Roboto's default spacing.
  */
-private val ConchTypography = Typography().let { base ->
-    base.copy(
-        displaySmall = base.displaySmall.copy(
+private val ConchTypography = Typography().run {
+    copy(
+        displaySmall = displaySmall.copy(
             fontWeight = FontWeight.Bold,
             fontSize = 34.sp,
             lineHeight = 41.sp,
             letterSpacing = 0.3.sp,
         ),
-        headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
-        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
-        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
-        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
-        bodyLarge = base.bodyLarge.copy(fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = 0.1.sp),
-        bodyMedium = base.bodyMedium.copy(letterSpacing = 0.1.sp),
-        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
-        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium),
-        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
+        headlineLarge = headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
+        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
+        headlineSmall = headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp),
+        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
+        titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
+        titleSmall = titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
+        bodyLarge = bodyLarge.copy(fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = 0.1.sp),
+        bodyMedium = bodyMedium.copy(letterSpacing = 0.1.sp),
+        labelLarge = labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp),
+        labelMedium = labelMedium.copy(fontWeight = FontWeight.Medium),
+        labelSmall = labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
     )
 }

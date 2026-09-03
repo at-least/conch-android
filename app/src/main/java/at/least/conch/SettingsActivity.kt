@@ -40,7 +40,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -241,7 +240,11 @@ class SettingsActivity : ComponentActivity() {
             ) {
                 TerminalSection()
                 PrivacySecuritySection()
-                BackupSection(exportPicker, importPicker, syncFolderPicker)
+                BackupSection(
+                    onExport = { exportPicker.launch(ScheduledBackup.FILE_NAME) },
+                    onImport = { importPicker.launch(arrayOf("*/*")) },
+                    onChooseFolder = { syncFolderPicker.launch(null) },
+                )
             }
         }
 
@@ -287,37 +290,43 @@ class SettingsActivity : ComponentActivity() {
     private fun TerminalSection() {
         Column {
             GroupHeader("Terminal")
-            GroupedCard(count = 3) { index ->
-                when (index) {
-                    0 -> SettingsSwitch(
-                        icon = Icons.Filled.Lightbulb,
-                        title = "Keep screen on",
-                        supporting = "Keep the screen awake while the terminal is open.",
-                        checked = keepScreenOn.value,
-                        onCheckedChange = { on ->
-                            keepScreenOn.value = on
-                            SettingsStore.setKeepScreenOn(this@SettingsActivity, on)
-                        },
-                    )
-                    1 -> SettingsRow(
-                        icon = Icons.Filled.Palette,
-                        title = "Terminal theme",
-                    ) {
-                        Text("Color scheme for the terminal (applied to new sessions).")
-                        TerminalThemePicker(Modifier.padding(top = 8.dp))
-                    }
-                    else -> SettingsRow(
-                        icon = Icons.Filled.TextFields,
-                        title = "Terminal font",
-                    ) {
-                        Text(
-                            "JetBrains Mono Nerd Font ships with the app: box-drawing and powerline " +
-                                "glyphs for tmux, htop, starship and friends (applied to new sessions)."
+            GroupedCard(
+                rows = listOf(
+                    {
+                        SettingsSwitch(
+                            icon = Icons.Filled.Lightbulb,
+                            title = "Keep screen on",
+                            supporting = "Keep the screen awake while the terminal is open.",
+                            checked = keepScreenOn.value,
+                            onCheckedChange = { on ->
+                                keepScreenOn.value = on
+                                SettingsStore.setKeepScreenOn(this@SettingsActivity, on)
+                            },
                         )
-                        TerminalFontPicker(Modifier.padding(top = 8.dp))
-                    }
-                }
-            }
+                    },
+                    {
+                        SettingsRow(
+                            icon = Icons.Filled.Palette,
+                            title = "Terminal theme",
+                        ) {
+                            Text("Color scheme for the terminal (applied to new sessions).")
+                            TerminalThemePicker(Modifier.padding(top = 8.dp))
+                        }
+                    },
+                    {
+                        SettingsRow(
+                            icon = Icons.Filled.TextFields,
+                            title = "Terminal font",
+                        ) {
+                            Text(
+                                "JetBrains Mono Nerd Font ships with the app: box-drawing and powerline " +
+                                    "glyphs for tmux, htop, starship and friends (applied to new sessions)."
+                            )
+                            TerminalFontPicker(Modifier.padding(top = 8.dp))
+                        }
+                    },
+                ),
+            )
         }
     }
 
@@ -325,97 +334,101 @@ class SettingsActivity : ComponentActivity() {
     private fun PrivacySecuritySection() {
         Column {
             GroupHeader("Privacy & security")
-            GroupedCard(count = 4) { index ->
-                when (index) {
-                    0 -> SettingsSwitch(
-                        icon = Icons.Filled.Fingerprint,
-                        title = "Lock app",
-                        supporting = if (AppLock.canAuthenticate(this@SettingsActivity)) {
-                            "Require fingerprint, face or screen lock to open Conch."
-                        } else {
-                            "No screen lock or biometrics set up on this device."
-                        },
-                        enabled = AppLock.canAuthenticate(this@SettingsActivity),
-                        checked = appLock.value,
-                        onCheckedChange = { on ->
-                            appLock.value = on
-                            AppLock.setEnabled(this@SettingsActivity, on)
-                        },
-                    )
-                    1 -> SettingsSwitch(
-                        icon = Icons.Filled.History,
-                        title = "Command history",
-                        supporting = "Remember the commands you run, per host, encrypted on this device. " +
-                            "Search and re-run them from the terminal menu, or save them as snippets.",
-                        checked = commandHistory.value,
-                        onCheckedChange = { on ->
-                            commandHistory.value = on
-                            SettingsStore.setCommandHistory(this@SettingsActivity, on)
-                        },
-                    )
-                    // Destructive, so it's tinted red — Apple's convention for
-                    // an irreversible local action, kept apart from a plain row.
-                    2 -> ListItem(
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        leadingContent = {
-                            Icon(
-                                Icons.Filled.History,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        },
-                        headlineContent = {
-                            Text("Clear history", color = MaterialTheme.colorScheme.error)
-                        },
-                        modifier = Modifier.clickable {
-                            CommandHistoryStore(this@SettingsActivity).clear()
-                            message.value = "Command history cleared"
-                        },
-                    )
-                    else -> SettingsSwitch(
-                        icon = Icons.Filled.BugReport,
-                        title = "Crash reports",
-                        supporting = if (CrashReporting.isAvailable()) {
-                            "Send anonymous crash reports to the developer's self-hosted server. Host " +
-                                "addresses, usernames and credentials are never included. Off by default."
-                        } else {
-                            "Not available in this build (no reporting endpoint compiled in)."
-                        },
-                        enabled = CrashReporting.isAvailable(),
-                        checked = crashEnabled.value,
-                        onCheckedChange = { on ->
-                            crashEnabled.value = on
-                            CrashReporting.setEnabled(on)
-                        },
-                    )
-                }
-            }
+            GroupedCard(
+                rows = listOf(
+                    {
+                        SettingsSwitch(
+                            icon = Icons.Filled.Fingerprint,
+                            title = "Lock app",
+                            supporting = if (AppLock.canAuthenticate(this@SettingsActivity)) {
+                                "Require fingerprint, face or screen lock to open Conch."
+                            } else {
+                                "No screen lock or biometrics set up on this device."
+                            },
+                            enabled = AppLock.canAuthenticate(this@SettingsActivity),
+                            checked = appLock.value,
+                            onCheckedChange = { on ->
+                                appLock.value = on
+                                AppLock.setEnabled(this@SettingsActivity, on)
+                            },
+                        )
+                    },
+                    {
+                        SettingsSwitch(
+                            icon = Icons.Filled.History,
+                            title = "Command history",
+                            supporting = "Remember the commands you run, per host, encrypted on this device. " +
+                                "Search and re-run them from the terminal menu, or save them as snippets.",
+                            checked = commandHistory.value,
+                            onCheckedChange = { on ->
+                                commandHistory.value = on
+                                SettingsStore.setCommandHistory(this@SettingsActivity, on)
+                            },
+                        )
+                    },
+                    {
+                        // Destructive, so it's tinted red — Apple's convention for
+                        // an irreversible local action, kept apart from a plain row.
+                        ListItem(
+                            colors = groupedRowColors(),
+                            leadingContent = {
+                                Icon(
+                                    Icons.Filled.History,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            headlineContent = {
+                                Text("Clear history", color = MaterialTheme.colorScheme.error)
+                            },
+                            modifier = Modifier.clickable {
+                                CommandHistoryStore(this@SettingsActivity).clear()
+                                message.value = "Command history cleared"
+                            },
+                        )
+                    },
+                    {
+                        SettingsSwitch(
+                            icon = Icons.Filled.BugReport,
+                            title = "Crash reports",
+                            supporting = if (CrashReporting.isAvailable()) {
+                                "Send anonymous crash reports to the developer's self-hosted server. Host " +
+                                    "addresses, usernames and credentials are never included. Off by default."
+                            } else {
+                                "Not available in this build (no reporting endpoint compiled in)."
+                            },
+                            enabled = CrashReporting.isAvailable(),
+                            checked = crashEnabled.value,
+                            onCheckedChange = { on ->
+                                crashEnabled.value = on
+                                CrashReporting.setEnabled(on)
+                            },
+                        )
+                    },
+                ),
+            )
         }
     }
 
     @Composable
     private fun BackupSection(
-        exportPicker: androidx.activity.compose.ManagedActivityResultLauncher<String, android.net.Uri?>,
-        importPicker: androidx.activity.compose.ManagedActivityResultLauncher<Array<String>, android.net.Uri?>,
-        syncFolderPicker: androidx.activity.compose.ManagedActivityResultLauncher<android.net.Uri?, android.net.Uri?>,
+        onExport: () -> Unit,
+        onImport: () -> Unit,
+        onChooseFolder: () -> Unit,
     ) {
         Column {
             GroupHeader("Backup")
-            GroupedCard(count = 2) { index ->
-                if (index == 0) {
-                    BackupRestoreRow(exportPicker, importPicker)
-                } else {
-                    AccountFreeSyncRow(syncFolderPicker)
-                }
-            }
+            GroupedCard(
+                rows = listOf(
+                    { BackupRestoreRow(onExport, onImport) },
+                    { AccountFreeSyncRow(onChooseFolder) },
+                ),
+            )
         }
     }
 
     @Composable
-    private fun BackupRestoreRow(
-        exportPicker: androidx.activity.compose.ManagedActivityResultLauncher<String, android.net.Uri?>,
-        importPicker: androidx.activity.compose.ManagedActivityResultLauncher<Array<String>, android.net.Uri?>,
-    ) {
+    private fun BackupRestoreRow(onExport: () -> Unit, onImport: () -> Unit) {
         SettingsRow(icon = Icons.Filled.FileDownload, title = "Backup & restore") {
             Text(
                 "Export hosts (with passwords), keys, snippets and known hosts into a " +
@@ -435,7 +448,7 @@ class SettingsActivity : ComponentActivity() {
                     Modifier.padding(top = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OutlinedButton(onClick = { exportPicker.launch(ScheduledBackup.FILE_NAME) }) {
+                    OutlinedButton(onClick = onExport) {
                         Icon(
                             Icons.Filled.FileDownload,
                             contentDescription = null,
@@ -443,7 +456,7 @@ class SettingsActivity : ComponentActivity() {
                         )
                         Text("Export")
                     }
-                    OutlinedButton(onClick = { importPicker.launch(arrayOf("*/*")) }) {
+                    OutlinedButton(onClick = onImport) {
                         Icon(
                             Icons.Filled.FileUpload,
                             contentDescription = null,
@@ -458,7 +471,7 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     private fun AccountFreeSyncRow(
-        syncFolderPicker: androidx.activity.compose.ManagedActivityResultLauncher<android.net.Uri?, android.net.Uri?>,
+        onChooseFolder: () -> Unit,
     ) {
         SettingsRow(icon = Icons.Filled.CloudSync, title = "Account-free sync") {
             Text(
@@ -486,7 +499,7 @@ class SettingsActivity : ComponentActivity() {
                 }
             } else {
                 OutlinedButton(
-                    onClick = { syncFolderPicker.launch(null) },
+                    onClick = onChooseFolder,
                     modifier = Modifier.padding(top = 12.dp),
                 ) {
                     Icon(
@@ -512,7 +525,7 @@ class SettingsActivity : ComponentActivity() {
         supporting: @Composable ColumnScope.() -> Unit,
     ) {
         ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            colors = groupedRowColors(),
             leadingContent = { Icon(icon, contentDescription = null) },
             headlineContent = { Text(title) },
             supportingContent = { Column(content = supporting) },
@@ -535,7 +548,7 @@ class SettingsActivity : ComponentActivity() {
         enabled: Boolean = true,
     ) {
         ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            colors = groupedRowColors(),
             leadingContent = { Icon(icon, contentDescription = null) },
             headlineContent = { Text(title) },
             supportingContent = { Text(supporting) },

@@ -11,8 +11,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,23 +18,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -53,15 +47,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -263,18 +253,9 @@ class KeysActivity : ComponentActivity() {
                         }) {
                             Icon(Icons.Filled.Upload, contentDescription = "Import private key")
                         }
-                        // The primary action lives in the nav bar, not a
-                        // floating button — consistent with the rest of the
-                        // app's Apple-style chrome.
-                        IconButton(onClick = {
+                        TopBarAddButton("Generate key") {
                             genName = ""
                             showGenerate = true
-                        }) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "Generate key",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
                         }
                     }
                 )
@@ -385,12 +366,14 @@ class KeysActivity : ComponentActivity() {
                 Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = GroupedListDefaults.PagePadding,
             ) {
-                item(key = "keys-card") {
-                    GroupedCard(count = keys.size, dividerInset = 60.dp) { index ->
-                        KeyRow(keys[index], onClick = { onOpen(keys[index]) })
-                    }
+                groupedItems(
+                    count = keys.size,
+                    key = { index -> keys[index].id },
+                    dividerInset = GroupedListDefaults.IconRowDividerInset,
+                ) { index ->
+                    KeyRow(keys[index], onClick = { onOpen(keys[index]) })
                 }
             }
         }
@@ -398,61 +381,22 @@ class KeysActivity : ComponentActivity() {
 
     @Composable
     private fun EmptyKeys(onGenerate: () -> Unit, modifier: Modifier = Modifier) {
-        Column(
-            modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                Icons.Filled.Key,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                "No keys yet",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-            Text(
-                "Generate an Ed25519 key, then add its public key to ~/.ssh/authorized_keys on your server.",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Button(
-                onClick = onGenerate,
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.padding(top = 24.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("Generate key", modifier = Modifier.padding(start = 8.dp))
-            }
-        }
+        EmptyState(
+            icon = Icons.Filled.Key,
+            title = "No keys yet",
+            body = "Generate an Ed25519 key, then add its public key to ~/.ssh/authorized_keys on your server.",
+            actionLabel = "Generate key",
+            onAction = onGenerate,
+            modifier = modifier,
+        )
     }
 
     @Composable
     private fun KeyRow(k: SshKeyInfo, onClick: () -> Unit) {
         ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            colors = groupedRowColors(),
             leadingContent = {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(MaterialTheme.colorScheme.secondary),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.Key,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(17.dp),
-                    )
-                }
+                IconTile(Icons.Filled.Key)
             },
             headlineContent = { Text(k.name) },
             supportingContent = {
@@ -526,7 +470,7 @@ class KeysActivity : ComponentActivity() {
         ModalBottomSheet(onDismissRequest = onDismiss) {
             Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                 ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    colors = groupedRowColors(),
                     leadingContent = { Icon(Icons.Filled.Key, contentDescription = null) },
                     headlineContent = { Text(key.name, style = MaterialTheme.typography.titleMedium) },
                     supportingContent = {
@@ -548,35 +492,43 @@ class KeysActivity : ComponentActivity() {
                 // Its own grouped card, isolated at the bottom — Apple's
                 // convention for a destructive action ("Delete key") among
                 // otherwise-safe ones.
-                GroupedCard(count = 3, dividerInset = 56.dp, modifier = Modifier.padding(top = 16.dp)) { index ->
-                    when (index) {
-                        0 -> ListItem(
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
-                            headlineContent = { Text("Copy public key") },
-                            modifier = Modifier.clickable(onClick = onCopy),
-                        )
-                        1 -> ListItem(
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            leadingContent = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
-                            headlineContent = { Text("Export private key") },
-                            supportingContent = { Text("Unencrypted PEM — store it somewhere safe") },
-                            modifier = Modifier.clickable(onClick = onExport),
-                        )
-                        else -> ListItem(
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            leadingContent = {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            },
-                            headlineContent = { Text("Delete key", color = MaterialTheme.colorScheme.error) },
-                            modifier = Modifier.clickable(onClick = onDelete),
-                        )
-                    }
-                }
+                GroupedCard(
+                    rows = listOf(
+                        {
+                            ListItem(
+                                colors = groupedRowColors(),
+                                leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                                headlineContent = { Text("Copy public key") },
+                                modifier = Modifier.clickable(onClick = onCopy),
+                            )
+                        },
+                        {
+                            ListItem(
+                                colors = groupedRowColors(),
+                                leadingContent = { Icon(Icons.Filled.FileDownload, contentDescription = null) },
+                                headlineContent = { Text("Export private key") },
+                                supportingContent = { Text("Unencrypted PEM — store it somewhere safe") },
+                                modifier = Modifier.clickable(onClick = onExport),
+                            )
+                        },
+                        {
+                            ListItem(
+                                colors = groupedRowColors(),
+                                leadingContent = {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                headlineContent = { Text("Delete key", color = MaterialTheme.colorScheme.error) },
+                                modifier = Modifier.clickable(onClick = onDelete),
+                            )
+                        },
+                    ),
+                    dividerInset = GroupedListDefaults.GlyphRowDividerInset,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
             }
         }
     }

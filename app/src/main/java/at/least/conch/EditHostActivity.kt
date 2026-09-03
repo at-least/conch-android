@@ -31,7 +31,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedCard
@@ -120,7 +119,7 @@ private fun SwitchRow(
     supportingColor: Color = Color.Unspecified,
 ) {
     ListItem(
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        colors = groupedRowColors(),
         headlineContent = { Text(title) },
         supportingContent = {
             Text(
@@ -150,22 +149,27 @@ private fun EditHostScreen(
     // rememberSaveable: the form must survive rotation / dark-mode config
     // changes (ConnectBot ships the exact bug — form collapses and input
     // is lost on rotate). `keys` reloads instead; it is derived data.
-    var alias by rememberSaveable { mutableStateOf(initial?.alias.orEmpty()) }
-    var hostname by rememberSaveable { mutableStateOf(initial?.hostname.orEmpty()) }
+    //
+    // A blank [Host] stands in when adding, so every "what does a new host
+    // start as" answer comes from the model rather than being restated as a
+    // literal per field here.
+    val base = initial ?: Host()
+    var alias by rememberSaveable { mutableStateOf(base.alias) }
+    var hostname by rememberSaveable { mutableStateOf(base.hostname) }
     var portText by rememberSaveable {
         mutableStateOf(if (initial != null && initial.port != 22) initial.port.toString() else "")
     }
-    var username by rememberSaveable { mutableStateOf(initial?.username.orEmpty()) }
-    var authType by rememberSaveable { mutableStateOf(initial?.authType ?: Host.AUTH_PASSWORD) }
+    var username by rememberSaveable { mutableStateOf(base.username) }
+    var authType by rememberSaveable { mutableStateOf(base.authType) }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var fontSizeText by rememberSaveable {
         mutableStateOf(if ((initial?.fontSizeSp ?: 0f) > 0f) initial!!.fontSizeSp.toInt().toString() else "")
     }
-    var keepAlive by rememberSaveable { mutableStateOf(initial?.keepAlive ?: true) }
-    var tmux by rememberSaveable { mutableStateOf(initial?.tmuxAutoAttach ?: false) }
-    var safExpose by rememberSaveable { mutableStateOf(initial?.safExpose ?: false) }
-    var group by rememberSaveable { mutableStateOf(initial?.group.orEmpty()) }
+    var keepAlive by rememberSaveable { mutableStateOf(base.keepAlive) }
+    var tmux by rememberSaveable { mutableStateOf(base.tmuxAutoAttach) }
+    var safExpose by rememberSaveable { mutableStateOf(base.safExpose) }
+    var group by rememberSaveable { mutableStateOf(base.group) }
     var groupMenuOpen by rememberSaveable { mutableStateOf(false) }
     val existingGroups = remember(otherHosts) { HostGrouping.groupNames(otherHosts) }
     var socksPortText by rememberSaveable {

@@ -8,10 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,11 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
@@ -39,7 +35,6 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,10 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -69,10 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
@@ -221,19 +210,8 @@ class MainActivity : FragmentActivity() {
                                 }
                             }
                         }
-                        // The primary action lives in the nav bar, not a
-                        // floating button — Apple reserves FABs for Material
-                        // apps; iOS puts "add" in the bar itself.
-                        IconButton(
-                            onClick = {
-                                startActivity(Intent(this@MainActivity, EditHostActivity::class.java))
-                            }
-                        ) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "Add host",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
+                        TopBarAddButton("Add host") {
+                            startActivity(Intent(this@MainActivity, EditHostActivity::class.java))
                         }
                         IconButton(onClick = { mainMenuOpen = true }) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "More options")
@@ -303,9 +281,10 @@ class MainActivity : FragmentActivity() {
                     // Search only once there is something to search — the
                     // empty state's guidance would otherwise sit under a
                     // pointless field.
-                    HostSearchField(
+                    ConchSearchField(
                         query = search,
                         onQueryChange = { search = it },
+                        placeholder = "Search hosts",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -320,25 +299,41 @@ class MainActivity : FragmentActivity() {
                             Modifier
                                 .fillMaxSize()
                                 .weight(1f),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(24.dp)
+                            contentPadding = GroupedListDefaults.PagePadding,
                         ) {
-                            sections.forEach { section ->
-                                item(key = "section:${section.title ?: ""}") {
-                                    Column {
-                                        // Ungrouped hosts get a heading only once
-                                        // a named group exists to tell them apart.
-                                        if (grouped) {
-                                            GroupHeader(section.title ?: "Ungrouped")
-                                        }
-                                        HostGroupCard(
-                                            hosts = section.hosts,
-                                            onOpen = ::openTerminal,
-                                            onNewSession = ::openTerminal,
-                                            onEdit = ::editHost,
-                                            onDelete = { confirmDelete = it },
+                            sections.forEachIndexed { sectionIndex, section ->
+                                // Ungrouped hosts get a heading only once
+                                // a named group exists to tell them apart.
+                                // The gap between sections rides on the
+                                // header: the rows of one card must touch,
+                                // so the list itself can't space its items.
+                                if (grouped) {
+                                    item(key = "section:${section.title ?: ""}") {
+                                        GroupHeader(
+                                            section.title ?: "Ungrouped",
+                                            Modifier.padding(
+                                                top = if (sectionIndex == 0) {
+                                                    0.dp
+                                                } else {
+                                                    GroupedListDefaults.SectionSpacing
+                                                },
+                                            ),
                                         )
                                     }
+                                }
+                                groupedItems(
+                                    count = section.hosts.size,
+                                    key = { index -> section.hosts[index].id },
+                                    dividerInset = GroupedListDefaults.IconRowDividerInset,
+                                ) { index ->
+                                    val host = section.hosts[index]
+                                    HostRow(
+                                        host = host,
+                                        onClick = { openTerminal(host) },
+                                        onNewSession = { openTerminal(host) },
+                                        onEdit = { editHost(host) },
+                                        onDelete = { confirmDelete = host },
+                                    )
                                 }
                             }
                         }
@@ -428,133 +423,28 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-/**
- * Host search (iOS `.searchable` parity): filters alias, host, user and
- * group. Styled after `UISearchBar` — a filled gray field with no visible
- * border, rather than Material's outlined/focus-color field.
- */
-@Composable
-private fun HostSearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = { Text("Search hosts", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-        leadingIcon = {
-            Icon(
-                Icons.Filled.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        trailingIcon = if (query.isNotEmpty()) {
-            {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        Icons.Filled.Clear,
-                        contentDescription = "Clear search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        } else {
-            null
-        },
-        singleLine = true,
-        shape = RoundedCornerShape(10.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Color.Transparent,
-            unfocusedBorderColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-        modifier = modifier,
-    )
-}
-
 @Composable
 private fun NoSearchResults(query: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            Icons.Filled.Search,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "No hosts match \"$query\"",
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 16.dp),
-        )
-    }
+    EmptyState(
+        icon = Icons.Filled.Search,
+        title = "No hosts match \"$query\"",
+        modifier = modifier,
+    )
 }
 
 /** Empty state: says what this screen is for and how to fill it. */
 @Composable
 private fun EmptyHosts(onAddHost: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            Icons.Filled.Dns,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "No hosts yet",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 16.dp),
-        )
-        Text(
-            "Add an SSH host to connect, or import an existing OpenSSH config from the menu.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Button(
-            onClick = onAddHost,
-            shape = MaterialTheme.shapes.extraLarge,
-            modifier = Modifier.padding(top = 24.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Add host")
-        }
-    }
+    EmptyState(
+        icon = Icons.Filled.Dns,
+        title = "No hosts yet",
+        body = "Add an SSH host to connect, or import an existing OpenSSH config from the menu.",
+        actionLabel = "Add host",
+        onAction = onAddHost,
+        modifier = modifier,
+    )
 }
 
-/** All hosts in one group, laid out in the shared iOS grouped-card style. */
-@Composable
-private fun HostGroupCard(
-    hosts: List<Host>,
-    onOpen: (Host) -> Unit,
-    onNewSession: (Host) -> Unit,
-    onEdit: (Host) -> Unit,
-    onDelete: (Host) -> Unit,
-) {
-    GroupedCard(count = hosts.size, dividerInset = 60.dp) { index ->
-        val host = hosts[index]
-        HostRow(
-            host = host,
-            onClick = { onOpen(host) },
-            onNewSession = { onNewSession(host) },
-            onEdit = { onEdit(host) },
-            onDelete = { onDelete(host) },
-        )
-    }
-}
 
 /**
  * One host row. A native [ListItem] does the layout, so heights and text
@@ -572,26 +462,14 @@ private fun HostRow(
     LiveSessions.version.intValue // subscribe: the registry is not snapshot state
     val status = HostCardStatus(liveSessionCount = LiveSessions.countForHost(host.id))
     ListItem(
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        colors = groupedRowColors(),
         leadingContent = {
             // A tinted icon tile (Settings/Contacts-row style) reads as a
             // status glyph too: green once the host has a live session.
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(
-                        if (status.isLive) MaterialTheme.conch.success else MaterialTheme.colorScheme.secondary
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.Dns,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(17.dp),
-                )
-            }
+            IconTile(
+                Icons.Filled.Dns,
+                if (status.isLive) MaterialTheme.conch.success else MaterialTheme.colorScheme.secondary,
+            )
         },
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {

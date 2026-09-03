@@ -7,28 +7,23 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -43,10 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -94,102 +86,55 @@ class SnippetsActivity : ComponentActivity() {
                     },
                     colors = flatTopAppBarColors(),
                     actions = {
-                        // The primary action lives in the nav bar, not a
-                        // floating button — consistent with the rest of the
-                        // app's Apple-style chrome.
-                        IconButton(onClick = { startNew() }) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "Add snippet",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                        TopBarAddButton("Add snippet") { startNew() }
                     }
                 )
             },
             containerColor = MaterialTheme.colorScheme.background,
         ) { padding ->
             if (snippets.isEmpty()) {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(32.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        Icons.Filled.Code,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "No snippets yet",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 16.dp),
-                    )
-                    Text(
-                        "Save the commands you type often and run them from the terminal's command palette.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    Button(
-                        onClick = { startNew() },
-                        shape = MaterialTheme.shapes.extraLarge,
-                        modifier = Modifier.padding(top = 24.dp),
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text("Add snippet", modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
+                EmptyState(
+                    icon = Icons.Filled.Code,
+                    title = "No snippets yet",
+                    body = "Save the commands you type often and run them from the terminal's command palette.",
+                    actionLabel = "Add snippet",
+                    onAction = { startNew() },
+                    modifier = Modifier.padding(padding),
+                )
             } else {
                 LazyColumn(
                     Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = GroupedListDefaults.PagePadding,
                 ) {
-                    item(key = "snippets-card") {
-                        GroupedCard(count = snippets.size, dividerInset = 60.dp) { index ->
-                            val snip = snippets[index]
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                leadingContent = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .clip(RoundedCornerShape(7.dp))
-                                            .background(MaterialTheme.colorScheme.secondary),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.Code,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(17.dp),
-                                        )
-                                    }
-                                },
-                                headlineContent = { Text(snip.label) },
-                                supportingContent = {
-                                    Text(
-                                        snip.command,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                },
-                                modifier = Modifier.clickable {
-                                    editing = snip
-                                    editLabel = snip.label
-                                    editCommand = snip.command
-                                    showEditor = true
-                                },
-                            )
-                        }
+                    groupedItems(
+                        count = snippets.size,
+                        key = { index -> snippets[index].id },
+                        dividerInset = GroupedListDefaults.IconRowDividerInset,
+                    ) { index ->
+                        val snip = snippets[index]
+                        ListItem(
+                            colors = groupedRowColors(),
+                            leadingContent = {
+                                IconTile(Icons.Filled.Code)
+                            },
+                            headlineContent = { Text(snip.label) },
+                            supportingContent = {
+                                Text(
+                                    snip.command,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                editing = snip
+                                editLabel = snip.label
+                                editCommand = snip.command
+                                showEditor = true
+                            },
+                        )
                     }
                 }
             }

@@ -10,11 +10,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -24,7 +22,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -59,12 +56,7 @@ fun TransfersSheet(queue: TransferQueue, onDismiss: () -> Unit) {
                 LazyColumn {
                     itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
                         TransferRow(item, queue)
-                        if (index != items.lastIndex) {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                modifier = Modifier.padding(start = 56.dp),
-                            )
-                        }
+                        if (index != items.lastIndex) RowDivider(GroupedListDefaults.GlyphRowDividerInset)
                     }
                 }
             }
@@ -75,7 +67,7 @@ fun TransfersSheet(queue: TransferQueue, onDismiss: () -> Unit) {
 @Composable
 private fun TransferRow(item: TransferQueue.Item, queue: TransferQueue) {
     ListItem(
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        colors = groupedRowColors(),
         leadingContent = {
             Icon(
                 if (item.direction == TransferQueue.Direction.DOWNLOAD) Icons.Filled.Download else Icons.Filled.Upload,

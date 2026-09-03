@@ -216,7 +216,7 @@ object SshConnectionFactory {
             // socket has to be cleared directly. A jumped client has no
             // socket of its own, hence the null-safety.
             ssh.timeout = 0
-            ssh.socket?.let { it.soTimeout = 0 }
+            ssh.socket?.soTimeout = 0
             // Keep-alive, started BY HAND and only now.
             //
             // Two sshj facts make this the only correct placement. (1)
